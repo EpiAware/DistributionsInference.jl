@@ -19,11 +19,21 @@ The scalar parameter rows of a fittable object.
 `obj`, each a `NamedTuple` with fields:
 
 - `name`: a `Symbol` identifying the parameter (a dotted path for a nested
-  parameter, e.g. `:onset.shape`).
+  parameter, e.g. `Symbol(\"onset.shape\")`).
 - `value`: the parameter's current value.
 - `prior`: the attached prior (a `UnivariateDistribution`) if the parameter is
   ESTIMATED, or `nothing` if it is fixed at `value`.
 - `support`: the `(lower, upper)` bounds of the parameter's admissible domain.
+
+A parameter estimated under an OBJECT-DEPENDENT prior (e.g. a hierarchical
+population term whose log-density depends on other reconstructed parameters,
+not on `value` alone) also carries `prior = nothing` at the row level — the
+same as a fixed parameter — and is scored instead through
+[`extra_logprior`](@ref). This keeps the row schema to exactly these four
+fields for every parameter kind. A type with such rows must give its own
+[`estimated_rows`](@ref)/[`flat_dimension`](@ref) methods (the generic
+defaults below treat `prior === nothing` as fixed and would otherwise drop it
+from the flat vector).
 
 This is the one function every fittable object implements with its own
 method; the fallback below only raises a clear error naming the missing
@@ -170,3 +180,86 @@ function reconstruct(obj, x::AbstractVector)
         "no `reconstruct` method for $(typeof(obj)); implement the fit " *
         "protocol's `reconstruct(obj, x::AbstractVector)` for this type"))
 end
+
+# A bare row vector is its own minimal fittable object (the `parameter_rows`
+# identity above), so it needs its own `reconstruct`: substitute the
+# estimated rows' values from `x`, in row order, and hold every fixed row
+# unchanged. Built with an explicit indexed loop (mirrors
+# ComposedDistributions' `unflatten`), since the rows are typically
+# heterogeneously typed (a `prior` of `Nothing` here, a distribution there).
+function reconstruct(rows::AbstractVector{<:NamedTuple}, x::AbstractVector)
+    n = count(row -> row.prior !== nothing, rows)
+    length(x) == n || throw(DimensionMismatch(
+        "flat vector has length $(length(x)) but $(length(rows)) row(s) " *
+        "carry $n estimated parameter(s)"))
+    out = Vector{Any}(undef, length(rows))
+    j = 0
+    for i in eachindex(rows)
+        row = rows[i]
+        if row.prior === nothing
+            out[i] = row
+        else
+            j += 1
+            out[i] = merge(row, (value = x[j],))
+        end
+    end
+    return out
+end
+
+@doc "
+
+Additional log-prior mass that depends on the RECONSTRUCTED object.
+
+`extra_logprior(obj, reconstructed, x)` is the neutral extension point for a
+prior term that cannot be scored per-row against `x` alone — a hierarchical
+population term is the motivating case, where a pooled member's log-density
+depends on the (reconstructed) population hyperparameters, not just on its
+own flat coordinate. The default returns `0.0`: most fittable objects need no
+such term, since an ordinary per-parameter prior is already scored from
+[`parameter_rows`](@ref)`(obj)`'s `prior` column in the engine's
+[`logdensity`](@ref). A type with an object-dependent prior overrides this
+with its own method and gives the corresponding row(s) `prior = nothing` (see
+[`parameter_rows`](@ref)).
+
+# Arguments
+- `obj`: the template fittable object.
+- `reconstructed`: `obj` rebuilt at `x` (i.e. [`reconstruct`](@ref)`(obj,
+  x)`), the object the extra term is scored against.
+- `x`: the estimated flat parameter vector `reconstructed` was built from.
+
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct PooledPair
+    a::Float64
+    b::Float64
+    mu::Float64
+end
+
+function DistributionsInference.parameter_rows(p::PooledPair)
+    return [(name = :mu, value = p.mu, prior = Normal(0.0, 1.0),
+            support = (-Inf, Inf)),
+        (name = :a, value = p.a, prior = nothing, support = (-Inf, Inf)),
+        (name = :b, value = p.b, prior = nothing, support = (-Inf, Inf))]
+end
+
+function DistributionsInference.reconstruct(p::PooledPair, x::AbstractVector)
+    return PooledPair(p.a, p.b, x[1])
+end
+
+# a and b share the population Normal(mu, 1): an object-dependent prior,
+# scored here rather than per row.
+function DistributionsInference.extra_logprior(p::PooledPair, r, x)
+    return logpdf(Normal(r.mu, 1.0), r.a) + logpdf(Normal(r.mu, 1.0), r.b)
+end
+
+DistributionsInference.extra_logprior(
+    PooledPair(0.2, -0.1, 0.0), PooledPair(0.2, -0.1, 0.5), [0.5])
+```
+
+# See also
+- [`logdensity`](@ref): adds this term after the per-row priors.
+- [`parameter_rows`](@ref): the row schema this keeps to four fields.
+"
+extra_logprior(obj, reconstructed, x) = 0.0

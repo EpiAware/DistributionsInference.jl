@@ -85,3 +85,69 @@ end
     @test_throws DimensionMismatch DistributionsInference.reconstruct(leaf, Float64[])
     @test_throws DimensionMismatch DistributionsInference.reconstruct(leaf, [1.0, 2.0])
 end
+
+@testitem "reconstruct: a bare row vector is a minimal fittable object" setup=[ToyFixture] begin
+    rows = [
+        (name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
+            support = (0.0, Inf)),
+        (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
+
+    rebuilt = DistributionsInference.reconstruct(rows, [3.5])
+    @test rebuilt[1].value == 3.5
+    @test rebuilt[1].name == :shape
+    @test rebuilt[1].prior == rows[1].prior
+    @test rebuilt[2] == rows[2]
+
+    @test_throws DimensionMismatch DistributionsInference.reconstruct(rows, Float64[])
+    @test_throws DimensionMismatch DistributionsInference.reconstruct(rows, [1.0, 2.0])
+
+    # A fully fixed row set round-trips at the empty vector, unchanged.
+    fixed_rows = [(name = :scale, value = 1.0, prior = nothing,
+        support = (0.0, Inf))]
+    @test DistributionsInference.reconstruct(fixed_rows, Float64[]) == fixed_rows
+end
+
+@testitem "extra_logprior: neutral by default, wired for an overriding type" setup=[ToyFixture] begin
+    # The default is a no-op for any fittable object, including the toy leaf.
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    rebuilt = DistributionsInference.reconstruct(leaf, [3.5])
+    @test DistributionsInference.extra_logprior(leaf, rebuilt, [3.5]) == 0.0
+
+    # A type overriding it: an object-dependent penalty scored against the
+    # reconstructed object rather than a per-row prior. `shape_prior = nothing`
+    # here mirrors the documented convention (the row carries no prior; the
+    # term is scored through `extra_logprior` instead).
+    struct PenalisedLeaf
+        shape::Float64
+        scale::Float64
+    end
+
+    function DistributionsInference.parameter_rows(d::PenalisedLeaf)
+        return [(name = :shape, value = d.shape, prior = nothing,
+                support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    # Estimate `shape` only, overriding the generic prior-based default: this
+    # type's flat vector is its `shape`, scored entirely through
+    # `extra_logprior` rather than any row-level prior.
+    DistributionsInference.estimated_rows(d::PenalisedLeaf) = [
+        DistributionsInference.parameter_rows(d)[1]]
+    DistributionsInference.flat_dimension(::PenalisedLeaf) = 1
+    function DistributionsInference.reconstruct(d::PenalisedLeaf, x::AbstractVector)
+        return PenalisedLeaf(x[1], d.scale)
+    end
+    function DistributionsInference.extra_logprior(
+            ::PenalisedLeaf, rebuilt::PenalisedLeaf, x::AbstractVector)
+        return -0.5 * rebuilt.shape^2
+    end
+    Distributions.logpdf(d::PenalisedLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+    template = PenalisedLeaf(2.0, 1.0)
+    data = [1.5, 2.0, 3.2]
+    prob = DistributionsInference.as_logdensity(template, data)
+    x = [2.5]
+    expected = -0.5 * 2.5^2 + sum(y -> logpdf(Gamma(2.5, 1.0), y), data)
+    @test DistributionsInference.logdensity(prob, x) ≈ expected
+end

@@ -32,7 +32,13 @@ directly, so it is sampleable by any LogDensityProblems consumer.
   record)`).
 - `flat_priors`: the estimated rows' priors, in [`parameter_rows`](@ref) order,
   collected once at construction so [`logdensity`](@ref) does not re-derive
-  them on every evaluation.
+  them on every evaluation. An entry is `nothing` for an estimated row scored
+  instead through [`extra_logprior`](@ref) (an object-dependent prior; see
+  [`parameter_rows`](@ref)), which then contributes no per-row term. A tree
+  mixing several prior families (a `LogNormal` here, a `Beta` there) makes
+  this vector abstractly typed, so [`logdensity`](@ref) pays one dynamic
+  dispatch per row; a tuple-of-priors specialisation is the natural
+  follow-up if profiling ever shows this matters.
 
 # See also
 - [`as_logdensity`](@ref): the assembler.
@@ -58,9 +64,12 @@ Assemble a [`FitLogDensity`](@ref) from a fittable object and data.
 observed `data` into the PPL-neutral log-density spec, reading the priors off
 `obj`'s [`parameter_rows`](@ref) (the estimation boundary). The result
 evaluates the (unnormalised) log-posterior over the ESTIMATED flat parameter
-vector via [`logdensity`](@ref). An object with no estimated rows estimates
-nothing: the flat vector is empty and `logdensity` is just the data
-likelihood.
+vector via [`logdensity`](@ref), on the CONSTRAINED scale: each prior is
+scored directly against its row's value with no Jacobian correction. An
+object with no estimated rows estimates nothing: the flat vector is empty and
+`logdensity` is just the data likelihood. Sampling on the unconstrained scale
+(the transform and its log-Jacobian) is a `Bijectors` extension concern, not
+this core engine's, mirroring ComposedDistributions' `to_constrained`.
 
 # Arguments
 - `obj`: the template fittable object, carrying its [`parameter_rows`](@ref).
@@ -121,11 +130,14 @@ Evaluate a [`FitLogDensity`](@ref) on its estimated flat parameter vector.
 
 `logdensity(prob, x)` is the (unnormalised) log-posterior at the estimated
 flat vector `x` (in [`parameter_rows`](@ref)`(prob.obj)` row order restricted
-to the estimated rows): the sum of the priors' log-densities at `x` plus the
-data log-likelihood of the object reconstructed there via
-[`reconstruct`](@ref). `x` is [`flat_dimension`](@ref)`(prob.obj)` long —
-empty when `prob.obj` estimates nothing, where `logdensity` is just the data
-likelihood.
+to the estimated rows), on the CONSTRAINED scale: each prior in `x` is scored
+directly, with no Jacobian correction (an unconstrained-scale transform is a
+`Bijectors` extension concern). The value is the sum of the priors'
+log-densities at `x`, plus [`extra_logprior`](@ref) (an object-dependent
+prior term; `0.0` unless `prob.obj` overrides it), plus the data
+log-likelihood of the object reconstructed there via [`reconstruct`](@ref).
+`x` is [`flat_dimension`](@ref)`(prob.obj)` long — empty when `prob.obj`
+estimates nothing, where `logdensity` is just the data likelihood.
 
 # Arguments
 - `prob`: the assembled [`FitLogDensity`](@ref).
@@ -169,10 +181,17 @@ function logdensity(prob::FitLogDensity, x::AbstractVector)
     length(x) == length(flat_priors) ||
         _throw_logdensity_dimmismatch(x, flat_priors, prob.obj)
     lp = isempty(x) ? 0.0 :
-         sum(i -> Distributions.logpdf(flat_priors[i], x[i]), eachindex(x))
+         sum(_row_logprior(flat_priors[i], x[i]) for i in eachindex(x))
     obj = reconstruct(prob.obj, x)
+    lp += extra_logprior(prob.obj, obj, x)
     return lp + prob.loglik(obj, prob.data)
 end
+
+# A single row's per-row prior contribution: `nothing` (a fixed parameter, or
+# an ESTIMATED one scored instead through `extra_logprior`, per the
+# `parameter_rows` convention) contributes nothing here; any other prior
+# scores directly against its flat value.
+_row_logprior(prior, xi) = prior === nothing ? zero(xi) : Distributions.logpdf(prior, xi)
 
 # --- LogDensityProblems interface (hard dep; no glue extension needed) -----
 

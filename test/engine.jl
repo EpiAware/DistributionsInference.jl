@@ -27,6 +27,27 @@
     @test_throws DimensionMismatch DistributionsInference.logdensity(prob, [1.0, 2.0])
 end
 
+@testitem "engine: a bare row vector is fully fittable end-to-end" begin
+    using DistributionsInference, Distributions
+
+    rows = [
+        (name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
+            support = (0.0, Inf)),
+        (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
+
+    # A loglik reading the reconstructed row vector directly, with no wrapper
+    # object needed: it scores a Gamma built from the two row values.
+    loglik(built, data) = sum(
+        y -> logpdf(Gamma(built[1].value, built[2].value), y), data)
+
+    data = [1.5, 2.0, 3.2]
+    prob = DistributionsInference.as_logdensity(rows, data; loglik = loglik)
+    x = [2.5]
+    expected = logpdf(LogNormal(0.0, 0.2), 2.5) +
+               sum(y -> logpdf(Gamma(2.5, 1.0), y), data)
+    @test DistributionsInference.logdensity(prob, x) ≈ expected
+end
+
 @testitem "engine: a custom loglik reducer is honoured" setup=[ToyFixture] begin
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     data = [1.5, 2.0, 3.2]
