@@ -18,9 +18,32 @@ using DifferentiationInterface: DifferentiationInterface, Constant
 import DifferentiationInterfaceTest as DIT
 import ForwardDiff, ReverseDiff, Enzyme, Mooncake
 using DistributionsInference
+using Distributions: Distributions, Gamma, LogNormal, logpdf
 
 export scenarios, backends, broken_scenario_names,
        backend_broken_scenarios, backend_skip_scenarios
+
+# A minimal fit-protocol object whose engine log-density the scenarios
+# differentiate: a Gamma leaf with the shape estimated (LogNormal prior)
+# and the scale fixed, mirroring the test suite's toy.
+struct GammaFit{T <: Real}
+    shape::T
+    scale::T
+end
+
+Distributions.logpdf(d::GammaFit, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::GammaFit)
+    return [
+        (name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::GammaFit, x::AbstractVector)
+    return GammaFit(x[1], oftype(x[1], d.scale))
+end
 
 # ForwardDiff reference gradient for a scenario function.
 function _reference(f, θ, contexts)
@@ -39,14 +62,26 @@ placeholder with the package's own differentiable log densities; group them by
 """
 function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
     out = DIT.Scenario{:gradient, :out}[]
-    # Placeholder: a plain differentiable function so the harness runs out of
-    # the box. Swap for a real log density, e.g.
-    #   f = (θ, obs) -> sum(x -> logpdf(SomeDist(θ...), x), obs)
-    θ = [1.0, 2.0]
-    f = θ -> sum(abs2, θ)
+
+    # The engine's own hot path: the gradient of `logdensity(prob, θ)` for a
+    # fit-protocol object with one estimated parameter, flowing through the
+    # per-row prior sum, `reconstruct`, and the data likelihood.
+    leaf = GammaFit(2.0, 1.0)
+    prob = DistributionsInference.as_logdensity(
+        leaf, [0.5, 1.2, 2.5, 3.8, 5.1])
+    f = (θ, p) -> DistributionsInference.logdensity(p, θ)
+    θ = [2.0]
+    contexts = (Constant(prob),)
+    prep_args = (; x = θ, contexts = contexts)
+    res1 = with_reference ? _reference(f, θ, contexts) : nothing
     push!(out,
-        DIT.Scenario{:gradient, :out}(f, θ; name = "placeholder sum_squares",
-            res1 = with_reference ? _reference(f, θ, ()) : nothing))
+        res1 === nothing ?
+        DIT.Scenario{:gradient, :out}(f, θ, contexts...;
+            prep_args = prep_args,
+            name = "fit-protocol engine logdensity") :
+        DIT.Scenario{:gradient, :out}(f, θ, contexts...;
+            res1 = res1, prep_args = prep_args,
+            name = "fit-protocol engine logdensity"))
     return out
 end
 
