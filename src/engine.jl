@@ -1,0 +1,138 @@
+# The PPL-neutral log-density engine: assembles a `FitLogDensity` from any
+# fit-protocol object (`protocol.jl`) and data, and evaluates its
+# (unnormalised) log-posterior over the estimated flat parameter vector.
+# `LogDensityProblems` is a hard dependency here, so the interface is
+# implemented directly on `FitLogDensity` — no glue extension is needed, unlike
+# ComposedDistributions' weakdep `LogDensityProblemsExt`. Ported from
+# ComposedDistributions' `ComposedLogDensity`/`as_logdensity`/`logdensity`
+# (ComposedDistributions#185), generalised from a composed distribution's
+# nested tree to the row-based fit protocol.
+
+# Default likelihood: sum `logpdf(obj, record)` over the observed records.
+_default_loglik(obj, data) = sum(record -> Distributions.logpdf(obj, record), data)
+
+@doc "
+
+A PPL-neutral log-density over a fit-protocol object's estimated parameters.
+
+`FitLogDensity` carries everything needed to evaluate the (unnormalised)
+log-posterior of a fittable object over its ESTIMATED flat parameter vector,
+with no PPL dependency: the template `obj`, the observed `data`, a `loglik`
+reducer scoring `data` against the object reconstructed at a draw, and the
+estimated rows' priors flattened once at construction. Build it with
+[`as_logdensity`](@ref); evaluate it on a flat vector with
+[`logdensity`](@ref). It also implements the `LogDensityProblems` interface
+directly, so it is sampleable by any LogDensityProblems consumer.
+
+# Fields
+- `obj`: the template fittable object (the structure [`reconstruct`](@ref)
+  rebuilds).
+- `data`: the observed records scored by `loglik`.
+- `loglik`: a reducer `(obj, data) -> Real` (default sums `logpdf(obj,
+  record)`).
+- `flat_priors`: the estimated rows' priors, in [`parameter_rows`](@ref) order,
+  collected once at construction so [`logdensity`](@ref) does not re-derive
+  them on every evaluation.
+
+# See also
+- [`as_logdensity`](@ref): the assembler.
+- [`logdensity`](@ref): evaluate on a flat vector.
+"
+struct FitLogDensity{D, T, L, FP}
+    obj::D
+    data::T
+    loglik::L
+    flat_priors::FP
+end
+
+function FitLogDensity(obj, data, loglik)
+    flat_priors = [row.prior for row in estimated_rows(obj)]
+    return FitLogDensity(obj, data, loglik, flat_priors)
+end
+
+@doc "
+
+Assemble a [`FitLogDensity`](@ref) from a fittable object and data.
+
+`as_logdensity(obj, data; loglik)` packages the template `obj` and the
+observed `data` into the PPL-neutral log-density spec, reading the priors off
+`obj`'s [`parameter_rows`](@ref) (the estimation boundary). The result
+evaluates the (unnormalised) log-posterior over the ESTIMATED flat parameter
+vector via [`logdensity`](@ref). An object with no estimated rows estimates
+nothing: the flat vector is empty and `logdensity` is just the data
+likelihood.
+
+# Arguments
+- `obj`: the template fittable object, carrying its [`parameter_rows`](@ref).
+- `data`: the observed records.
+
+# Keyword Arguments
+- `loglik`: a reducer `(obj, data) -> Real` scoring `data` against the
+  reconstructed object (default: sum of `logpdf(obj, record)`).
+
+# See also
+- [`logdensity`](@ref): evaluate the assembled spec on a flat vector.
+- [`parameter_rows`](@ref), [`reconstruct`](@ref): the fit protocol this reads.
+"
+function as_logdensity(obj, data; loglik = _default_loglik)
+    return FitLogDensity(obj, data, loglik)
+end
+
+# Hoisted into its own `@noinline` function so the error-message construction
+# (which interpolates `obj` via `show`) stays out of the hot evaluation path;
+# mirrors ComposedDistributions' `_throw_logdensity_dimmismatch`.
+@noinline function _throw_logdensity_dimmismatch(x, flat_priors, obj)
+    throw(DimensionMismatch(
+        "flat parameter vector has length $(length(x)) but $obj has " *
+        "$(length(flat_priors)) estimated parameters"))
+end
+
+@doc "
+
+Evaluate a [`FitLogDensity`](@ref) on its estimated flat parameter vector.
+
+`logdensity(prob, x)` is the (unnormalised) log-posterior at the estimated
+flat vector `x` (in [`parameter_rows`](@ref)`(prob.obj)` row order restricted
+to the estimated rows): the sum of the priors' log-densities at `x` plus the
+data log-likelihood of the object reconstructed there via
+[`reconstruct`](@ref). `x` is [`flat_dimension`](@ref)`(prob.obj)` long —
+empty when `prob.obj` estimates nothing, where `logdensity` is just the data
+likelihood.
+
+# Arguments
+- `prob`: the assembled [`FitLogDensity`](@ref).
+- `x`: an estimated flat parameter vector of length
+  [`flat_dimension`](@ref)`(prob.obj)`.
+
+# See also
+- [`as_logdensity`](@ref): assemble `prob`.
+- [`reconstruct`](@ref): the flat vector -> concrete object hook this calls.
+"
+function logdensity(prob::FitLogDensity, x::AbstractVector)
+    flat_priors = prob.flat_priors
+    length(x) == length(flat_priors) ||
+        _throw_logdensity_dimmismatch(x, flat_priors, prob.obj)
+    lp = isempty(x) ? 0.0 :
+         sum(i -> Distributions.logpdf(flat_priors[i], x[i]), eachindex(x))
+    obj = reconstruct(prob.obj, x)
+    return lp + prob.loglik(obj, prob.data)
+end
+
+# --- LogDensityProblems interface (hard dep; no glue extension needed) -----
+
+# The engine supplies the log-density itself; a gradient is delegated to
+# LogDensityProblemsAD downstream, so only the zeroth-order capability is
+# claimed here.
+function LogDensityProblems.capabilities(::Type{<:FitLogDensity})
+    return LogDensityProblems.LogDensityOrder{0}()
+end
+
+function LogDensityProblems.dimension(prob::FitLogDensity)
+    return flat_dimension(prob.obj)
+end
+
+# Qualified call on the right-hand side: `logdensity` above is this module's
+# own evaluator, distinct from `LogDensityProblems.logdensity` being defined.
+function LogDensityProblems.logdensity(prob::FitLogDensity, x::AbstractVector)
+    return logdensity(prob, x)
+end
