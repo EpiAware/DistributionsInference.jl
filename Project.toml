@@ -1,0 +1,25 @@
+name = "DistributionsInference"
+uuid = "205dfa0f-445e-4692-a651-ee32c3bca9ae"
+authors = ["Sam Abbott", "EpiAware contributors"]
+version = "0.0.1"
+
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
+LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
+
+[compat]
+Distributions = "0.25"
+DocStringExtensions = "0.9"
+FlexiChains = "0.4, 0.5, 0.6"
+LogDensityProblems = "2"
+julia = "1.11, 1.12"
+
+# `docs` is deliberately not a workspace member: `FlexiChains` (a hard dep,
+# >=0.4) needs DimensionalData >=0.29.24, but the docs env's AlgebraOfGraphics
+# 0.13 (kit ad-backends tutorial) caps DimensionalData at 0.28.3 — an
+# unresolvable clash inside a shared workspace Manifest. Filed upstream as
+# EpiAwarePackageTools#283; re-add `docs` once that lands.
+[workspace]
+projects = ["test"]
