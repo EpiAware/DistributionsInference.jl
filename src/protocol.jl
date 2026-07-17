@@ -25,12 +25,12 @@ The scalar parameter rows of a fittable object.
   ESTIMATED, or `nothing` if it is fixed at `value`.
 - `support`: the `(lower, upper)` bounds of the parameter's admissible domain.
 
-This is the one function every fittable object implements with its own method;
-there is no generic fallback for a user type. [`estimated_rows`](@ref),
-[`flat_dimension`](@ref) and the engine's [`as_logdensity`](@ref) are all built
-on it. A bare `AbstractVector` of already-built rows is its own
-`parameter_rows` (the identity), so a literal row list can stand in for a
-fittable object without a wrapping type.
+This is the one function every fittable object implements with its own
+method; the fallback below only raises a clear error naming the missing
+method. [`estimated_rows`](@ref), [`flat_dimension`](@ref) and the engine's
+[`as_logdensity`](@ref) are all built on it. A bare `AbstractVector` of
+already-built rows is its own `parameter_rows` (the identity), so a literal
+row list can stand in for a fittable object without a wrapping type.
 
 # Arguments
 - `obj`: the fittable object.
@@ -49,7 +49,11 @@ DistributionsInference.parameter_rows(rows) === rows
 - [`estimated_rows`](@ref): the subset with an attached prior.
 - [`reconstruct`](@ref): the companion hook, flat vector -> concrete object.
 "
-function parameter_rows end
+function parameter_rows(obj)
+    throw(ArgumentError(
+        "no `parameter_rows` method for $(typeof(obj)); implement the fit " *
+        "protocol's `parameter_rows(obj)` for this type"))
+end
 
 parameter_rows(rows::AbstractVector{<:NamedTuple}) = rows
 
@@ -125,17 +129,44 @@ at its value in `obj`. `x` is [`flat_dimension`](@ref)`(obj)` long — empty whe
 `obj` estimates nothing, in which case `reconstruct(obj, x) == obj`.
 
 This is the companion hook every fittable object implements with its own
-method, alongside [`parameter_rows`](@ref); there is no generic fallback,
-since rebuilding a concrete object is necessarily type-specific. The engine's
-[`logdensity`](@ref) calls it once per evaluation to score `prob.data` against
-the object collapsed at `x`.
+method, alongside [`parameter_rows`](@ref); rebuilding a concrete object is
+necessarily type-specific, so the fallback below only raises a clear error
+naming the missing method. The engine's [`logdensity`](@ref) calls it once
+per evaluation to score `prob.data` against the object collapsed at `x`.
 
 # Arguments
 - `obj`: the fittable object whose structure is rebuilt.
 - `x`: an estimated flat vector of length [`flat_dimension`](@ref)`(obj)`.
 
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct DemoLeaf
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::DemoLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::DemoLeaf, x::AbstractVector)
+    return DemoLeaf(x[1], d.scale)
+end
+
+DistributionsInference.reconstruct(DemoLeaf(2.0, 1.0), [3.5])
+```
+
 # See also
 - [`parameter_rows`](@ref): the row inventory whose order fixes `x`'s layout.
 - [`as_logdensity`](@ref): the engine assembler built on `reconstruct`.
 "
-function reconstruct end
+function reconstruct(obj, x::AbstractVector)
+    throw(ArgumentError(
+        "no `reconstruct` method for $(typeof(obj)); implement the fit " *
+        "protocol's `reconstruct(obj, x::AbstractVector)` for this type"))
+end

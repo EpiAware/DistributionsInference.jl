@@ -70,6 +70,34 @@ likelihood.
 - `loglik`: a reducer `(obj, data) -> Real` scoring `data` against the
   reconstructed object (default: sum of `logpdf(obj, record)`).
 
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct ToyLeaf
+    shape::Float64
+    scale::Float64
+end
+
+Distributions.logpdf(d::ToyLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::ToyLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::ToyLeaf, x::AbstractVector)
+    return ToyLeaf(x[1], d.scale)
+end
+
+leaf = ToyLeaf(2.0, 1.0)
+data = [1.5, 2.0, 3.2]
+prob = DistributionsInference.as_logdensity(leaf, data)
+DistributionsInference.flat_dimension(leaf)
+```
+
 # See also
 - [`logdensity`](@ref): evaluate the assembled spec on a flat vector.
 - [`parameter_rows`](@ref), [`reconstruct`](@ref): the fit protocol this reads.
@@ -103,6 +131,34 @@ likelihood.
 - `prob`: the assembled [`FitLogDensity`](@ref).
 - `x`: an estimated flat parameter vector of length
   [`flat_dimension`](@ref)`(prob.obj)`.
+
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct FitLeaf
+    shape::Float64
+    scale::Float64
+end
+
+Distributions.logpdf(d::FitLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::FitLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::FitLeaf, x::AbstractVector)
+    return FitLeaf(x[1], d.scale)
+end
+
+leaf = FitLeaf(2.0, 1.0)
+data = [1.5, 2.0, 3.2]
+prob = DistributionsInference.as_logdensity(leaf, data)
+DistributionsInference.logdensity(prob, [2.5])
+```
 
 # See also
 - [`as_logdensity`](@ref): assemble `prob`.
