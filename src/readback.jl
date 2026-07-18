@@ -238,7 +238,12 @@ length(DistributionsInference.readback_draws(leaf, chain))
 - [`to_flexichain`](@ref): build the chain this reads.
 "
 function readback_draws(obj, chain::FlexiChains.FlexiChain; draws = nothing)
+    rows = estimated_rows(obj)
     sel = _draw_indices(chain, draws)
     idx = sel isa Colon ? (1:FlexiChains.niters(chain)) : sel
-    return [readback(obj, chain; draw = i) for i in idx]
+    isempty(rows) && return [reconstruct(obj, Float64[]) for _ in idx]
+    # Materialise each estimated row's column once, then index per draw, so
+    # this stays O(niter) rather than re-extracting every column per draw.
+    cols = [vec(_chain_column(chain, row.name)) for row in rows]
+    return [reconstruct(obj, [col[i] for col in cols]) for i in idx]
 end
