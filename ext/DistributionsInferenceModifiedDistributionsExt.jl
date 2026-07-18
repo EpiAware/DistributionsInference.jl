@@ -18,7 +18,7 @@
 # `Distributions.jl` leaf carries no prior anywhere, so there is nothing here
 # to mark estimated on the object itself, and `flat_dimension` is always `0`.
 # That is not a stand-in for a missing feature — it is the complete, correct
-# scope. Per @seabbs's direction on ComposedDistributions#195/DistributionsInference#20,
+# scope. Following the pattern shipped in DistributionsInference#23,
 # `distribution_priors(obj; priors, default)` (`src/priors.jl`) is the
 # generic "attach a prior" path for ANY `parameter_rows`-implementing object:
 # it returns a full row set with priors filled, directly usable as a fittable

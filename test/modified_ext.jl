@@ -87,8 +87,7 @@ end
     # distribution_priors' documented "estimate everything" default, via the
     # generic bare-row-vector path (parameter_rows(d) alone makes this
     # reachable; no bespoke "make this Affine estimated" mechanism is needed,
-    # per @seabbs's direction on ComposedDistributions#195/
-    # DistributionsInference#20).
+    # following the pattern shipped in DistributionsInference#23.
     affine_scale, affine_shift = 1.5, 0.5
     true_shape, true_scale = 3.0, 1.2
     rng = Random.Xoshiro(1)
