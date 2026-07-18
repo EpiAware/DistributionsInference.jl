@@ -12,13 +12,41 @@
 @testsnippet TuringFixture begin
     using DistributionsInference, Distributions
 
+    # A gradient-based sampler (`NUTS`) evaluates `reconstruct` at a
+    # `ForwardDiff.Dual`-valued flat vector, so the ESTIMATED field's type
+    # must be generic (a concretely `Float64` field, like `ToyFixture`'s
+    # `ToyGammaLeaf`, errors under `NUTS`; see `as_turing`'s docstring). A
+    # `Distributions.jl` leaf gets this for free from its own parametric
+    # type; these toy leaves need the same.
+    struct TuringGammaLeaf{S <: Real}
+        shape::S
+        scale::Float64
+        shape_prior::Distribution
+    end
+
+    Distributions.logpdf(d::TuringGammaLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::TuringGammaLeaf)
+        return [
+            (name = :shape, value = d.shape,
+                prior = d.shape_prior, support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(d::TuringGammaLeaf, x::AbstractVector)
+        return TuringGammaLeaf(x[1], d.scale, d.shape_prior)
+    end
+
     # Two estimated parameters under a DOTTED row name (mirrors a nested
     # parameter path, e.g. a leaf nested under an edge): proves `as_turing`
     # splits the dotted name into DynamicPPL's nested `VarName` segments the
-    # same way the readback rebuilds them.
-    struct TwoParamLeaf
-        shape::Float64
-        scale::Float64
+    # same way the readback rebuilds them. Independently-typed fields for the
+    # same AD reason as `TuringGammaLeaf` (both are estimated here, and each
+    # may carry a different `Dual` tag/perturbation).
+    struct TwoParamLeaf{S <: Real, C <: Real}
+        shape::S
+        scale::C
     end
 
     Distributions.logpdf(d::TwoParamLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
@@ -86,12 +114,12 @@ end
           DistributionsInference.logdensity(prob, x)
 end
 
-@testitem "as_turing round-trip: NUTS chain reads back through readback" setup=[ToyFixture] begin
+@testitem "as_turing round-trip: NUTS chain reads back through readback" setup=[TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, Turing, Random
     using FlexiChains: FlexiChains, VNChain
 
     scale = 1.5
-    leaf = ToyGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.2))
+    leaf = TuringGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.2))
     data = [1.5, 2.0, 3.2, 2.8, 1.9]
 
     model = DistributionsInference.as_turing(leaf, data)
@@ -112,7 +140,7 @@ end
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
 end
 
-@testitem "as_turing acceptance: NUTS recovers the true parameter" setup=[ToyFixture] begin
+@testitem "as_turing acceptance: NUTS recovers the true parameter" setup=[TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, Turing, Random
     using FlexiChains: FlexiChains, VNChain
 
@@ -121,7 +149,7 @@ end
     scale = 1.5
     data = rand(rng, Gamma(true_shape, scale), 500)
 
-    leaf = ToyGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.5))
+    leaf = TuringGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.5))
     model = DistributionsInference.as_turing(leaf, data)
 
     Random.seed!(2)

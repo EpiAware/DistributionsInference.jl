@@ -37,6 +37,13 @@ sample it from and is rejected with an `ArgumentError`. Sample such an object
 with [`as_logdensity`](@ref) + `LogDensityProblemsAD` (the `LogDensityProblems`
 extension) instead.
 
+A gradient-based sampler (e.g. `NUTS`) evaluates [`reconstruct`](@ref) at a
+`ForwardDiff.Dual`-valued flat vector, so `obj`'s type must accept a non-`Real`
+concrete element for each ESTIMATED field: a `Distributions.jl` leaf already
+does (its type parameter is generic), and a hand-written `struct` needs the
+same — a field concretely typed `Float64` errors under `NUTS` (a
+gradient-free sampler, e.g. `AdvancedMH`, has no such constraint).
+
 This method is available only when `DynamicPPL` is loaded (the model lives in a
 package extension).
 
@@ -56,8 +63,8 @@ package extension).
 using DistributionsInference, Distributions, DynamicPPL, Turing, Random
 using FlexiChains: FlexiChains, VNChain
 
-struct TuringGammaLeaf
-    shape::Float64
+struct TuringGammaLeaf{S <: Real}
+    shape::S
     scale::Float64
 end
 
