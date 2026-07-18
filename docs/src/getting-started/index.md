@@ -112,6 +112,8 @@ same [`readback`](@ref) call reads its chain back too.
 ## Learning more
 
 - Want the full interface? See the [Public API](@ref public-api).
+- Want the packages DistributionsInference works alongside? See
+  [Related packages](../index.md) on the home page.
 
 ## Getting help
 
