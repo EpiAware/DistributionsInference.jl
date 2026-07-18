@@ -21,6 +21,7 @@
 # its `TUTORIAL_STUBS` heading meanwhile. Restore the deps and re-add `docs`
 # as a workspace member once the upstream ceiling lifts.
 [deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 ADFixtures = "51837e51-2e8d-4c65-a757-038da73554aa"
 DifferentiationInterfaceTest = "a82114a7-5aa3-49a8-9643-716bb13727a3"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
