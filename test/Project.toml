@@ -20,6 +20,7 @@ ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
+ModifiedDistributions = "664e6f8c-d74f-44d3-9f37-f82699103046"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 JuliaFormatter = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
@@ -51,6 +52,7 @@ JET = "0.10.2"
 JuliaFormatter = "2"
 LinearAlgebra = "1"
 LogDensityProblems = "2"
+ModifiedDistributions = "0.1"
 Pkg = "1"
 Statistics = "1"
 Test = "1"
@@ -60,6 +62,9 @@ Turing = "0.42, 0.43, 0.44, 0.45"
 
 [sources]
 DistributionsInference = {path = ".."}
+# ModifiedDistributions is unregistered, so it is pinned by git until it
+# registers (mirrors its own test env's ComposedDistributions pin).
+ModifiedDistributions = {rev = "main", url = "https://github.com/EpiAware/ModifiedDistributions.jl"}
 # Until EpiAwarePackageTools is registered, it is pinned by git so
 # the env resolves out of the box. Switch to a local path to
 # develop the kit alongside this package.
