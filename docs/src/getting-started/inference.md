@@ -141,7 +141,20 @@ fitted_tree = DistributionsInference.readback(tree, tree_chain)
 event(fitted_tree, :onset_admit)
 ```
 
+`as_turing` works on a tree exactly as it does on `leaf`, one named site per estimated row.
+
+```@example fitting
+tree_model = DistributionsInference.as_turing(tree, tree_data)
+Random.seed!(1)
+tree_turing_chain = sample(tree_model, NUTS(), 200; chain_type = VNChain, progress = false)
+event(DistributionsInference.readback(tree, tree_turing_chain), :onset_admit)
+```
+
+A tree with a *centred* `pool` (ComposedDistributions' partial-pooling spec) is the one case `as_turing` refuses: a centred pool's member row has no fixed `~` prior of its own (it is scored against the reconstructed population instead, through [`extra_logprior`](@ref)), and DynamicPPL has no sampling path for that yet, so `as_turing` raises a clear error naming the affected rows rather than silently mis-scoring them; fit that tree through `as_logdensity` and a `LogDensityProblems`-compatible sampler instead, exactly as in the section above.
+
+A `ComposedDistributions` tree also keeps its own native `update(tree, chain)` (documented on ComposedDistributions' own inference guide, linked below); this page shows `readback` because it is the one spelling that works identically whether the object came from this package, from ComposedDistributions, or from a hand-written type like `ToyDelay`.
+
 ## See also
 
 - [Public API](@ref public-api) for the full protocol surface (`parameter_rows`, `reconstruct`, `distribution_priors`, `distribution_params`, and the rest).
-- ComposedDistributions' own [inference guide](https://composeddistributions.epiaware.org/stable/getting-started/inference) for the tree-shaped verbs (`compose`, `uncertain`, `update`) this page's composed-distribution example builds on.
+- ComposedDistributions' own [inference guide](https://composeddistributions.epiaware.org/stable/getting-started/inference) for the tree-shaped verbs (`compose`, `uncertain`, `pool`, `update`) this page's composed-distribution example builds on.
