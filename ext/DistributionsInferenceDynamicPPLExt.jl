@@ -112,13 +112,18 @@ function _to_symbol_chain(obj, chain::FlexiChains.FlexiChain{<:VarName},
         prefix::Symbol)
     lookup = Dict(_row_varname(prefix, row.name) => row.name
     for row in estimated_rows(obj))
-    if isempty(lookup)
-        # `FlexiChains.map_parameters` infers the wrong key type on a chain
+    if isempty(FlexiChains.parameters(chain))
+        # `FlexiChains.map_parameters` infers the wrong key type on a CHAIN
         # with zero parameters (an empty `Set` there resolves to `Union{}`,
         # not `Symbol`, and building a `FlexiChain{Union{}}` stack-overflows
         # on its own `NamedTuple` reconstruction): build a fresh empty
         # `Symbol`-keyed chain directly instead, mirroring `to_flexichain`'s
-        # own 0-estimated construction in `src/readback.jl`.
+        # own 0-estimated construction in `src/readback.jl`. Guarding on the
+        # CHAIN being empty (not `lookup`/`obj`'s estimated rows) matters: an
+        # `obj` with estimated rows against a genuinely empty chain is a
+        # mismatch, and still needs to reach the core readback's
+        # `has_parameter` check below to be reported as one, rather than
+        # silently reading back the template unchanged.
         return FlexiChains.FlexiChain{Symbol}(
             FlexiChains.niters(chain), FlexiChains.nchains(chain),
             Dict{FlexiChains.ParameterOrExtra{<:Symbol}, Matrix}())
