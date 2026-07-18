@@ -22,5 +22,13 @@ gain a `VarName`-keyed dispatch, so a chain sampled from `as_turing` (e.g.
 with `chain_type = FlexiChains.VNChain`) reads back unchanged. Generalises
 ComposedDistributions' `as_turing`/FlexiChains `VarName` readback (closes #4).
 
+Added the `Bijectors` weakdep extension (`DistributionsInferenceBijectorsExt`):
+`to_constrained(prob, z)` maps an unconstrained flat vector to the constrained
+ESTIMATED parameters plus a log-Jacobian, built per row from
+`FitLogDensity`'s stored `flat_priors` via `Bijectors.bijector`, so
+`logdensity(prob, x) + logjac` is the unconstrained-space log-target a
+sampler works with. Generalises ComposedDistributions' `to_constrained`
+(closes #6).
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.

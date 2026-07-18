@@ -13,8 +13,9 @@ The protocol (`parameter_rows`, `reconstruct`), the engine (`as_logdensity`,
 `logdensity`, `FitLogDensity`), and the dotted-name `FlexiChains` readback
 (`to_flexichain`, `readback`, `readback_draws`) are implemented, together with
 the `DynamicPPL` extension (`as_turing`, and a `VarName`-keyed dispatch of
-`readback`/`readback_draws`); the remaining extension packages land in
-follow-up issues.
+`readback`/`readback_draws`) and the `Bijectors` extension (`to_constrained`,
+the prior-driven unconstrained <-> constrained transform); the remaining
+extension packages land in follow-up issues.
 
 ```@example
 using DistributionsInference
@@ -52,6 +53,11 @@ include("readback.jl")
 # parameters, a Turing-free stub whose method lives in the weakdep
 # `DistributionsInferenceDynamicPPLExt` extension (`ext/`).
 include("turing.jl")
+
+# `to_constrained`: the unconstrained <-> constrained transform, a
+# Bijectors-free stub whose method lives in the weakdep
+# `DistributionsInferenceBijectorsExt` extension (`ext/`).
+include("bijectors.jl")
 
 include("public.jl")
 
