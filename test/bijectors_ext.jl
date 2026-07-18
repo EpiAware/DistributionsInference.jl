@@ -90,15 +90,18 @@ end
     using Bijectors: Bijectors, transformed
 
     leaf = TwoParamLeaf(2.0, 1.0)
-    data = [1.5, 2.0, 3.2]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    data = Float64[]
+    zero_lik(d, ds) = 0.0
+    prob = DistributionsInference.as_logdensity(leaf, data; loglik = zero_lik)
     n = DistributionsInference.flat_dimension(leaf)
     z = [-0.3, 0.5]
     x, logjac = DistributionsInference.to_constrained(prob, z)
 
     # The unconstrained-space log-target, rebuilt independently row by row
     # through Bijectors' own `transformed` distribution (a different code
-    # path from `to_constrained`'s `with_logabsdet_jacobian` call).
+    # path from `to_constrained`'s `with_logabsdet_jacobian` call). A
+    # zero likelihood isolates the prior-transform identity this test
+    # targets from the (already separately tested) data term.
     target = sum(eachindex(z)) do i
         logpdf(transformed(prob.flat_priors[i]), z[i])
     end
