@@ -40,7 +40,13 @@ const TUTORIAL_STUBS = Pair{String, String}[
 # terminate in reasonable time), so it need not block its siblings from
 # running for real. Leave empty; every heavy tutorial with no such problem
 # should execute.
-const FORCE_STUB_TUTORIALS = String[]
+#
+# `ad-backends.jl` is force-stubbed while its plotting stack cannot resolve:
+# `AlgebraOfGraphics` caps `DimensionalData` below the floor the hard
+# `FlexiChains` dep needs (kit#283; ComposedDistributions#147 is the same
+# conflict), so its deps were dropped from docs/Project.toml (#19). Un-stub
+# and restore the deps when the upstream ceiling lifts.
+const FORCE_STUB_TUTORIALS = String["ad-backends.jl"]
 
 # Whether this package advertises itself as part of the EpiAware ecosystem: a
 # "Part of the EpiAware ecosystem" section in the managed README block, and the
