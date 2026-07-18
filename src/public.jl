@@ -16,3 +16,10 @@ public parameter_rows, estimated_rows, flat_dimension, reconstruct,
 # hard dependency here, so the interface is implemented directly on
 # `FitLogDensity` with no glue extension needed.
 public FitLogDensity, as_logdensity, logdensity
+
+# The dotted-name `FlexiChains` readback: `to_flexichain` builds a chain from
+# raw sampler draws keyed by the estimated rows' dotted names; `readback` and
+# `readback_draws` read it back onto a fitted object (point summary/draw, and
+# every draw respectively). `FlexiChains` is a hard dependency, so this needs
+# no PPL and no glue extension.
+public to_flexichain, readback, readback_draws
