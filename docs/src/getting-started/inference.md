@@ -3,7 +3,7 @@
 Any type becomes fittable by naming its own scalar parameters and how to rebuild itself from a flat vector.
 No probabilistic programming language is required to reach that point: the log-density this produces is PPL-neutral, and Turing (or any other PPL) is an optional layer on top, not a requirement.
 
-This page carries the `ToyDelay` object from the README's own quickstart further: sampling with a hand-rolled `LogDensityProblems`-compatible sampler and with Turing, then reading a fitted chain back onto the object either way.
+This page carries the `ToyDelay` object from the README's own quickstart further: sampling with a hand-rolled `LogDensityProblems`-compatible sampler and with Turing, then reading a fitted chain back onto the object either way, before showing the same calls working unchanged against a `ComposedDistributions` tree.
 
 ```@example fitting
 using DistributionsInference, Distributions, Random
@@ -116,11 +116,32 @@ DistributionsInference.readback(leaf, turing_chain).shape
 
 ## Fitting a composed distribution
 
-!!! note "Coming soon"
-    A `ComposedDistributions` tree will implement this same protocol directly (tracked in [DistributionsInference#5](https://github.com/EpiAware/DistributionsInference.jl/issues/5)), so a tree becomes fittable through exactly the calls on this page, with no separate readback surface.
-    Until then, fit a composed tree through ComposedDistributions' own [inference guide](https://composeddistributions.epiaware.org/stable/getting-started/inference), which covers the same three routes — a bare `LogDensityProblems` sampler, Turing, and reading the fit back — against its own `uncertain`/`update` verbs.
+Nothing above is specific to a hand-written type like `ToyDelay`: the same verbs work directly on a `ComposedDistributions` tree once `ComposedDistributions` is loaded, through a weak extension that maps a tree's own `params_table` onto this package's row schema.
+
+```@example fitting
+using ComposedDistributions
+using ComposedDistributions: compose, uncertain, event
+
+tree = compose((
+    onset_admit = uncertain(Gamma(2.0, 1.0); shape = LogNormal(log(2.0), 0.2)),
+    admit_death = LogNormal(0.5, 0.4)))
+tree_data = [[0.5, 2.0], [1.0, 3.0], [0.8, 2.5]]
+
+tree_prob = DistributionsInference.as_logdensity(tree, tree_data)
+DistributionsInference.flat_dimension(tree)
+```
+
+The one estimated parameter is `onset_admit`'s shape (the [`uncertain`](@ref) leaf); `admit_death` stays fixed, exactly like `ToyDelay`'s `scale` above.
+Sampling and reading the fit back are the same calls against `tree` instead of `leaf`, `to_flexichain`/`readback` or `as_turing` alike; the hand-rolled sampler from earlier on this page needs no change at all.
+
+```@example fitting
+tree_draws = toy_sample(tree_prob, [2.0], 500)
+tree_chain = DistributionsInference.to_flexichain(tree, tree_draws)
+fitted_tree = DistributionsInference.readback(tree, tree_chain)
+event(fitted_tree, :onset_admit)
+```
 
 ## See also
 
 - [Public API](@ref public-api) for the full protocol surface (`parameter_rows`, `reconstruct`, `distribution_priors`, `distribution_params`, and the rest).
-- ComposedDistributions' [inference guide](https://composeddistributions.epiaware.org/stable/getting-started/inference) for fitting a composed tree today.
+- ComposedDistributions' own [inference guide](https://composeddistributions.epiaware.org/stable/getting-started/inference) for the tree-shaped verbs (`compose`, `uncertain`, `update`) this page's composed-distribution example builds on.

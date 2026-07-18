@@ -22,6 +22,7 @@
 # as a workspace member once the upstream ceiling lifts.
 [deps]
 ADFixtures = "51837e51-2e8d-4c65-a757-038da73554aa"
+ComposedDistributions = "2f642b71-32a9-4f47-97c4-6deb7517f7a7"
 DifferentiationInterfaceTest = "a82114a7-5aa3-49a8-9643-716bb13727a3"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
@@ -40,12 +41,16 @@ DistributionsInference = "205dfa0f-445e-4692-a651-ee32c3bca9ae"
 [sources]
 DistributionsInference = {path = ".."}
 ADFixtures = {path = "../test/ADFixtures"}
+# ComposedDistributions is unregistered, so it is pinned by git until it
+# registers (mirrors test/Project.toml).
+ComposedDistributions = {rev = "main", url = "https://github.com/EpiAware/ComposedDistributions.jl"}
 # Until EpiAwarePackageTools is registered, it is pinned by git so
 # the env resolves out of the box. Switch to a local path to
 # develop the kit alongside this package.
 EpiAwarePackageTools = {url = "https://github.com/EpiAware/EpiAwarePackageTools.jl", rev = "main"}
 
 [compat]
+ComposedDistributions = "0.1"
 DifferentiationInterfaceTest = "0.9, 0.10"
 Distributions = "0.25"
 DynamicPPL = "0.39, 0.40, 0.41, 0.42"
