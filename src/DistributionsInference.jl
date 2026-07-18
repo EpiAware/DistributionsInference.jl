@@ -11,8 +11,10 @@ core (see `ComposedDistributions#185`).
 
 The protocol (`parameter_rows`, `reconstruct`), the engine (`as_logdensity`,
 `logdensity`, `FitLogDensity`), and the dotted-name `FlexiChains` readback
-(`to_flexichain`, `readback`, `readback_draws`) are implemented; the
-extension packages land in follow-up issues.
+(`to_flexichain`, `readback`, `readback_draws`) are implemented, together with
+the `DynamicPPL` extension (`as_turing`, and a `VarName`-keyed dispatch of
+`readback`/`readback_draws`); the remaining extension packages land in
+follow-up issues.
 
 ```@example
 using DistributionsInference
@@ -45,6 +47,11 @@ include("engine.jl")
 # (`readback`, `readback_draws`). `FlexiChains` is a hard dependency, so
 # this needs no PPL and no glue extension.
 include("readback.jl")
+
+# `as_turing`: a DynamicPPL model over a fittable object's estimated
+# parameters, a Turing-free stub whose method lives in the weakdep
+# `DistributionsInferenceDynamicPPLExt` extension (`ext/`).
+include("turing.jl")
 
 include("public.jl")
 

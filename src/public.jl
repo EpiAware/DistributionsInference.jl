@@ -21,5 +21,14 @@ public FitLogDensity, as_logdensity, logdensity
 # raw sampler draws keyed by the estimated rows' dotted names; `readback` and
 # `readback_draws` read it back onto a fitted object (point summary/draw, and
 # every draw respectively). `FlexiChains` is a hard dependency, so this needs
-# no PPL and no glue extension.
+# no PPL and no glue extension. Both also dispatch on a `VarName`-keyed chain
+# (e.g. sampled from `as_turing`) once `DynamicPPL` is loaded (see
+# `ext/DistributionsInferenceDynamicPPLExt.jl`).
 public to_flexichain, readback, readback_draws
+
+# `as_turing`: a DynamicPPL model over a fittable object's estimated
+# parameters, a light wrapper on `as_logdensity`. Declared here (with its
+# docstring, in `turing.jl`) as a Turing-free stub; the model itself lives in
+# the `DistributionsInferenceDynamicPPLExt` package extension, loaded only
+# when `DynamicPPL` is present.
+public as_turing
