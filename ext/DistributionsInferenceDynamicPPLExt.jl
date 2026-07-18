@@ -25,7 +25,8 @@ module DistributionsInferenceDynamicPPLExt
 using DistributionsInference: DistributionsInference, FitLogDensity,
                               as_logdensity, estimated_rows, reconstruct,
                               extra_logprior
-import DistributionsInference: as_turing, readback, readback_draws
+import DistributionsInference: as_turing, distribution_params, readback,
+                               readback_draws
 using DynamicPPL: DynamicPPL, @model, NamedDist, VarName
 using FlexiChains: FlexiChains
 
@@ -103,7 +104,7 @@ end
 # Rename a `VarName`-keyed chain's parameters onto the estimated rows' dotted
 # `Symbol` names, so it matches what the core `to_flexichain` would have
 # built, and the existing `Symbol`-keyed readback machinery
-# (`_flat_from_chain`/`_chain_column` in `src/readback.jl`) reads it
+# (`distribution_params`/`_chain_column` in `src/readback.jl`) reads it
 # unchanged. A chain parameter that is not one of `obj`'s estimated rows'
 # `VarName`s signals a chain that was not sampled from `as_turing(obj, ...)`
 # at this `prefix` (wrong prefix, or a mismatched template), so it errors
@@ -136,11 +137,18 @@ function _to_symbol_chain(obj, chain::FlexiChains.FlexiChain{<:VarName},
     end
 end
 
-# `readback`/`readback_draws` for a `VarName`-keyed chain (e.g. sampled from
-# `as_turing` with `chain_type = FlexiChains.VNChain`): convert onto the
-# dotted `Symbol` naming via `_to_symbol_chain`, then delegate to the core
-# `Symbol`-keyed method. `prefix` matches the `prefix` `as_turing` was called
-# with (default `:d`); every other keyword forwards to the core method.
+# `distribution_params`/`readback`/`readback_draws` for a `VarName`-keyed
+# chain (e.g. sampled from `as_turing` with `chain_type =
+# FlexiChains.VNChain`): convert onto the dotted `Symbol` naming via
+# `_to_symbol_chain`, then delegate to the core `Symbol`-keyed method.
+# `prefix` matches the `prefix` `as_turing` was called with (default `:d`);
+# every other keyword forwards to the core method.
+function distribution_params(obj, chain::FlexiChains.FlexiChain{<:VarName};
+        prefix::Symbol = :d, kwargs...)
+    return distribution_params(
+        obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
+end
+
 function readback(obj, chain::FlexiChains.FlexiChain{<:VarName};
         prefix::Symbol = :d, kwargs...)
     return readback(obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
