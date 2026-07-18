@@ -9,10 +9,10 @@ programming language. Extension packages layer `DynamicPPL`,
 `ComposedDistributions`, `Bijectors`, and `Mooncake` support on top of this
 core (see `ComposedDistributions#185`).
 
-The protocol (`parameter_rows`, `reconstruct`) and the engine
-(`as_logdensity`, `logdensity`, `FitLogDensity`) are implemented; the
-dotted-name `FlexiChains` readback and the extension packages land in
-follow-up issues.
+The protocol (`parameter_rows`, `reconstruct`), the engine (`as_logdensity`,
+`logdensity`, `FitLogDensity`), and the dotted-name `FlexiChains` readback
+(`to_flexichain`, `readback`, `readback_draws`) are implemented; the
+extension packages land in follow-up issues.
 
 ```@example
 using DistributionsInference
@@ -27,6 +27,7 @@ using DocStringExtensions: @template, DOCSTRING, EXPORTS, IMPORTS,
                            TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 using FlexiChains: FlexiChains
 using LogDensityProblems: LogDensityProblems
+using Statistics: mean
 
 # Register the standard EpiAware docstring conventions before any
 # docstrings are defined (see src/docstrings.jl).
@@ -38,6 +39,12 @@ include("docstrings.jl")
 # interface).
 include("protocol.jl")
 include("engine.jl")
+
+# The dotted-name `FlexiChains` readback: build a chain from raw sampler
+# draws (`to_flexichain`) and read it back onto a fitted object
+# (`readback`, `readback_draws`). `FlexiChains` is a hard dependency, so
+# this needs no PPL and no glue extension.
+include("readback.jl")
 
 include("public.jl")
 
