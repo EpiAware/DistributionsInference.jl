@@ -32,3 +32,10 @@ public to_flexichain, readback, readback_draws
 # the `DistributionsInferenceDynamicPPLExt` package extension, loaded only
 # when `DynamicPPL` is present.
 public as_turing
+
+# `to_constrained`: the prior-driven unconstrained <-> constrained transform
+# over a `FitLogDensity`'s estimated parameters. Declared here (with its
+# docstring, in `bijectors.jl`) as a Bijectors-free stub; the transform itself
+# lives in the `DistributionsInferenceBijectorsExt` package extension, loaded
+# only when `Bijectors` is present.
+public to_constrained
