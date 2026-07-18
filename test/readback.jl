@@ -73,6 +73,76 @@ end
         leaf, "not a matrix or vector-of-vectors")
 end
 
+@testitem "distribution_params: keyed by dotted name, params-first" setup=[ToyFixture] begin
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    values = [1.0, 2.0, 3.0, 4.0]
+    chain = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
+
+    nt = DistributionsInference.distribution_params(leaf, chain)
+    @test nt isa NamedTuple
+    @test keys(nt) == (:shape,)   # only the estimated row, not `scale`
+    @test nt.shape ≈ 2.5          # default summary is `mean`
+
+    # Same selection semantics as `readback` (it is the primitive underneath).
+    @test DistributionsInference.distribution_params(
+        leaf, chain; draw = 2).shape ≈ 2.0
+    @test DistributionsInference.distribution_params(
+        leaf, chain; draws = 2:3).shape ≈ 2.5
+
+    # `readback` collapses this to a flat vector (estimated_rows order) and
+    # reconstructs: the two agree exactly.
+    @test DistributionsInference.readback(leaf, chain).shape == nt.shape
+
+    # The 0-estimated edge case returns an empty NamedTuple, not an error.
+    fixed_leaf = ToyGammaLeaf(2.0, 1.0)
+    fixed_chain = DistributionsInference.to_flexichain(fixed_leaf, zeros(0, 3))
+    @test DistributionsInference.distribution_params(fixed_leaf, fixed_chain) ==
+          NamedTuple()
+end
+
+@testitem "distribution_params: a dotted (nested) row name round-trips" begin
+    using DistributionsInference, Distributions
+    using FlexiChains: FlexiChains
+
+    rows = [
+        (name = Symbol("leaf.shape"), value = 2.0, prior = LogNormal(0.0, 0.2),
+            support = (0.0, Inf)),
+        (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
+    draws = [1.0 2.0 3.0]
+    chain = DistributionsInference.to_flexichain(rows, draws)
+
+    nt = DistributionsInference.distribution_params(rows, chain)
+    @test keys(nt) == (Symbol("leaf.shape"),)
+    @test nt[Symbol("leaf.shape")] ≈ 2.0
+end
+
+@testitem "distribution_params: a duplicate estimated name errors clearly" begin
+    using DistributionsInference, Distributions
+    using FlexiChains: FlexiChains
+
+    # Two rows sharing a dotted name: a `parameter_rows` protocol bug (each
+    # row is meant to identify one distinct parameter), not a case with a
+    # sensible dedupe. `NamedTuple{names}(...)` would otherwise fail with a
+    # bare "duplicate field name" error naming neither the object nor the
+    # repeated name.
+    rows = [
+        (name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
+            support = (0.0, Inf)),
+        (name = :shape, value = 1.0, prior = LogNormal(0.0, 0.2),
+            support = (0.0, Inf))]
+    chain = DistributionsInference.to_flexichain(rows, [1.0 2.0 3.0; 4.0 5.0 6.0])
+
+    err = try
+        DistributionsInference.distribution_params(rows, chain)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("duplicate", err.msg)
+    @test occursin("shape", err.msg)
+end
+
 @testitem "readback: summary/draw/draws selection semantics" setup=[ToyFixture] begin
     using Statistics: median
 

@@ -221,6 +221,12 @@ end
     all_fitted = DistributionsInference.readback_draws(leaf, chain)
     @test length(all_fitted) == 200
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
+
+    # `distribution_params` also dispatches on a VarName-keyed chain (same
+    # `_to_symbol_chain` conversion `readback` uses), and agrees with it.
+    nt = DistributionsInference.distribution_params(leaf, chain)
+    @test keys(nt) == (:shape,)
+    @test nt.shape == fitted.shape
 end
 
 @testitem "as_turing acceptance: NUTS recovers the true parameter" setup=[TuringFixture] begin
