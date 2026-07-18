@@ -13,17 +13,15 @@
 # combined trend plot (lazily loaded kit-side; absent here, the plot degrades
 # to an `@info` note rather than failing the build).
 #
-# NOTE: this env currently cannot instantiate. `AlgebraOfGraphics` caps
-# `DimensionalData` at 0.28.3 (transitively); this package's hard `FlexiChains`
-# dep needs `DimensionalData` >=0.29.24. Filed as
-# EpiAwarePackageTools#283 (root `[workspace]` drops `docs` as a member for
-# the same reason). Re-run `scaffold_update`/re-add as a workspace member once
-# that lands upstream.
+# NOTE: the ad-backends tutorial's plotting stack (AlgebraOfGraphics/
+# CairoMakie/DataFramesMeta) is removed so this env instantiates:
+# `AlgebraOfGraphics` caps `DimensionalData` at 0.28.3 (transitively) while
+# this package's hard `FlexiChains` dep needs >=0.29.24 (kit#283;
+# ComposedDistributions#147 is the same conflict). The tutorial renders from
+# its `TUTORIAL_STUBS` heading meanwhile. Restore the deps and re-add `docs`
+# as a workspace member once the upstream ceiling lifts.
 [deps]
 ADFixtures = "51837e51-2e8d-4c65-a757-038da73554aa"
-AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
-CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-DataFramesMeta = "1313f7d8-7da2-5740-9ea0-a2ca25f37964"
 DifferentiationInterfaceTest = "a82114a7-5aa3-49a8-9643-716bb13727a3"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
@@ -43,9 +41,6 @@ ADFixtures = {path = "../test/ADFixtures"}
 EpiAwarePackageTools = {url = "https://github.com/EpiAware/EpiAwarePackageTools.jl", rev = "main"}
 
 [compat]
-AlgebraOfGraphics = "0.13"
-CairoMakie = "0.15"
-DataFramesMeta = "0.15"
 DifferentiationInterfaceTest = "0.9, 0.10"
 Markdown = "1"
 Statistics = "1"
