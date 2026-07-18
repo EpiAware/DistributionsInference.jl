@@ -10,9 +10,16 @@ FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
+[weakdeps]
+DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
+
+[extensions]
+DistributionsInferenceDynamicPPLExt = "DynamicPPL"
+
 [compat]
 Distributions = "0.25"
 DocStringExtensions = "0.9"
+DynamicPPL = "0.39, 0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
 LogDensityProblems = "2"
 Statistics = "1"
