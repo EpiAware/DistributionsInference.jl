@@ -30,5 +30,18 @@ ESTIMATED parameters plus a log-Jacobian, built per row from
 sampler works with. Generalises ComposedDistributions' `to_constrained`
 (closes #6).
 
+Added the `ComposedDistributions` weakdep extension
+(`DistributionsInferenceComposedDistributionsExt`): `parameter_rows`,
+`estimated_rows`, `flat_dimension`, `reconstruct` and `extra_logprior` for a
+composed distribution, over CD's existing public codec (`params_table`,
+`flat_dimension`, `unflatten`, `reconstruct`) rather than new inference logic —
+a centred pooled parameter's population-dependent prior is scored through
+`extra_logprior`, and every other estimated row (stick-breaking `Resolve`
+coordinates, pooled z-latents/hyperparameters, shared tags) maps straight onto
+a dotted-name row. `to_flexichain`/`readback`/`readback_draws`/`as_turing` need
+no ComposedDistributions-specific code at all once the row protocol is
+correct. Generalises ComposedDistributions' `as_logdensity`/`ComposedLogDensity`
+(closes #5).
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.

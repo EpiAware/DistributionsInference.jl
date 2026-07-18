@@ -8,6 +8,7 @@ AdvancedMH = "5b7e9947-ddc0-4b3f-9b55-0d8042f74170"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
+ComposedDistributions = "2f642b71-32a9-4f47-97c4-6deb7517f7a7"
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 DifferentiationInterfaceTest = "a82114a7-5aa3-49a8-9643-716bb13727a3"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
@@ -39,6 +40,7 @@ AdvancedMH = "0.8"
 Aqua = "0.8"
 BenchmarkTools = "1.4"
 Bijectors = "0.13, 0.14, 0.15, 0.16"
+ComposedDistributions = "0.1"
 DifferentiationInterface = "0.6, 0.7"
 DifferentiationInterfaceTest = "0.9, 0.10"
 Distributions = "0.25"
@@ -60,6 +62,9 @@ Turing = "0.42, 0.43, 0.44, 0.45"
 
 [sources]
 DistributionsInference = {path = ".."}
+# ComposedDistributions is unregistered, so it is pinned by git until it
+# registers (mirrors ModifiedDistributions.jl's own test env pin).
+ComposedDistributions = {rev = "main", url = "https://github.com/EpiAware/ComposedDistributions.jl"}
 # Until EpiAwarePackageTools is registered, it is pinned by git so
 # the env resolves out of the box. Switch to a local path to
 # develop the kit alongside this package.
