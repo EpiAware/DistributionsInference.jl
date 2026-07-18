@@ -33,7 +33,7 @@
         support = (-Inf, Inf))
     @test DistributionsInference.default_prior(unmapped_free) isa Normal
 
-    # A DOTTED name is classified by its OWN (last-segment) name, not the
+    # A dotted name is classified by its own (last-segment) name, not the
     # dotted path.
     dotted_row = (name = Symbol("onset.shape"), value = 2.0, prior = nothing,
         support = (-Inf, Inf))
@@ -61,7 +61,7 @@ end
     overridden = DistributionsInference.distribution_priors(
         rows; priors = Dict(:shape => custom))
     @test overridden[1].prior == custom
-    # An override also wins over an ALREADY-attached prior.
+    # An override also wins over an already-attached prior.
     overridden2 = DistributionsInference.distribution_priors(
         rows; priors = Dict(:scale => custom))
     @test overridden2[2].prior == custom

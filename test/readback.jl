@@ -80,7 +80,7 @@ end
 
     nt = DistributionsInference.distribution_params(leaf, chain)
     @test nt isa NamedTuple
-    @test keys(nt) == (:shape,)   # only the ESTIMATED row, not `scale`
+    @test keys(nt) == (:shape,)   # only the estimated row, not `scale`
     @test nt.shape ≈ 2.5          # default summary is `mean`
 
     # Same selection semantics as `readback` (it is the primitive underneath).
@@ -114,6 +114,33 @@ end
     nt = DistributionsInference.distribution_params(rows, chain)
     @test keys(nt) == (Symbol("leaf.shape"),)
     @test nt[Symbol("leaf.shape")] ≈ 2.0
+end
+
+@testitem "distribution_params: a duplicate estimated name errors clearly" begin
+    using DistributionsInference, Distributions
+    using FlexiChains: FlexiChains
+
+    # Two rows sharing a dotted name: a `parameter_rows` protocol bug (each
+    # row is meant to identify one distinct parameter), not a case with a
+    # sensible dedupe. `NamedTuple{names}(...)` would otherwise fail with a
+    # bare "duplicate field name" error naming neither the object nor the
+    # repeated name.
+    rows = [
+        (name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
+            support = (0.0, Inf)),
+        (name = :shape, value = 1.0, prior = LogNormal(0.0, 0.2),
+            support = (0.0, Inf))]
+    chain = DistributionsInference.to_flexichain(rows, [1.0 2.0 3.0; 4.0 5.0 6.0])
+
+    err = try
+        DistributionsInference.distribution_params(rows, chain)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("duplicate", err.msg)
+    @test occursin("shape", err.msg)
 end
 
 @testitem "readback: summary/draw/draws selection semantics" setup=[ToyFixture] begin

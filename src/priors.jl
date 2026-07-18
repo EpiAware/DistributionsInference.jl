@@ -1,9 +1,9 @@
 # Default-prior assembly over the fit protocol: the generic, params-first
 # analogue of ComposedDistributions' `build_priors`/`default_prior`
-# (CD#195/DI#20), but over ANY object implementing `parameter_rows` rather
+# (CD#195/DI#20), but over any object implementing `parameter_rows` rather
 # than a `ComposedDistributions` tree specifically.
 #
-# This is a SEPARATE implementation, not a thin wrapper over CD's: DI depends
+# This is a separate implementation, not a thin wrapper over CD's: DI depends
 # on ComposedDistributions (weakly, via an eventual extension), not the
 # reverse, so CD's own `default_prior`/`build_priors` cannot delegate here
 # without inverting that dependency edge. The two packages carry independent
@@ -12,7 +12,7 @@
 # `_is_location_param` (`src/composers/introspection.jl`) for the sibling
 # copy this mirrors.
 
-# A `parameter_rows` row's OWN parameter name, stripping any dotted path
+# A `parameter_rows` row's own parameter name, stripping any dotted path
 # prefix (`Symbol("onset.shape")` -> `:shape`): the classification below
 # looks at the parameter's own natural domain, not the path it sits at.
 function _own_param_name(name::Symbol)
@@ -42,7 +42,7 @@ Pick a default prior for one `parameter_rows` row, brms-style.
 `default_prior(row)` is [`distribution_priors`](@ref)'s per-row default for
 rows the caller does not override. `row` is a [`parameter_rows`](@ref)-shaped
 `NamedTuple` `(; name, value, prior, support)`; the prior family follows the
-parameter's OWN name (the last dotted segment of `name`, e.g. `:shape` from
+parameter's own name (the last dotted segment of `name`, e.g. `:shape` from
 `Symbol(\"onset.shape\")`), not the row's `support`:
 
 - a `[0, 1]`-support row (a simplex/probability parameter) -> `Uniform(0, 1)`.
@@ -87,7 +87,7 @@ end
 Assemble a fully-specified row set from a fittable object, brms-style.
 
 `distribution_priors(obj; priors, default)` reads [`parameter_rows`](@ref)`(obj)`
-and returns the SAME row shape with every row's `prior` field filled: a
+and returns the same row shape with every row's `prior` field filled: a
 `priors` override for that row's dotted `name`, if given, else the row's own
 attached `prior` if it is already set, else `default(row)` (support-derived,
 [`default_prior`](@ref) unless a different `default` is given). The result is

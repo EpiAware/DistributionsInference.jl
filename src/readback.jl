@@ -124,9 +124,9 @@ _select_draws(col, sel) = vec(col)[sel]
 
 Read a dotted-name `FlexiChain`'s parameter values, keyed by name.
 
-`distribution_params(obj, chain)` is the PARAMS-FIRST readback primitive
+`distribution_params(obj, chain)` is the params-first readback primitive
 (CD#195/DI#20): the estimated parameter values read from `chain`, keyed by
-each [`estimated_rows`](@ref)`(obj)` row's dotted `name`, BEFORE any object
+each [`estimated_rows`](@ref)`(obj)` row's dotted `name`, *before* any object
 is rebuilt — a single `draw`'s values, or each row's draws reduced by
 `summary` over the `draws` selection (default: the mean over every draw).
 [`readback`](@ref) is a thin layer on top: it collapses this result to a flat
@@ -150,6 +150,12 @@ silent argument swap between sibling calls.
 - `draw`: a single iteration index to read, overriding `summary`/`draws`.
 - `draws`: a subset of iterations to reduce over (a range / index vector, or a
   predicate over the iteration index); `nothing` uses every iteration.
+
+Two estimated rows sharing a dotted `name` is refused with a clear
+`ArgumentError` naming the duplicate: a `NamedTuple` cannot key two entries
+by the same name, and a repeated name can only mean `parameter_rows(obj)`
+gave two distinct parameters the same identifier (a protocol bug in `obj`'s
+own implementation), not a case with a sensible silent resolution.
 
 # Examples
 ```@example
@@ -182,6 +188,8 @@ function distribution_params(obj, chain::FlexiChains.FlexiChain;
         summary = mean, draw = nothing, draws = nothing)
     rows = estimated_rows(obj)
     isempty(rows) && return NamedTuple()
+    names = Tuple(row.name for row in rows)
+    _check_unique_names(names)
     vals = if draw !== nothing
         [vec(_chain_column(chain, row.name))[draw] for row in rows]
     else
@@ -189,8 +197,28 @@ function distribution_params(obj, chain::FlexiChains.FlexiChain;
         [summary(_select_draws(_chain_column(chain, row.name), sel))
          for row in rows]
     end
-    names = Tuple(row.name for row in rows)
     return NamedTuple{names}(Tuple(vals))
+end
+
+# `NamedTuple{names}(...)` fails on a repeated name with a bare "duplicate
+# field name" error that does not say which object or row is at fault. A
+# duplicate can only come from a `parameter_rows(obj)` implementation that
+# gives two estimated rows the same dotted `name` (a protocol bug, not a
+# normal case: every row is meant to name one distinct parameter) — refuse
+# it here, at the earliest point the duplicate is visible, with a message
+# that names the object and the repeated name(s), rather than let it surface
+# later as a puzzling `NamedTuple` construction error.
+function _check_unique_names(names::Tuple)
+    length(names) == length(Set(names)) && return nothing
+    counts = Dict{Symbol, Int}()
+    for n in names
+        counts[n] = get(counts, n, 0) + 1
+    end
+    dupes = [n for (n, c) in counts if c > 1]
+    throw(ArgumentError(
+        "distribution_params: duplicate estimated parameter name(s) " *
+        "$(dupes); parameter_rows(obj) must give every estimated row a " *
+        "unique dotted name"))
 end
 
 @doc "
@@ -297,7 +325,7 @@ length(DistributionsInference.readback_draws(leaf, chain))
 ```
 
 !!! note \"Not layered on `distribution_params`\"
-    Unlike [`readback`](@ref), this does NOT call
+    Unlike [`readback`](@ref), this does *not* call
     [`distribution_params`](@ref) once per draw: `distribution_params`
     re-fetches and re-validates every estimated row's column on each call,
     which would be O(niter x nrows) column look-ups here instead of the
