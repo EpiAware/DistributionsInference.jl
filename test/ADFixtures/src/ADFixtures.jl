@@ -82,6 +82,32 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
         DIT.Scenario{:gradient, :out}(f, θ, contexts...;
             res1 = res1, prep_args = prep_args,
             name = "fit-protocol engine logdensity"))
+
+    # The `xlogy` edge case (DI#7, ComposedDistributions#99): a Gamma-family
+    # estimated parameter landing exactly on `shape == 1.0` routes a nonzero
+    # cotangent into `LogExpFunctions.xlogy`'s `iszero(x)` branch inside
+    # `Distributions.gammalogpdf`. Mooncake had no rule for the two-argument
+    # `xlogy`/`xlog1py` and derives one from the primal branch, giving `0`
+    # instead of the correct `log(y)` (chalk-lab/Mooncake.jl#1241).
+    # `DistributionsInferenceMooncakeExt` now imports the `ChainRulesCore`
+    # rules for `xlogy`/`xlog1py` as Mooncake primitives, so this scenario is
+    # not broken on Mooncake (see `broken_scenario_names`/
+    # `backend_broken_scenarios` below if that ever regresses).
+    edge_leaf = GammaFit(2.0, 1.0)
+    edge_prob = DistributionsInference.as_logdensity(
+        edge_leaf, [0.5, 1.2, 2.5, 3.8, 5.1])
+    edge_θ = [1.0]
+    edge_contexts = (Constant(edge_prob),)
+    edge_prep_args = (; x = edge_θ, contexts = edge_contexts)
+    edge_res1 = with_reference ? _reference(f, edge_θ, edge_contexts) : nothing
+    push!(out,
+        edge_res1 === nothing ?
+        DIT.Scenario{:gradient, :out}(f, edge_θ, edge_contexts...;
+            prep_args = edge_prep_args,
+            name = "fit-protocol engine logdensity (shape at 1.0, xlogy edge case)") :
+        DIT.Scenario{:gradient, :out}(f, edge_θ, edge_contexts...;
+            res1 = edge_res1, prep_args = edge_prep_args,
+            name = "fit-protocol engine logdensity (shape at 1.0, xlogy edge case)"))
     return out
 end
 
