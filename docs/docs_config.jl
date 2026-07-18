@@ -58,7 +58,13 @@ const ORG_BRANDING = false
 
 # Regexes for URLs to skip during the (full-build) linkcheck, e.g. a page
 # published by a separate workflow that is not yet live.
-const LINKCHECK_IGNORE = Regex[]
+#
+# The package's own docs site has never deployed, so the subdomain has no TLS
+# certificate yet and every self-link fails linkcheck (curl exit 60). Drop
+# this entry once the first docs deploy to main has gone live.
+const LINKCHECK_IGNORE = Regex[
+    r"^https://distributionsinference\.epiaware\.org"
+]
 
 # README -> index.md link rewrites: `from => to` pairs applied line by line,
 # e.g. rewriting an absolute docs URL to an in-site `@ref` so links stay within

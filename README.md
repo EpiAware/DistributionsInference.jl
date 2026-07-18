@@ -32,7 +32,7 @@ The inference layer for the EpiAware composable-modelling stack: a PPL-neutral f
 
 ## Getting started
 
-See [documentation](https://distributionsinference.epiaware.org/stable/) for a full walkthrough.
+See [documentation](https://distributionsinference.epiaware.org/dev/) for a full walkthrough.
 
 A type becomes fittable by naming its scalar parameters and how to rebuild
 itself from a flat vector — no other change needed.
@@ -99,14 +99,14 @@ fit = DistributionsInference.readback(leaf, chain)
 fit.shape
 ```
 
-The [getting started guide](https://distributionsinference.epiaware.org/stable/getting-started/)
+The [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/)
 carries this same object further: reading every draw with `readback_draws`,
 and sampling with Turing instead of the toy sampler above.
 
 ## Where to learn more
 
-- Want to get started running code? See the [getting started guide](https://distributionsinference.epiaware.org/stable/getting-started/).
-- Want to understand the API? See the [API reference](https://distributionsinference.epiaware.org/stable/lib/public).
+- Want to get started running code? See the [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/).
+- Want to understand the API? See the [API reference](https://distributionsinference.epiaware.org/dev/lib/public).
 - Want to see the code? Check out our [GitHub repository](https://github.com/EpiAware/DistributionsInference.jl).
 
 ## Getting help
