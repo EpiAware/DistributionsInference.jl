@@ -20,6 +20,7 @@ pages = [
     # package grows.
     "Getting started" => [
         "Overview" => "getting-started/index.md",
+        "Fitting an object" => "getting-started/inference.md",
         "Tutorials" => [
             "Automatic differentiation backends" => "getting-started/tutorials/ad-backends.md"
         ]
