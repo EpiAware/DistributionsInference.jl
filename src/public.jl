@@ -10,6 +10,14 @@
 public parameter_rows, estimated_rows, flat_dimension, reconstruct,
        extra_logprior
 
+# Default-prior assembly over the protocol above (CD#195/DI#20): `default_prior`
+# picks a support-derived prior for one `parameter_rows` row (mirroring
+# ComposedDistributions' own `default_prior`, a parallel implementation since
+# DI cannot depend on CD's copy); `distribution_priors` assembles a fully
+# prior'd row set for a whole fittable object, the generic estimate-everything
+# path ComposedDistributions' `param_priors`/`uncertain(tree)` generalises.
+public default_prior, distribution_priors
+
 # The PPL-neutral log-density engine built on the protocol above: assembles a
 # `FitLogDensity` from any fit-protocol object and data, and evaluates its
 # log-posterior over the estimated flat parameters. `LogDensityProblems` is a
@@ -18,13 +26,16 @@ public parameter_rows, estimated_rows, flat_dimension, reconstruct,
 public FitLogDensity, as_logdensity, logdensity
 
 # The dotted-name `FlexiChains` readback: `to_flexichain` builds a chain from
-# raw sampler draws keyed by the estimated rows' dotted names; `readback` and
-# `readback_draws` read it back onto a fitted object (point summary/draw, and
-# every draw respectively). `FlexiChains` is a hard dependency, so this needs
-# no PPL and no glue extension. Both also dispatch on a `VarName`-keyed chain
-# (e.g. sampled from `as_turing`) once `DynamicPPL` is loaded (see
-# `ext/DistributionsInferenceDynamicPPLExt.jl`).
-public to_flexichain, readback, readback_draws
+# raw sampler draws keyed by the estimated rows' dotted names;
+# `distribution_params` is the params-first primitive (the estimated values,
+# keyed by dotted name, before any rebuild); `readback` and `readback_draws`
+# read the chain back onto a fitted object (point summary/draw, and every
+# draw respectively) — `readback` is a thin layer over `distribution_params`,
+# `readback_draws` its own optimised implementation. `FlexiChains` is a hard
+# dependency, so this needs no PPL and no glue extension. All three also
+# dispatch on a `VarName`-keyed chain (e.g. sampled from `as_turing`) once
+# `DynamicPPL` is loaded (see `ext/DistributionsInferenceDynamicPPLExt.jl`).
+public to_flexichain, distribution_params, readback, readback_draws
 
 # `as_turing`: a DynamicPPL model over a fittable object's estimated
 # parameters, a light wrapper on `as_logdensity`. Declared here (with its

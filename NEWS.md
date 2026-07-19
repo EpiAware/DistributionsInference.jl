@@ -30,5 +30,31 @@ ESTIMATED parameters plus a log-Jacobian, built per row from
 sampler works with. Generalises ComposedDistributions' `to_constrained`
 (closes #6).
 
+Added the `ComposedDistributions` weakdep extension
+(`DistributionsInferenceComposedDistributionsExt`): `parameter_rows`,
+`estimated_rows`, `flat_dimension`, `reconstruct` and `extra_logprior` for a
+composed distribution, over CD's existing public codec (`params_table`,
+`flat_dimension`, `unflatten`, `reconstruct`) rather than new inference logic —
+a centred pooled parameter's population-dependent prior is scored through
+`extra_logprior`, and every other estimated row (stick-breaking `Resolve`
+coordinates, pooled z-latents/hyperparameters, shared tags) maps straight onto
+a dotted-name row. `to_flexichain`/`readback`/`readback_draws`/`as_turing` need
+no ComposedDistributions-specific code at all once the row protocol is
+correct. Generalises ComposedDistributions' `as_logdensity`/`ComposedLogDensity`
+(closes #5).
+
+Added the `ModifiedDistributions` weakdep extension
+(`DistributionsInferenceModifiedDistributionsExt`): `parameter_rows` and
+`reconstruct` for a STANDALONE modifier distribution (`affine(Gamma(...))`,
+`thin(...)`, ...), not only as a leaf inside a composed tree. A modifier's
+fixed structure (an `Affine`'s scale/shift, a `Weighted`'s weight, a
+`Modified`'s hazard effect/link) is peeled through and not reported as a row,
+mirroring ComposedDistributions' own leaf-protocol precedent; a `thin`
+factor is the one modifier-owned parameter reported as an extra row. Every
+row is fixed by design (a bare `Distributions.jl` leaf carries no prior
+anywhere to mark one estimated) — `distribution_priors` plus a
+caller-supplied `loglik` rebuilding the concrete modifier from row values is
+the generic path to fitting one (closes #17).
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.

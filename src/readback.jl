@@ -120,16 +120,105 @@ end
 _select_draws(col, ::Colon) = vec(col)
 _select_draws(col, sel) = vec(col)[sel]
 
-# The estimated flat vector read from `chain`: a single `draw`'s values, or
-# each row's draws reduced by `summary` over the `draws` selection. Mirrors
-# ComposedDistributions' `chain_to_params` reduction semantics.
-function _flat_from_chain(obj, chain; draw, draws, summary)
+@doc "
+
+Read a dotted-name `FlexiChain`'s parameter values, keyed by name.
+
+`distribution_params(obj, chain)` is the params-first readback primitive
+(CD#195/DI#20): the estimated parameter values read from `chain`, keyed by
+each [`estimated_rows`](@ref)`(obj)` row's dotted `name`, *before* any object
+is rebuilt — a single `draw`'s values, or each row's draws reduced by
+`summary` over the `draws` selection (default: the mean over every draw).
+[`readback`](@ref) is a thin layer on top: it collapses this result to a flat
+vector (`estimated_rows` order is fixed, so `values(...)` recovers it) and
+calls [`reconstruct`](@ref).
+
+The argument order is `obj` first, `chain` second — matching
+`to_flexichain(obj, draws)` and `readback(obj, chain)` in this same file, and
+ComposedDistributions' `chain_to_params(template, chain)` (the function this
+generalises, CD#195/DI#20): keeping one order across the module avoids a
+silent argument swap between sibling calls.
+
+# Arguments
+- `obj`: the fittable object the chain's parameters were sampled for.
+- `chain`: the `FlexiChain` to read parameter values from (see
+  [`to_flexichain`](@ref)).
+
+# Keyword Arguments
+- `summary`: the reduction `AbstractVector -> scalar` applied to each row's
+  draws (default `mean`); ignored when `draw` is given.
+- `draw`: a single iteration index to read, overriding `summary`/`draws`.
+- `draws`: a subset of iterations to reduce over (a range / index vector, or a
+  predicate over the iteration index); `nothing` uses every iteration.
+
+Two estimated rows sharing a dotted `name` is refused with a clear
+`ArgumentError` naming the duplicate: a `NamedTuple` cannot key two entries
+by the same name, and a repeated name can only mean `parameter_rows(obj)`
+gave two distinct parameters the same identifier (a protocol bug in `obj`'s
+own implementation), not a case with a sensible silent resolution.
+
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct ParamsLeaf
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::ParamsLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+leaf = ParamsLeaf(2.0, 1.0)
+draws = [2.1, 2.4, 2.0, 2.6]
+chain = DistributionsInference.to_flexichain(leaf, reshape(draws, 1, :))
+DistributionsInference.distribution_params(leaf, chain)
+```
+
+# See also
+- [`readback`](@ref): rebuilds `obj` from this primitive's result.
+- [`readback_draws`](@ref): the vectorised, every-draw form (its own
+  optimised implementation, not layered on this — see its docstring).
+"
+function distribution_params(obj, chain::FlexiChains.FlexiChain;
+        summary = mean, draw = nothing, draws = nothing)
     rows = estimated_rows(obj)
-    isempty(rows) && return Float64[]
-    draw !== nothing &&
-        return [vec(_chain_column(chain, row.name))[draw] for row in rows]
-    sel = _draw_indices(chain, draws)
-    return [summary(_select_draws(_chain_column(chain, row.name), sel)) for row in rows]
+    isempty(rows) && return NamedTuple()
+    names = Tuple(row.name for row in rows)
+    _check_unique_names(names)
+    vals = if draw !== nothing
+        [vec(_chain_column(chain, row.name))[draw] for row in rows]
+    else
+        sel = _draw_indices(chain, draws)
+        [summary(_select_draws(_chain_column(chain, row.name), sel))
+         for row in rows]
+    end
+    return NamedTuple{names}(Tuple(vals))
+end
+
+# `NamedTuple{names}(...)` fails on a repeated name with a bare "duplicate
+# field name" error that does not say which object or row is at fault. A
+# duplicate can only come from a `parameter_rows(obj)` implementation that
+# gives two estimated rows the same dotted `name` (a protocol bug, not a
+# normal case: every row is meant to name one distinct parameter) — refuse
+# it here, at the earliest point the duplicate is visible, with a message
+# that names the object and the repeated name(s), rather than let it surface
+# later as a puzzling `NamedTuple` construction error.
+function _check_unique_names(names::Tuple)
+    length(names) == length(Set(names)) && return nothing
+    counts = Dict{Symbol, Int}()
+    for n in names
+        counts[n] = get(counts, n, 0) + 1
+    end
+    dupes = [n for (n, c) in counts if c > 1]
+    throw(ArgumentError(
+        "distribution_params: duplicate estimated parameter name(s) " *
+        "$(dupes); parameter_rows(obj) must give every estimated row a " *
+        "unique dotted name"))
 end
 
 @doc "
@@ -180,13 +269,15 @@ DistributionsInference.readback(leaf, chain).shape
 ```
 
 # See also
+- [`distribution_params`](@ref): the params-first primitive this layers on.
 - [`to_flexichain`](@ref): build the chain this reads.
 - [`readback_draws`](@ref): the vectorised, every-draw form.
 "
 function readback(obj, chain::FlexiChains.FlexiChain; summary = mean,
         draw = nothing, draws = nothing)
-    x = _flat_from_chain(obj, chain; draw = draw, draws = draws, summary = summary)
-    return reconstruct(obj, x)
+    nt = distribution_params(obj, chain; summary = summary, draw = draw,
+        draws = draws)
+    return reconstruct(obj, collect(values(nt)))
 end
 
 @doc "
@@ -233,8 +324,19 @@ chain = DistributionsInference.to_flexichain(leaf, reshape(draws, 1, :))
 length(DistributionsInference.readback_draws(leaf, chain))
 ```
 
+!!! note \"Not layered on `distribution_params`\"
+    Unlike [`readback`](@ref), this does *not* call
+    [`distribution_params`](@ref) once per draw: `distribution_params`
+    re-fetches and re-validates every estimated row's column on each call,
+    which would be O(niter x nrows) column look-ups here instead of the
+    O(nrows) this implementation does by materialising each column once
+    up front. The two stay independent implementations of the same
+    per-draw extraction for this reason.
+
 # See also
 - [`readback`](@ref): the single-draw / reduced read this vectorises.
+- [`distribution_params`](@ref): the params-first primitive `readback` (but
+  not this function) layers on.
 - [`to_flexichain`](@ref): build the chain this reads.
 "
 function readback_draws(obj, chain::FlexiChains.FlexiChain; draws = nothing)

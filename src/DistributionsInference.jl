@@ -9,13 +9,15 @@ programming language. Extension packages layer `DynamicPPL`,
 `ComposedDistributions`, `Bijectors`, and `Mooncake` support on top of this
 core (see `ComposedDistributions#185`).
 
-The protocol (`parameter_rows`, `reconstruct`), the engine (`as_logdensity`,
+The protocol (`parameter_rows`, `reconstruct`), default-prior assembly over it
+(`default_prior`, `distribution_priors`), the engine (`as_logdensity`,
 `logdensity`, `FitLogDensity`), and the dotted-name `FlexiChains` readback
-(`to_flexichain`, `readback`, `readback_draws`) are implemented, together with
-the `DynamicPPL` extension (`as_turing`, and a `VarName`-keyed dispatch of
-`readback`/`readback_draws`) and the `Bijectors` extension (`to_constrained`,
-the prior-driven unconstrained <-> constrained transform); the remaining
-extension packages land in follow-up issues.
+(`to_flexichain`, `distribution_params`, `readback`, `readback_draws`) are
+implemented, together with the `DynamicPPL` extension (`as_turing`, and a
+`VarName`-keyed dispatch of `distribution_params`/`readback`/`readback_draws`)
+and the `Bijectors` extension (`to_constrained`, the prior-driven
+unconstrained <-> constrained transform); the remaining extension packages
+land in follow-up issues.
 
 ```@example
 using DistributionsInference
@@ -42,6 +44,13 @@ include("docstrings.jl")
 # interface).
 include("protocol.jl")
 include("engine.jl")
+
+# Default-prior assembly over the fit protocol (`default_prior`,
+# `distribution_priors`): the generic, params-first analogue of
+# ComposedDistributions' `build_priors`/`param_priors` (CD#195/DI#20), over
+# any `parameter_rows`-implementing object rather than a composed-distribution
+# tree specifically.
+include("priors.jl")
 
 # The dotted-name `FlexiChains` readback: build a chain from raw sampler
 # draws (`to_flexichain`) and read it back onto a fitted object
