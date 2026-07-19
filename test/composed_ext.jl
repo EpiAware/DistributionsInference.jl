@@ -49,6 +49,34 @@
     shared_leaf = shared(:rate, uncertain(Gamma(2.0, 1.0);
         shape = LogNormal(log(2.0), 0.2)))
     shared_tree = compose((a = shared_leaf, b = shared_leaf))
+
+    # Two DISTINCT pooling groups in one tree, one non-centred (LogNormal
+    # population, 2 hyperparameters) and one centred (fixed Normal population,
+    # no hyperparameters) — the readback must keep each group's entry
+    # separate (ported from ComposedDistributions' own former
+    # `flexichains_ext.jl`, #221).
+    two_pool_tree = compose((
+        north = uncertain(Gamma(2.0, 1.0); shape = pool(:district)),
+        south = uncertain(Gamma(2.0, 1.0); shape = pool(:district)),
+        east = uncertain(Gamma(2.0, 1.0);
+            shape = pool(:region, Normal(0.4, 0.2))),
+        west = uncertain(Gamma(2.0, 1.0);
+            shape = pool(:region, Normal(0.4, 0.2)))))
+
+    # A pooled parameter INSIDE a shared-tagged leaf: the tie is inventoried
+    # once under its tag, so the pooled latent lowers to `<tag>.<param>.z`,
+    # not `<branch>.<param>.z` (ported from the same former test file).
+    tied_pooled_leaf = shared(:tied,
+        uncertain(Gamma(2.0, 1.0); shape = pool(:district)))
+    pooled_shared_tree = compose((north = tied_pooled_leaf,
+        south = tied_pooled_leaf))
+
+    # A pool group name colliding with a root edge name (#177): the
+    # root-lifted merge would silently clobber one with the other without the
+    # namespace-collision gate.
+    colliding_tree = compose((
+        g = Gamma(2.0, 1.0),
+        b = uncertain(Gamma(3.0, 1.0); shape = pool(:g))))
 end
 
 @testitem "ComposedDistributions extension loads" setup=[ComposedFixture] begin
@@ -166,6 +194,42 @@ end
     all_fitted = DistributionsInference.readback_draws(tree, chain)
     @test length(all_fitted) == length(draws)
     @test all_fitted[end] == ComposedDistributions.reconstruct(tree, draws[end])
+end
+
+@testitem "readback: two distinct pooling groups stay separate" setup=[ComposedFixture] begin
+    tree = two_pool_tree
+    n = DistributionsInference.flat_dimension(tree)
+    draws = [[0.05 * i + 0.01 * j for j in 1:n] for i in 1:20]
+    chain = DistributionsInference.to_flexichain(tree, draws)
+
+    fitted = DistributionsInference.readback(tree, chain)
+    expected_x = [mean(d[i] for d in draws) for i in 1:n]
+    @test fitted == ComposedDistributions.reconstruct(tree, expected_x)
+    @test !ComposedDistributions.has_uncertain(fitted)
+end
+
+@testitem "readback: a pooled parameter inside a shared leaf" setup=[ComposedFixture] begin
+    tree = pooled_shared_tree
+    n = DistributionsInference.flat_dimension(tree)
+    draws = [[0.05 * i + 0.01 * j for j in 1:n] for i in 1:20]
+    chain = DistributionsInference.to_flexichain(tree, draws)
+
+    fitted = DistributionsInference.readback(tree, chain)
+    expected_x = [mean(d[i] for d in draws) for i in 1:n]
+    @test fitted == ComposedDistributions.reconstruct(tree, expected_x)
+    # Tied, so both occurrences collapse to the SAME reconstructed value.
+    @test ComposedDistributions.event(fitted, :north) ==
+          ComposedDistributions.event(fitted, :south)
+end
+
+@testitem "parameter_rows rejects a pool/root-edge name collision (#177)" setup=[
+    ComposedFixture] begin
+    # A bare template handed straight to the fit protocol need never have
+    # passed `as_logdensity`'s own gate, so the same `:g` pool-group-vs-
+    # root-edge collision must be caught here too — without the guard, the
+    # root-lifted merge would silently overwrite the fixed leaf `g`'s entry
+    # with the pool group's hyperparameters instead of erroring.
+    @test_throws ArgumentError DistributionsInference.parameter_rows(colliding_tree)
 end
 
 @testitem "as_turing rejects a centred-pooled tree, mirroring CD's own guard" setup=[ComposedFixture] begin
