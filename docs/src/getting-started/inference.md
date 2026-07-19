@@ -157,4 +157,4 @@ A `ComposedDistributions` tree also keeps its own native `update(tree, chain)` (
 ## See also
 
 - [Public API](@ref public-api) for the full protocol surface (`parameter_rows`, `reconstruct`, `distribution_priors`, `distribution_params`, and the rest).
-- ComposedDistributions' own [inference guide](https://composeddistributions.epiaware.org/stable/getting-started/inference) for the tree-shaped verbs (`compose`, `uncertain`, `pool`, `update`) this page's composed-distribution example builds on.
+- ComposedDistributions' own [inference guide](https://composeddistributions.epiaware.org/dev/getting-started/inference) for the tree-shaped verbs (`compose`, `uncertain`, `pool`, `update`) this page's composed-distribution example builds on.
