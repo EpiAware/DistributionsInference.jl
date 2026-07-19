@@ -60,10 +60,13 @@ const ORG_BRANDING = false
 # published by a separate workflow that is not yet live.
 #
 # The package's own docs site has never deployed, so the subdomain has no TLS
-# certificate yet and every self-link fails linkcheck (curl exit 60). Drop
-# this entry once the first docs deploy to main has gone live.
-const LINKCHECK_IGNORE = Regex[
-    r"^https://distributionsinference\.epiaware\.org"
+# certificate yet and every self-link fails linkcheck (curl exit 60), not just
+# /stable/ — drop the domain-wide match once the first docs deploy to main has
+# gone live. Discussions is off until enabled on the repo, so that self-link
+# is ignored too (mirrors the sibling packages).
+const LINKCHECK_IGNORE = [
+    r"^https://distributionsinference\.epiaware\.org",
+    r"github\.com/EpiAware/DistributionsInference\.jl/discussions"
 ]
 
 # README -> index.md link rewrites: `from => to` pairs applied line by line,

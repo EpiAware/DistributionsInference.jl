@@ -174,3 +174,65 @@ end
     data = [[0.4, 0.7], [0.6, 0.5]]
     @test_throws ArgumentError DistributionsInference.as_turing(centred_tree, data)
 end
+
+# The three real-chain round trips below (shared tag, Dirichlet stick
+# coordinate, non-centred pool) were ComposedDistributions' own
+# `test/composers/turing_ext.jl` before that package dropped its `as_turing`/
+# `chain_to_params` surface in favour of this package's generic one (CD#221,
+# CD#233): they exercise the trickiest ordering/dedup cases (a tied leaf
+# sampled once but read back onto every occurrence; a K-1 stick-breaking
+# simplex; a pooled member's `.z` latent) through an ACTUAL `sample(...,
+# NUTS(), ...)` chain, not a hand-built one, so a table/codec ordering
+# regression that only shows up under real sampling is still caught. Ported
+# here rather than dropped, so the coverage does not thin when CD removes its
+# copy.
+
+@testitem "as_turing round-trip: shared-tag readback lands on the right leaf" setup=[
+    ComposedFixture] begin
+    using DynamicPPL, Turing, Random
+
+    data = [[0.5, 0.6], [1.0, 0.9], [0.8, 0.7]]
+    model = as_turing(shared_tree, data)
+
+    Random.seed!(23)
+    chain = sample(model, NUTS(), 200; progress = false)
+
+    # Exactly ONE site for the tie, at the tag's dotted name — not one per
+    # occurrence (`d.a.shape`/`d.b.shape` never appear).
+    fitted = DistributionsInference.readback(shared_tree, chain)
+    @test ComposedDistributions.event(fitted, :a) ==
+          ComposedDistributions.event(fitted, :b)
+    @test !ComposedDistributions.has_uncertain(fitted)
+end
+
+@testitem "as_turing round-trip: Dirichlet branch_probs stick coordinate" setup=[
+    ComposedFixture] begin
+    using DynamicPPL, Turing, Random, Distributions
+
+    data = [0.8, 1.5, 2.2, 0.6]
+    model = as_turing(resolve_tree, data)
+
+    Random.seed!(7)
+    chain = sample(model, NUTS(), 200; progress = false)
+
+    fitted = DistributionsInference.readback(resolve_tree, chain)
+    @test !ComposedDistributions.has_uncertain(fitted)
+    p = collect(values(Distributions.probs(fitted)))
+    @test sum(p) ≈ 1.0
+end
+
+@testitem "as_turing round-trip: non-centred pooled tree" setup=[ComposedFixture] begin
+    using DynamicPPL, Turing, Random
+
+    data = [[0.5, 2.0, 1.2], [1.0, 3.0, 0.8], [0.9, 1.8, 1.1]]
+    model = as_turing(noncentred_tree, data)
+
+    Random.seed!(13)
+    chain = sample(model, NUTS(), 200; progress = false)
+
+    fitted = DistributionsInference.readback(noncentred_tree, chain)
+    @test !ComposedDistributions.has_uncertain(fitted)
+    @test ComposedDistributions.event(fitted, :north) isa Distributions.Gamma
+    @test ComposedDistributions.event(fitted, :east) isa Distributions.Gamma
+    @test ComposedDistributions.event(fitted, :south) isa Distributions.Gamma
+end
