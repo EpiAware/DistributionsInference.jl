@@ -62,6 +62,15 @@ hand — DI cannot depend on CD's copy; see this file's header note).
 # Arguments
 - `row`: a [`parameter_rows`](@ref) row `(; name, value, prior, support)`.
 
+# Examples
+```@example
+using DistributionsInference
+
+row = (name = Symbol(\"onset.shape\"), value = 2.0, prior = nothing,
+    support = (0.0, Inf))
+DistributionsInference.default_prior(row)
+```
+
 # See also
 - [`distribution_priors`](@ref): assembles a full row set from this default.
 "
