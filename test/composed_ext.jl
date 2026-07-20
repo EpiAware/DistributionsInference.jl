@@ -138,6 +138,51 @@ end
         plain_tree, DistributionsInference.reconstruct(plain_tree, [2.0]), [2.0]) == 0.0
 end
 
+@testitem "reconstruct_with_logprior fuses reconstruct/extra_logprior correctly (#28)" setup=[ComposedFixture] begin
+    for (tree, x) in ((plain_tree, [2.0]), (noncentred_tree, fill(0.1, 5)),
+        (centred_tree, [0.3, 0.6]), (resolve_tree, [0.2]), (shared_tree, [2.5]))
+        reconstructed, extra = DistributionsInference.reconstruct_with_logprior(tree, x)
+        expected_reconstructed = DistributionsInference.reconstruct(tree, x)
+        expected_extra = DistributionsInference.extra_logprior(
+            tree, expected_reconstructed, x)
+        @test reconstructed == expected_reconstructed
+        @test extra ≈ expected_extra
+    end
+end
+
+@testitem "reconstruct_with_logprior walks unflatten once, not twice (#28)" setup=[ComposedFixture] begin
+    x = [0.3, 0.6]
+
+    # Warm up so `@allocated` measures steady-state cost, not compilation.
+    DistributionsInference.reconstruct_with_logprior(centred_tree, x)
+    obj0 = DistributionsInference.reconstruct(centred_tree, x)
+    DistributionsInference.extra_logprior(centred_tree, obj0, x)
+    ComposedDistributions.unflatten(centred_tree, x)
+
+    alloc_unflatten = @allocated ComposedDistributions.unflatten(centred_tree, x)
+    # The naive composition `logdensity` used before this fix: `reconstruct`
+    # (one `unflatten` walk internally) then `extra_logprior` on the result
+    # (a second, independent `unflatten` walk for the centred-pool term). Both
+    # this and the fused call below pay the SAME `_centred_pool_rows(d)` walk
+    # once (a `params_table` pass, unrelated to #28, dominating the raw byte
+    # count) — comparing the two directly cancels that shared cost and
+    # isolates the `unflatten` saving.
+    alloc_naive = @allocated begin
+        obj = DistributionsInference.reconstruct(centred_tree, x)
+        DistributionsInference.extra_logprior(centred_tree, obj, x)
+    end
+    alloc_fused = @allocated DistributionsInference.reconstruct_with_logprior(
+        centred_tree, x)
+
+    # The fused override reuses one `unflatten` for both halves, so it must
+    # cost strictly less than the naive two-call composition, by at least
+    # half an `unflatten` walk's worth of bytes (comfortably below the one
+    # full walk actually saved; a regression that reintroduces the second
+    # walk collapses this gap to ~0 and fails).
+    @test alloc_fused < alloc_naive
+    @test alloc_naive - alloc_fused >= 0.5 * alloc_unflatten
+end
+
 @testitem "logdensity agrees with CD for a centred pooled tree (incl. extra_logprior)" setup=[ComposedFixture] begin
     data = [[0.4, 0.7], [0.6, 0.5]]
     prob = DistributionsInference.as_logdensity(centred_tree, data)

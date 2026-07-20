@@ -263,3 +263,65 @@ DistributionsInference.extra_logprior(
 - [`parameter_rows`](@ref): the row schema this keeps to four fields.
 "
 extra_logprior(obj, reconstructed, x) = 0.0
+
+@doc "
+
+Reconstruct `obj` at `x` and score its [`extra_logprior`](@ref) together.
+
+`reconstruct_with_logprior(obj, x)` returns `(reconstructed, extra)`, i.e.
+[`reconstruct`](@ref)`(obj, x)` paired with
+[`extra_logprior`](@ref)`(obj, reconstructed, x)`. The generic default below
+is exactly that: call `reconstruct`, then `extra_logprior` on the result — no
+behaviour change from calling the two separately.
+
+This is an OPT-IN fusion point, not a new protocol requirement: it exists
+because `reconstruct` and `extra_logprior` can each need the same expensive
+intermediate representation of `x` (e.g. a nested-parameter unflattening) with
+no way to share it when the engine calls them as two independent functions.
+A type whose `reconstruct`/`extra_logprior` pair recomputes shared state can
+override `reconstruct_with_logprior` directly to compute that state once and
+reuse it for both halves, without changing the individual `reconstruct`/
+`extra_logprior` methods (which stay correct, and are still what a caller
+using either function on its own gets). See
+`DistributionsInferenceComposedDistributionsExt` for the motivating case
+(ComposedDistributions#212's centred-pooling internals).
+
+# Arguments
+- `obj`: the template fittable object.
+- `x`: an estimated flat parameter vector of length
+  [`flat_dimension`](@ref)`(obj)`.
+
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct FitLeaf
+    shape::Float64
+    scale::Float64
+end
+
+Distributions.logpdf(d::FitLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::FitLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::FitLeaf, x::AbstractVector)
+    return FitLeaf(x[1], d.scale)
+end
+
+leaf = FitLeaf(2.0, 1.0)
+DistributionsInference.reconstruct_with_logprior(leaf, [2.5])
+```
+
+# See also
+- [`reconstruct`](@ref), [`extra_logprior`](@ref): the pair this fuses.
+- [`logdensity`](@ref): the engine call site.
+"
+function reconstruct_with_logprior(obj, x::AbstractVector)
+    reconstructed = reconstruct(obj, x)
+    return reconstructed, extra_logprior(obj, reconstructed, x)
+end

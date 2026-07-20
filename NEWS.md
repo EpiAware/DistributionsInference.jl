@@ -1,5 +1,14 @@
 ## Unreleased
 
+Added `reconstruct_with_logprior`, an opt-in fusion point for the fit
+protocol's `reconstruct`/`extra_logprior` pair. The generic default is
+behaviour-preserving (calls `reconstruct` then `extra_logprior` exactly as
+before); a type whose pair recomputes shared intermediate state can override
+it directly to compute that state once. `logdensity` now calls it instead of
+the two functions separately, and the `ComposedDistributions` extension
+overrides it so a centred-pooled tree pays one `unflatten` walk per
+evaluation instead of two (closes #28).
+
 Added the fit protocol (`parameter_rows`, `estimated_rows`, `flat_dimension`,
 `reconstruct`) generalising ComposedDistributions' `params_table` shape, and
 the PPL-neutral log-density engine built on it (`FitLogDensity`,

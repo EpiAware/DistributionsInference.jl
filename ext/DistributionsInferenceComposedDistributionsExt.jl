@@ -30,7 +30,8 @@ module DistributionsInferenceComposedDistributionsExt
 
 using ComposedDistributions: ComposedDistributions, AbstractComposedDistribution
 import DistributionsInference: parameter_rows, estimated_rows, flat_dimension,
-                               reconstruct, extra_logprior
+                               reconstruct, extra_logprior,
+                               reconstruct_with_logprior
 
 # A CD `params_table` row's `prior` column carries a `CentredPoolPrior` marker
 # (ComposedDistributions.Pool.jl) for a centred pooled parameter: the
@@ -106,17 +107,38 @@ function reconstruct(d::AbstractComposedDistribution, x::AbstractVector)
 end
 
 # `extra_logprior`: the centred-pooled population term, `0.0` when `d` has no
-# centred pooling (the common case, no extra cost). Recomputes `unflatten`
-# independently of `reconstruct`'s own internal call — DistributionsInference's
-# protocol calls the two separately with no shared cache slot for a package's
-# object-dependent extra state, so a tree with centred pooling pays
-# `unflatten` twice per evaluation. Worth a follow-up if profiling ever flags
-# it; not optimised here.
+# centred pooling (the common case, no extra cost). Calling this directly (as
+# opposed to through `reconstruct_with_logprior` below) recomputes `unflatten`
+# independently of `reconstruct`'s own internal call, so a tree with centred
+# pooling pays `unflatten` twice — kept correct and self-contained for a
+# caller that uses `extra_logprior` on its own (matching the generic
+# protocol's contract), with the shared-work version below as the fast path
+# `logdensity` actually takes (#28).
 function extra_logprior(d::AbstractComposedDistribution, ::Any, x::AbstractVector)
     rows = ComposedDistributions._centred_pool_rows(d)
     isempty(rows) && return 0.0
     nt = ComposedDistributions.unflatten(d, x)
     return ComposedDistributions._pool_centred_logprior(rows, nt)
+end
+
+# `reconstruct_with_logprior`: the single-walk fast path (#28). `reconstruct`
+# above is `update(d, unflatten(d, x))`, and `extra_logprior` above
+# independently calls `unflatten(d, x)` again for the centred-pool term — two
+# `unflatten` walks over the same `(d, x)` per `logdensity` evaluation.
+# `unflatten(d, x)` is computed once here and reused for both: `update` builds
+# the reconstructed tree from it, and the same `nt` scores the centred-pooled
+# rows, matching `_centred_pool_rows`'s documented cost ("a tree with only
+# non-centred (or no) pooling adds no per-evaluation cost", ComposedDistributions
+# Pool.jl) — this override keeps that true for `logdensity`'s actual call
+# path, not just for `_centred_pool_rows` collection.
+function reconstruct_with_logprior(
+        d::AbstractComposedDistribution, x::AbstractVector)
+    rows = ComposedDistributions._centred_pool_rows(d)
+    nt = ComposedDistributions.unflatten(d, x)
+    reconstructed = ComposedDistributions.update(d, nt)
+    extra = isempty(rows) ? 0.0 :
+            ComposedDistributions._pool_centred_logprior(rows, nt)
+    return reconstructed, extra
 end
 
 end # module DistributionsInferenceComposedDistributionsExt

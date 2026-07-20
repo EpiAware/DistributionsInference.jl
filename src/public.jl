@@ -4,11 +4,13 @@
 # `reconstruct`) with its own method; `estimated_rows`/`flat_dimension` are
 # generic on top of `parameter_rows`. `extra_logprior` is the neutral-default
 # hook for an object-dependent prior term (a hierarchical population, say)
-# that cannot be scored per-row against the flat vector alone. Public but not
-# exported (like ComposedDistributions' matching codec surface), reached by
-# qualified name.
+# that cannot be scored per-row against the flat vector alone.
+# `reconstruct_with_logprior` fuses `reconstruct`/`extra_logprior` into one
+# call, an opt-in override point for a type whose pair would otherwise
+# recompute shared state (#28). Public but not exported (like
+# ComposedDistributions' matching codec surface), reached by qualified name.
 public parameter_rows, estimated_rows, flat_dimension, reconstruct,
-       extra_logprior
+       extra_logprior, reconstruct_with_logprior
 
 # Default-prior assembly over the protocol above (CD#195/DI#20): `default_prior`
 # picks a support-derived prior for one `parameter_rows` row (mirroring

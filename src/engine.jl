@@ -174,7 +174,9 @@ DistributionsInference.logdensity(prob, [2.5])
 
 # See also
 - [`as_logdensity`](@ref): assemble `prob`.
-- [`reconstruct`](@ref): the flat vector -> concrete object hook this calls.
+- [`reconstruct_with_logprior`](@ref): the flat vector -> concrete object plus
+  extra-logprior hook this calls (fusing [`reconstruct`](@ref) and
+  [`extra_logprior`](@ref) so a package can share work between the two).
 "
 function logdensity(prob::FitLogDensity, x::AbstractVector)
     flat_priors = prob.flat_priors
@@ -182,8 +184,8 @@ function logdensity(prob::FitLogDensity, x::AbstractVector)
         _throw_logdensity_dimmismatch(x, flat_priors, prob.obj)
     lp = isempty(x) ? 0.0 :
          sum(_row_logprior(flat_priors[i], x[i]) for i in eachindex(x))
-    obj = reconstruct(prob.obj, x)
-    lp += extra_logprior(prob.obj, obj, x)
+    obj, extra = reconstruct_with_logprior(prob.obj, x)
+    lp += extra
     return lp + prob.loglik(obj, prob.data)
 end
 
