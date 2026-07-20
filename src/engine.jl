@@ -39,21 +39,28 @@ directly, so it is sampleable by any LogDensityProblems consumer.
   this vector abstractly typed, so [`logdensity`](@ref) pays one dynamic
   dispatch per row; a tuple-of-priors specialisation is the natural
   follow-up if profiling ever shows this matters.
+- `extra_state`: [`extra_prior_state`](@ref)`(obj)`, collected once at
+  construction alongside `flat_priors` and threaded into every
+  [`extra_logprior`](@ref) call, so a package whose extra term needs a
+  structural walk of `obj` (DI#28's motivating case: which rows carry an
+  object-dependent prior) pays it once here rather than on every evaluation.
 
 # See also
 - [`as_logdensity`](@ref): the assembler.
 - [`logdensity`](@ref): evaluate on a flat vector.
 "
-struct FitLogDensity{D, T, L, FP}
+struct FitLogDensity{D, T, L, FP, ES}
     obj::D
     data::T
     loglik::L
     flat_priors::FP
+    extra_state::ES
 end
 
 function FitLogDensity(obj, data, loglik)
     flat_priors = [row.prior for row in estimated_rows(obj)]
-    return FitLogDensity(obj, data, loglik, flat_priors)
+    extra_state = extra_prior_state(obj)
+    return FitLogDensity(obj, data, loglik, flat_priors, extra_state)
 end
 
 @doc "
@@ -183,7 +190,7 @@ function logdensity(prob::FitLogDensity, x::AbstractVector)
     lp = isempty(x) ? 0.0 :
          sum(_row_logprior(flat_priors[i], x[i]) for i in eachindex(x))
     obj = reconstruct(prob.obj, x)
-    lp += extra_logprior(prob.obj, obj, x)
+    lp += extra_logprior(prob.obj, obj, x, prob.extra_state)
     return lp + prob.loglik(obj, prob.data)
 end
 

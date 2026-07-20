@@ -8,7 +8,7 @@
 # exported (like ComposedDistributions' matching codec surface), reached by
 # qualified name.
 public parameter_rows, estimated_rows, flat_dimension, reconstruct,
-       extra_logprior
+       extra_logprior, extra_prior_state
 
 # Default-prior assembly over the protocol above (CD#195/DI#20): `default_prior`
 # picks a support-derived prior for one `parameter_rows` row (mirroring

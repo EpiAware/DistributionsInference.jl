@@ -130,12 +130,19 @@ end
 @testitem "extra_logprior: centred-pool term matches a hand computation" setup=[ComposedFixture] begin
     x = [0.3, 0.6]
     reconstructed = DistributionsInference.reconstruct(centred_tree, x)
+    state = DistributionsInference.extra_prior_state(centred_tree)
     expected = logpdf(centred_pop, x[1]) + logpdf(centred_pop, x[2])
-    @test DistributionsInference.extra_logprior(centred_tree, reconstructed, x) ≈ expected
-
-    # A tree with no centred pooling contributes nothing extra.
     @test DistributionsInference.extra_logprior(
-        plain_tree, DistributionsInference.reconstruct(plain_tree, [2.0]), [2.0]) == 0.0
+        centred_tree, reconstructed, x, state) ≈ expected
+
+    # A tree with no centred pooling contributes nothing extra, and its
+    # cached state (found once, not recomputed per evaluation -- DI#28) is
+    # correspondingly empty rather than merely unused.
+    plain_state = DistributionsInference.extra_prior_state(plain_tree)
+    @test isempty(plain_state)
+    @test DistributionsInference.extra_logprior(plain_tree,
+        DistributionsInference.reconstruct(plain_tree, [2.0]), [2.0],
+        plain_state) == 0.0
 end
 
 @testitem "logdensity agrees with CD for a centred pooled tree (incl. extra_logprior)" setup=[ComposedFixture] begin

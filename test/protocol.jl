@@ -111,7 +111,9 @@ end
     # The default is a no-op for any fittable object, including the toy leaf.
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     rebuilt = DistributionsInference.reconstruct(leaf, [3.5])
-    @test DistributionsInference.extra_logprior(leaf, rebuilt, [3.5]) == 0.0
+    @test DistributionsInference.extra_prior_state(leaf) === nothing
+    @test DistributionsInference.extra_logprior(leaf, rebuilt, [3.5], nothing) ==
+          0.0
 
     # A type overriding it: an object-dependent penalty scored against the
     # reconstructed object rather than a per-row prior. `shape_prior = nothing`
@@ -139,7 +141,7 @@ end
         return PenalisedLeaf(x[1], d.scale)
     end
     function DistributionsInference.extra_logprior(
-            ::PenalisedLeaf, rebuilt::PenalisedLeaf, x::AbstractVector)
+            ::PenalisedLeaf, rebuilt::PenalisedLeaf, x::AbstractVector, ::Any)
         return -0.5 * rebuilt.shape^2
     end
     Distributions.logpdf(d::PenalisedLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)

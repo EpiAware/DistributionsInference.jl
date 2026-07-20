@@ -83,6 +83,53 @@ end
     @test isfinite(LogDensityProblems.logdensity(fixed_prob, Float64[]))
 end
 
+@testitem "engine: extra_prior_state is computed once at construction, not per logdensity call" begin
+    using DistributionsInference, Distributions
+
+    # DI#28: `extra_logprior` used to recompute its structural state (which
+    # rows carry an object-dependent prior) on every `logdensity` evaluation,
+    # even when that state does not depend on the flat vector `x` at all --
+    # only on `obj`, fixed for the life of a `FitLogDensity`. `extra_prior_state`
+    # now runs once, at `as_logdensity` construction, and its result is
+    # threaded into every `extra_logprior` call instead. A real counter (not
+    # a benchmark) proves this directly: it increments only when
+    # `extra_prior_state` actually runs, so a count of exactly 1 after many
+    # `logdensity` evaluations is only possible if the per-evaluation call
+    # this issue is about is genuinely gone, not just fast.
+    calls = Ref(0)
+
+    struct CountedLeaf
+        shape::Float64
+        scale::Float64
+    end
+
+    Distributions.logpdf(d::CountedLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::CountedLeaf)
+        return [
+            (name = :shape, value = d.shape,
+                prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(d::CountedLeaf, x::AbstractVector)
+        return CountedLeaf(x[1], d.scale)
+    end
+
+    DistributionsInference.extra_prior_state(::CountedLeaf) = (calls[] += 1; nothing)
+
+    leaf = CountedLeaf(2.0, 1.0)
+    data = [1.5, 2.0, 3.2]
+    prob = DistributionsInference.as_logdensity(leaf, data)
+    @test calls[] == 1
+
+    for x in ([2.0], [2.5], [3.0], [1.8])
+        DistributionsInference.logdensity(prob, x)
+    end
+    @test calls[] == 1
+end
+
 @testitem "engine acceptance: toy protocol object fits end-to-end via an LDP sampler" setup=[ToyFixture] begin
     using LogDensityProblems
     using Random
