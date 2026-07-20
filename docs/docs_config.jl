@@ -57,11 +57,15 @@ const FORCE_STUB_TUTORIALS = String["ad-backends.jl"]
 const ORG_BRANDING = false
 
 # Regexes for URLs to skip during the (full-build) linkcheck, e.g. a page
-# published by a separate workflow that is not yet live. The stable docs site
-# does not exist until the first deploy, and Discussions is off until enabled
-# on the repo, so both self-links are ignored (mirrors the sibling packages).
+# published by a separate workflow that is not yet live.
+#
+# The package's own docs site has never deployed, so the subdomain has no TLS
+# certificate yet and every self-link fails linkcheck (curl exit 60), not just
+# /stable/ — drop the domain-wide match once the first docs deploy to main has
+# gone live. Discussions is off until enabled on the repo, so that self-link
+# is ignored too (mirrors the sibling packages).
 const LINKCHECK_IGNORE = [
-    r"^https://distributionsinference\.epiaware\.org/stable",
+    r"^https://distributionsinference\.epiaware\.org",
     r"github\.com/EpiAware/DistributionsInference\.jl/discussions"
 ]
 
