@@ -30,7 +30,7 @@ module DistributionsInferenceComposedDistributionsExt
 
 using ComposedDistributions: ComposedDistributions, AbstractComposedDistribution
 import DistributionsInference: parameter_rows, estimated_rows, flat_dimension,
-                               reconstruct, extra_logprior
+                               reconstruct, extra_logprior, extra_prior_state
 
 # A CD `params_table` row's `prior` column carries a `CentredPoolPrior` marker
 # (ComposedDistributions.Pool.jl) for a centred pooled parameter: the
@@ -105,18 +105,33 @@ function reconstruct(d::AbstractComposedDistribution, x::AbstractVector)
     return ComposedDistributions.reconstruct(d, x)
 end
 
+# `extra_prior_state`: the centred-pooled `(path, param, pool)` rows, found
+# once by walking `params_table(d)` (DI#28). `d` is fixed for the life of a
+# `FitLogDensity`, and this walk depends only on `d`'s structure, never on the
+# flat vector `x` `extra_logprior` is called with — so finding it here, at
+# `as_logdensity` construction, rather than inside `extra_logprior` itself,
+# turns a per-evaluation `params_table` walk into a one-off. Profiling (DI#28)
+# measured this walk at ~2-2.7 μs even on a tree with NO centred pooling at
+# all (`_centred_pool_rows` calls `params_table` before checking whether any
+# row actually carries the marker), comparable to `reconstruct`'s own cost —
+# not the "no extra cost" the previous version of this comment claimed.
+function extra_prior_state(d::AbstractComposedDistribution)
+    ComposedDistributions._centred_pool_rows(d)
+end
+
 # `extra_logprior`: the centred-pooled population term, `0.0` when `d` has no
-# centred pooling (the common case, no extra cost). Recomputes `unflatten`
-# independently of `reconstruct`'s own internal call — DistributionsInference's
-# protocol calls the two separately with no shared cache slot for a package's
-# object-dependent extra state, so a tree with centred pooling pays
-# `unflatten` twice per evaluation. Worth a follow-up if profiling ever flags
-# it; not optimised here.
-function extra_logprior(d::AbstractComposedDistribution, ::Any, x::AbstractVector)
-    rows = ComposedDistributions._centred_pool_rows(d)
-    isempty(rows) && return 0.0
+# centred pooling. `state` is `extra_prior_state(d)` (the rows), already
+# found once at construction — genuinely no extra cost per evaluation in the
+# no-pooling case now, just the `isempty` check. The `unflatten` this still
+# calls is unrelated to that one-off walk: it reads `x`'s values at THIS
+# evaluation (it cannot be cached, since `x` changes every call) and was
+# already shown to cost ~5.6 ns on its own (DI#28) — not worth avoiding the
+# second call `reconstruct` also makes internally.
+function extra_logprior(d::AbstractComposedDistribution, ::Any,
+        x::AbstractVector, state)
+    isempty(state) && return 0.0
     nt = ComposedDistributions.unflatten(d, x)
-    return ComposedDistributions._pool_centred_logprior(rows, nt)
+    return ComposedDistributions._pool_centred_logprior(state, nt)
 end
 
 end # module DistributionsInferenceComposedDistributionsExt

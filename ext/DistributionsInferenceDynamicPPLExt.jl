@@ -88,7 +88,7 @@ end
         θ[i] = param
     end
     obj = reconstruct(prob.obj, θ)
-    DynamicPPL.@addlogprob! extra_logprior(prob.obj, obj, θ)
+    DynamicPPL.@addlogprob! extra_logprior(prob.obj, obj, θ, prob.extra_state)
     DynamicPPL.@addlogprob! prob.loglik(obj, prob.data)
     return obj
 end

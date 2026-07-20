@@ -208,15 +208,55 @@ end
 
 @doc "
 
+Structure-dependent state [`extra_logprior`](@ref) needs, computed once.
+
+`extra_prior_state(obj)` runs a single time, when [`as_logdensity`](@ref)
+assembles a [`FitLogDensity`](@ref), and the result is threaded into every
+[`extra_logprior`](@ref) call for that `obj` — mirroring how
+[`as_logdensity`](@ref) already collects `flat_priors` once rather than
+re-deriving them on every [`logdensity`](@ref) evaluation. The default
+returns `nothing`: most fittable objects need no such state, since
+[`extra_logprior`](@ref)'s default is a constant `0.0`.
+
+Override this alongside [`extra_logprior`](@ref) when computing the extra
+term requires walking `obj`'s own structure (e.g. finding which rows carry an
+object-dependent prior) — that walk depends only on `obj` (fixed for the
+life of a [`FitLogDensity`](@ref)), never on the flat vector `x`, so paying
+it once here rather than inside [`extra_logprior`](@ref) turns a per-evaluation
+cost into a one-off.
+
+# Arguments
+- `obj`: the template fittable object.
+
+# Examples
+```@example
+using DistributionsInference
+
+struct ToyLeaf
+    shape::Float64
+    scale::Float64
+end
+
+DistributionsInference.extra_prior_state(::ToyLeaf) === nothing
+```
+
+# See also
+- [`extra_logprior`](@ref): consumes this state.
+- [`as_logdensity`](@ref): computes it once, at construction.
+"
+extra_prior_state(obj) = nothing
+
+@doc "
+
 Additional log-prior mass that depends on the RECONSTRUCTED object.
 
-`extra_logprior(obj, reconstructed, x)` is the neutral extension point for a
-prior term that cannot be scored per-row against `x` alone — a hierarchical
-population term is the motivating case, where a pooled member's log-density
-depends on the (reconstructed) population hyperparameters, not just on its
-own flat coordinate. The default returns `0.0`: most fittable objects need no
-such term, since an ordinary per-parameter prior is already scored from
-[`parameter_rows`](@ref)`(obj)`'s `prior` column in the engine's
+`extra_logprior(obj, reconstructed, x, state)` is the neutral extension point
+for a prior term that cannot be scored per-row against `x` alone — a
+hierarchical population term is the motivating case, where a pooled member's
+log-density depends on the (reconstructed) population hyperparameters, not
+just on its own flat coordinate. The default returns `0.0`: most fittable
+objects need no such term, since an ordinary per-parameter prior is already
+scored from [`parameter_rows`](@ref)`(obj)`'s `prior` column in the engine's
 [`logdensity`](@ref). A type with an object-dependent prior overrides this
 with its own method and gives the corresponding row(s) `prior = nothing` (see
 [`parameter_rows`](@ref)).
@@ -226,6 +266,9 @@ with its own method and gives the corresponding row(s) `prior = nothing` (see
 - `reconstructed`: `obj` rebuilt at `x` (i.e. [`reconstruct`](@ref)`(obj,
   x)`), the object the extra term is scored against.
 - `x`: the estimated flat parameter vector `reconstructed` was built from.
+- `state`: [`extra_prior_state`](@ref)`(obj)`, computed once at construction —
+  a type overriding both methods reads whatever it stashed there instead of
+  recomputing it from `obj` on every call.
 
 # Examples
 ```@example
@@ -249,17 +292,20 @@ function DistributionsInference.reconstruct(p::PooledPair, x::AbstractVector)
 end
 
 # a and b share the population Normal(mu, 1): an object-dependent prior,
-# scored here rather than per row.
-function DistributionsInference.extra_logprior(p::PooledPair, r, x)
+# scored here rather than per row. `PooledPair` needs no precomputed state
+# (the population members are fixed by the type, not found by a structural
+# walk), so `extra_prior_state` is left at its default `nothing`.
+function DistributionsInference.extra_logprior(p::PooledPair, r, x, ::Any)
     return logpdf(Normal(r.mu, 1.0), r.a) + logpdf(Normal(r.mu, 1.0), r.b)
 end
 
 DistributionsInference.extra_logprior(
-    PooledPair(0.2, -0.1, 0.0), PooledPair(0.2, -0.1, 0.5), [0.5])
+    PooledPair(0.2, -0.1, 0.0), PooledPair(0.2, -0.1, 0.5), [0.5], nothing)
 ```
 
 # See also
 - [`logdensity`](@ref): adds this term after the per-row priors.
 - [`parameter_rows`](@ref): the row schema this keeps to four fields.
+- [`extra_prior_state`](@ref): precomputed once, threaded in as `state`.
 "
-extra_logprior(obj, reconstructed, x) = 0.0
+extra_logprior(obj, reconstructed, x, state) = 0.0

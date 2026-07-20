@@ -91,7 +91,7 @@
     function DistributionsInference.reconstruct(d::NoPriorLeaf, x::AbstractVector)
         return NoPriorLeaf(x[1], d.scale)
     end
-    function DistributionsInference.extra_logprior(::NoPriorLeaf, r, x)
+    function DistributionsInference.extra_logprior(::NoPriorLeaf, r, x, ::Any)
         return -0.5 * r.shape^2
     end
 end
@@ -126,7 +126,7 @@ end
         return PooledPairLeaf(p.a, p.b, x[1])
     end
 
-    function DistributionsInference.extra_logprior(p::PooledPairLeaf, r, x)
+    function DistributionsInference.extra_logprior(p::PooledPairLeaf, r, x, ::Any)
         return logpdf(Normal(r.mu, 1.0), r.a) + logpdf(Normal(r.mu, 1.0), r.b)
     end
 end
@@ -171,7 +171,7 @@ end
     # equality guarantee depends on, not just the per-row-prior + likelihood
     # terms the single-site test above already covers.
     rebuilt = DistributionsInference.reconstruct(leaf, x)
-    @test DistributionsInference.extra_logprior(leaf, rebuilt, x) != 0.0
+    @test DistributionsInference.extra_logprior(leaf, rebuilt, x, nothing) != 0.0
 
     cm = DynamicPPL.condition(model, @varname(d.mu) => x[1])
     @test DynamicPPL.logjoint(cm, DynamicPPL.VarInfo(cm)) ≈

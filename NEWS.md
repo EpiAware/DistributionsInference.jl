@@ -56,5 +56,20 @@ anywhere to mark one estimated) — `distribution_priors` plus a
 caller-supplied `loglik` rebuilding the concrete modifier from row values is
 the generic path to fitting one (closes #17).
 
+`extra_logprior` gains a fourth argument, `state`: `extra_prior_state(obj)`,
+computed once when `as_logdensity` assembles a `FitLogDensity` and threaded
+into every subsequent `extra_logprior` call, mirroring how `flat_priors` is
+already collected once rather than re-derived per evaluation. Profiling
+(#28) found the ComposedDistributions extension's `extra_logprior` was
+paying a full `params_table` walk on every single evaluation to find which
+rows carry a centred-pooled prior, whether or not the tree actually has any
+— contradicting its own "no extra cost in the common case" claim. That walk
+now runs once, in a new `extra_prior_state` method, and `extra_logprior`
+reads the cached rows instead. A type overriding `extra_logprior` updates its
+method to the new four-argument signature (breaking; the package is
+unreleased, so this ships without a deprecation path); most existing
+overrides need no precomputed state and can add an ignored trailing
+argument.
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.
