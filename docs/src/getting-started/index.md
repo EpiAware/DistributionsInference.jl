@@ -1,10 +1,22 @@
 # [Getting started](@id getting-started)
 
-Welcome to the `DistributionsInference` documentation.
-This page is the quickstart.
-The home page is generated from the README and already carries the install
-instructions, so start here with what a new user does once the package is
-loaded, and grow it into tutorials as the package develops.
+`DistributionsInference` is a PPL-neutral fit protocol: name a type's own
+parameters once, and it gains a `LogDensityProblems` log-density, a
+dotted-name posterior readback, and (when Turing is loaded) a ready-made
+`DynamicPPL` model, all from the same declaration.
+No probabilistic programming language is required to reach a log-density; a
+PPL is an optional layer on top.
+This page is the quickstart; [Fitting an object](@ref fitting) carries the
+same example through sampling and readback.
+
+## Installation
+
+```julia
+using Pkg
+Pkg.add("DistributionsInference")
+```
+
+Load the package:
 
 ```julia
 using DistributionsInference
@@ -12,11 +24,67 @@ using DistributionsInference
 
 ## A first example
 
-_Replace this with a short, runnable example that shows the package's main
-entry point._
+Any type becomes fittable by naming its own parameters and how to rebuild
+itself from a flat vector.
+`ToyDelay` wraps a `Gamma` delay in two fields; `parameter_rows` names each
+one and gives `shape` a prior (so it is estimated) while leaving `scale`'s
+prior as `nothing` (so it stays fixed at its template value), and
+`reconstruct` says how to rebuild a `ToyDelay` from the flat vector a sampler
+works over.
+
+```@example getting-started
+using DistributionsInference, Distributions
+
+struct ToyDelay{T <: Real}
+    shape::T
+    scale::T
+end
+
+Distributions.logpdf(d::ToyDelay, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::ToyDelay)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
+    return ToyDelay(x[1], oftype(x[1], d.scale))
+end
+
+leaf = ToyDelay(2.0, 1.0)
+data = [1.5, 2.0, 3.2, 1.8, 2.6]
+```
+
+[`flat_dimension`](@ref) counts the estimated parameters — here that is
+`shape` alone, since `scale` carries no prior.
+[`as_logdensity`](@ref) packages the object and data into a log-density over
+just those estimated parameters.
+
+```@example getting-started
+DistributionsInference.flat_dimension(leaf)
+```
+
+```@example getting-started
+prob = DistributionsInference.as_logdensity(leaf, data)
+DistributionsInference.logdensity(prob, [2.0])
+```
+
+`prob` is a `LogDensityProblems` problem, so it can be handed to any sampler
+that speaks that interface, with no PPL involved — or, when Turing is
+wanted, [`as_turing`](@ref) wraps the same log-density as a `DynamicPPL`
+model instead.
+[Fitting an object](@ref fitting) takes `leaf` through both routes, reads a
+fitted chain back onto the object with [`readback`](@ref), and then runs the
+identical calls against a `ComposedDistributions` tree in place of a
+hand-written type.
 
 ## Learning more
 
+- Carry this example further in [Fitting an object](@ref fitting): sampling
+  with and without a PPL, reading a chain back onto the object, and fitting
+  a `ComposedDistributions` tree with the same calls.
 - Want the full interface? See the [Public API](@ref public-api).
 - Want to report a problem or ask a question? Open an issue or start a
   discussion on the [GitHub repository](https://github.com/EpiAware/DistributionsInference.jl).
