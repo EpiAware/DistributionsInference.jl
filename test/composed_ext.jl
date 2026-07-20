@@ -192,7 +192,7 @@ end
     using DynamicPPL, Turing, Random
 
     data = [[0.5, 0.6], [1.0, 0.9], [0.8, 0.7]]
-    model = as_turing(shared_tree, data)
+    model = DistributionsInference.as_turing(shared_tree, data)
 
     Random.seed!(23)
     chain = sample(model, NUTS(), 200; progress = false)
@@ -210,7 +210,7 @@ end
     using DynamicPPL, Turing, Random, Distributions
 
     data = [0.8, 1.5, 2.2, 0.6]
-    model = as_turing(resolve_tree, data)
+    model = DistributionsInference.as_turing(resolve_tree, data)
 
     Random.seed!(7)
     chain = sample(model, NUTS(), 200; progress = false)
@@ -225,7 +225,7 @@ end
     using DynamicPPL, Turing, Random
 
     data = [[0.5, 2.0, 1.2], [1.0, 3.0, 0.8], [0.9, 1.8, 1.1]]
-    model = as_turing(noncentred_tree, data)
+    model = DistributionsInference.as_turing(noncentred_tree, data)
 
     Random.seed!(13)
     chain = sample(model, NUTS(), 200; progress = false)
