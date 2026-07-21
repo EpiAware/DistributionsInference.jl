@@ -247,6 +247,7 @@ function logdensity(prob::FitLogDensity, x::AbstractVector)
         _throw_logdensity_dimmismatch(x, flat_priors, prob.obj)
     lp = isempty(x) ? 0.0 :
          sum(_row_logprior(flat_priors[i], x[i]) for i in eachindex(x))
+    _check_generic_fields(prob.obj, x)
     obj = reconstruct(prob.obj, x)
     lp += extra_logprior(prob.obj, obj, x, prob.extra_state)
     return lp + prob.loglik(obj, prob.data)

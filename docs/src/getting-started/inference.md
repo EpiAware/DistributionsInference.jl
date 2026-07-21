@@ -49,6 +49,23 @@ DistributionsInference.flat_dimension(leaf)
 DistributionsInference.logdensity(prob, [2.0])
 ```
 
+## Custom likelihood reducers
+
+`loglik` is a pluggable reducer `(obj, data) -> Real`, not fixed to a sum of `logpdf`: any scoring rule reusing the same parameter inventory, [`reconstruct`](@ref), priors and readback works unchanged, so a caller need not build a bespoke fitting path for it.
+
+A SURVIVAL-scoring reducer is one worked case: records known only to exceed a bound (a right-censored observation) score through `logccdf` instead of `logpdf`.
+
+```@example fitting
+survival_loglik(obj, records) = sum(y -> logccdf(Gamma(obj.shape, obj.scale), y), records)
+bounds = [1.0, 1.5, 2.0]
+survival_prob = DistributionsInference.as_logdensity(leaf, bounds; loglik = survival_loglik)
+DistributionsInference.logdensity(survival_prob, [2.0])
+```
+
+Because `survival_loglik` is written generically (`logccdf` differentiates the same way `logpdf` does), point estimation with an external optimiser, penalised point estimation (the same objective, any prior), and gradient-based posterior sampling all work from this one reducer, exactly as they do for the default data likelihood elsewhere on this page.
+
+An ESTIMATED (Monte Carlo) likelihood — one whose reducer draws random replicates internally, e.g. to marginalise a latent variable — is noisier and, unless written through a reparameterisation that keeps it differentiable, not usable by a gradient-based sampler at all: fall back to a gradient-free sampler (`AdvancedMH`, or any other `LogDensityProblems` consumer that does not need a gradient) for a reducer like this. More replicates reduce the noise in each evaluation at the cost of more compute per draw; too few replicates can bias a gradient-free sampler's acceptance rate as easily as they would bias a gradient-based one, so replicate count is a tuning knob to check by inflating it until further increases stop changing the posterior summary.
+
 ## Sampling without a probabilistic programming language
 
 `prob` is a `LogDensityProblems` problem, so any consumer of that interface can sample it directly, with no PPL in the loop.

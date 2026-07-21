@@ -144,6 +144,14 @@ necessarily type-specific, so the fallback below only raises a clear error
 naming the missing method. The engine's [`logdensity`](@ref) calls it once
 per evaluation to score `prob.data` against the object collapsed at `x`.
 
+An ESTIMATED field's type must stay GENERIC (e.g. `shape::S`, not
+`shape::Float64`): a gradient-based sampler threads a tracer number (a
+`ForwardDiff.Dual`, a `ReverseDiff.TrackedReal`, ...) through `x`, and a
+concrete field rejects it with an opaque `MethodError` from inside `obj`'s own
+constructor. Both call sites (`logdensity` and the `DynamicPPL` extension's
+turing model) guard this ahead of time with a clear, named `ArgumentError`
+instead.
+
 # Arguments
 - `obj`: the fittable object whose structure is rebuilt.
 - `x`: an estimated flat vector of length [`flat_dimension`](@ref)`(obj)`.
@@ -204,6 +212,58 @@ function reconstruct(rows::AbstractVector{<:NamedTuple}, x::AbstractVector)
         end
     end
     return out
+end
+
+# The concrete-field-under-AD guard (DI#48). A hand-rolled `reconstruct`
+# method whose target struct declares an ESTIMATED field with a concrete
+# (rather than generic) type crashes deep inside the AD backend the moment a
+# gradient-based sampler threads a tracer number through it: the struct's own
+# constructor rejects the foreign scalar with an opaque `MethodError` before
+# `reconstruct` even returns (confirmed directly: `ConcreteLeaf(dual, 1.0)`
+# throws `MethodError: no method matching Float64(::ForwardDiff.Dual{...})`
+# from inside the default inner constructor, not from anywhere `reconstruct`
+# controls). This check runs immediately BEFORE `reconstruct` at both call
+# sites (`logdensity` below and the `DynamicPPL` extension's turing model),
+# comparing each estimated row's OWN struct field (skipping a dotted `name`,
+# which belongs to a nested/composed structure this generic check does not
+# attempt to introspect) against the flat vector's per-element type, so the
+# failure is legible instead of surfacing from inside the AD backend.
+
+# A "plain scalar" element type (`Float64`, `Float32`, `Int`, ...) always
+# converts into any other concrete `Real` field without incident; only a
+# STRUCTURED tracer type (a `ForwardDiff.Dual`, a `ReverseDiff.TrackedReal`,
+# ...) triggers the guard below — recognised generically here by having
+# fields of its own, with no hardcoded dependency on any AD package.
+_is_plain_scalar(::Type{T}) where {T} = isconcretetype(T) && fieldcount(T) == 0
+
+@noinline function _throw_concrete_field_error(objtype, name, declared, xi_type)
+    throw(ArgumentError(
+        "reconstruct(::$objtype, x) would assign estimated parameter " *
+        "`$name` into a field concretely typed $declared, which cannot " *
+        "hold a value of type $xi_type; leave the field generically typed " *
+        "(e.g. `$name::S`) so gradient dual numbers can flow through it"))
+end
+
+# Checked per ELEMENT of `x` (not `x`'s container `eltype`): the `DynamicPPL`
+# turing model below threads values through an abstractly-typed `Vector{Real}`
+# regardless of what is actually stored in it, so the container's own eltype
+# cannot tell a plain `Float64` draw from a `Dual` one — only each element's
+# own runtime type can.
+function _check_generic_fields(obj, x::AbstractVector)
+    isempty(x) && return nothing
+    objtype = typeof(obj)
+    wrapper = objtype.name.wrapper
+    rows = estimated_rows(obj)
+    for i in eachindex(rows)
+        name = rows[i].name
+        hasfield(objtype, name) || continue
+        xi_type = typeof(x[i])
+        _is_plain_scalar(xi_type) && continue
+        declared = fieldtype(wrapper, name)
+        isconcretetype(declared) && !(xi_type <: declared) &&
+            _throw_concrete_field_error(objtype, name, declared, xi_type)
+    end
+    return nothing
 end
 
 @doc "
