@@ -91,5 +91,14 @@ optimisation package are added anywhere: this is the thin transform/objective
 wiring the fitting layer needed to make an external optimiser usable
 out of the box (closes #46).
 
+Fixed: a `reconstruct` method whose ESTIMATED field is typed to a concrete
+number (e.g. `shape::Float64`) rather than left generic used to fail a
+gradient-based sampler with an opaque `MethodError` from inside the struct's
+own constructor. `logdensity` and the `DynamicPPL` extension's turing model
+now guard this ahead of time, raising a clear, named `ArgumentError` before
+`reconstruct` runs (closes #48). Also documented the custom likelihood-reducer
+route in `reconstruct`'s docstring: an ESTIMATED field's type must stay
+GENERIC so a tracer number can flow through it.
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.

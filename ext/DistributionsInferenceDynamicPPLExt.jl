@@ -24,7 +24,7 @@ module DistributionsInferenceDynamicPPLExt
 
 using DistributionsInference: DistributionsInference, FitLogDensity,
                               as_logdensity, estimated_rows, reconstruct,
-                              extra_logprior
+                              extra_logprior, _check_generic_fields
 import DistributionsInference: as_turing, distribution_params, readback,
                                readback_draws
 using DynamicPPL: DynamicPPL, @model, NamedDist, VarName
@@ -87,6 +87,7 @@ end
         param ~ NamedDist(fp[i], vns[i])
         θ[i] = param
     end
+    _check_generic_fields(typeof(prob.obj), prob.concrete_fields, θ)
     obj = reconstruct(prob.obj, θ)
     DynamicPPL.@addlogprob! extra_logprior(prob.obj, obj, θ, prob.extra_state)
     DynamicPPL.@addlogprob! prob.loglik(obj, prob.data)

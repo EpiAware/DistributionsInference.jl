@@ -130,6 +130,53 @@ end
     @test calls[] == 1
 end
 
+@testitem "engine: the concrete-field guard's candidate list is computed once at construction, not per logdensity call" begin
+    using DistributionsInference, Distributions
+
+    # DI#48's review round: `_check_generic_fields` used to call
+    # `estimated_rows(obj)` fresh on every `logdensity` evaluation — the same
+    # per-evaluation-structural-recompute anti-pattern DI#28 (#41) had just
+    # fixed for `extra_logprior`, reintroduced one function over. The guard's
+    # candidate list is now `_concrete_field_candidates(obj)`, computed once
+    # at construction and cached on `FitLogDensity`. A real counter (not a
+    # benchmark) proves this directly, the same way as the `extra_prior_state`
+    # test above: it increments only when `parameter_rows` actually runs
+    # (`estimated_rows`'s own generic default calls it), so a count of exactly
+    # 1 after many `logdensity` evaluations is only possible if the
+    # per-evaluation walk is genuinely gone, not just fast.
+    calls = Ref(0)
+
+    struct GuardCountedLeaf{S <: Real}
+        shape::S
+        scale::Float64
+    end
+
+    Distributions.logpdf(d::GuardCountedLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::GuardCountedLeaf)
+        calls[] += 1
+        return [
+            (name = :shape, value = d.shape,
+                prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(d::GuardCountedLeaf, x::AbstractVector)
+        return GuardCountedLeaf(x[1], d.scale)
+    end
+
+    leaf = GuardCountedLeaf(2.0, 1.0)
+    data = [1.5, 2.0, 3.2]
+    prob = DistributionsInference.as_logdensity(leaf, data)
+    @test calls[] == 1
+
+    for x in ([2.0], [2.5], [3.0], [1.8])
+        DistributionsInference.logdensity(prob, x)
+    end
+    @test calls[] == 1
+end
+
 @testitem "engine acceptance: toy protocol object fits end-to-end via an LDP sampler" setup=[ToyFixture] begin
     using LogDensityProblems
     using Random

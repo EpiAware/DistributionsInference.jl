@@ -153,3 +153,79 @@ end
     expected = -0.5 * 2.5^2 + sum(y -> logpdf(Gamma(2.5, 1.0), y), data)
     @test DistributionsInference.logdensity(prob, x) ≈ expected
 end
+
+@testitem "reconstruct: a concrete estimated field is guarded against a tracer number (DI#48)" begin
+    using DistributionsInference, Distributions, ForwardDiff
+
+    # The bug this guards: an ESTIMATED field typed to a CONCRETE Float64
+    # rejects a `ForwardDiff.Dual` in its own inner constructor with an
+    # opaque `MethodError`, deep inside `reconstruct`, before `logdensity`
+    # ever gets to add the data likelihood.
+    struct ConcreteFitLeaf
+        shape::Float64
+        scale::Float64
+    end
+
+    Distributions.logpdf(d::ConcreteFitLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::ConcreteFitLeaf)
+        return [
+            (name = :shape, value = d.shape,
+                prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(d::ConcreteFitLeaf, x::AbstractVector)
+        return ConcreteFitLeaf(x[1], d.scale)
+    end
+
+    leaf = ConcreteFitLeaf(2.0, 1.0)
+    data = [1.5, 2.0, 3.2]
+    prob = DistributionsInference.as_logdensity(leaf, data)
+
+    # Ordinary (non-AD) use: a plain Float64 vector is unaffected.
+    @test isfinite(DistributionsInference.logdensity(prob, [2.5]))
+
+    # A `Dual`-valued flat vector: the guard raises a clear, named
+    # `ArgumentError` instead of the opaque `MethodError` `reconstruct` would
+    # otherwise surface (confirmed directly: `ConcreteFitLeaf(dual, 1.0)`
+    # throws `MethodError: no method matching Float64(::Dual{...})`).
+    dual_x = [ForwardDiff.Dual(2.5, 1.0)]
+    err = try
+        DistributionsInference.logdensity(prob, dual_x)
+        nothing
+    catch caught
+        caught
+    end
+    @test err isa ArgumentError
+    @test occursin("shape", err.msg)
+    @test occursin("ConcreteFitLeaf", err.msg)
+    @test occursin("generically typed", err.msg)
+
+    # A GENERICALLY typed field (a type parameter, not a concrete Float64):
+    # the same `Dual`-valued vector flows through untouched, no guard fires.
+    struct GenericFitLeaf{S <: Real}
+        shape::S
+        scale::Float64
+    end
+
+    Distributions.logpdf(d::GenericFitLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::GenericFitLeaf)
+        return [
+            (name = :shape, value = d.shape,
+                prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(d::GenericFitLeaf, x::AbstractVector)
+        return GenericFitLeaf(x[1], d.scale)
+    end
+
+    generic_leaf = GenericFitLeaf(2.0, 1.0)
+    generic_prob = DistributionsInference.as_logdensity(generic_leaf, data)
+    @test DistributionsInference.logdensity(generic_prob, dual_x) isa
+          ForwardDiff.Dual
+end
