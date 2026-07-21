@@ -94,6 +94,59 @@ all_fitted = DistributionsInference.readback_draws(leaf, chain)
 length(all_fitted)
 ```
 
+## Maximum likelihood and maximum a posteriori
+
+`prob`'s objective is already a plain (unnormalised) log-density, so a standard external optimiser can find a point estimate directly: minimising the negative log-likelihood is maximum likelihood, and minimising the negative log-posterior is maximum a posteriori.
+DistributionsInference ships no estimator method for this; [`as_optimisation_objective`](@ref) is only the thin wiring of the unconstrained transform, the objective and [`reconstruct`](@ref) together, once `Bijectors` is loaded — the optimiser itself (`Optim.jl` here) stays external.
+
+```@example fitting
+using Bijectors, Optim
+
+f = DistributionsInference.as_optimisation_objective(prob)
+res = optimize(f, zeros(DistributionsInference.flat_dimension(leaf)), LBFGS())
+z_hat = Optim.minimizer(res)
+```
+
+`z_hat` is on the unconstrained scale `f` optimises over; push it back through [`to_constrained`](@ref) and [`reconstruct`](@ref) — the same readback path every other sampler in this guide reconstructs through — to get the fitted object at the maximum-a-posteriori point.
+
+```@example fitting
+x_hat, _ = DistributionsInference.to_constrained(prob, z_hat)
+map_fit = DistributionsInference.reconstruct(prob.obj, x_hat)
+map_fit.shape
+```
+
+`logdensity` always adds an ESTIMATED row's own prior term (that is what makes the row estimated in the first place; see [`parameter_rows`](@ref)), so a maximum-likelihood point needs an object whose prior is negligible next to the data likelihood, rather than just swapping `loglik`.
+A separate type carrying a very diffuse prior on `shape` gives exactly that: its curvature near the likelihood's own optimum is small enough that the MAP point below is the maximum-likelihood estimate up to numerical precision, with the wiring otherwise unchanged.
+
+```@example fitting
+struct ToyDelayML{T <: Real}
+    shape::T
+    scale::T
+end
+
+Distributions.logpdf(d::ToyDelayML, y::Real) =
+    logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::ToyDelayML)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(0.0, 100.0), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing, support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::ToyDelayML, x::AbstractVector)
+    return ToyDelayML(x[1], oftype(x[1], d.scale))
+end
+
+ml_leaf = ToyDelayML(2.0, 1.0)
+ml_prob = DistributionsInference.as_logdensity(ml_leaf, data)
+ml_f = DistributionsInference.as_optimisation_objective(ml_prob)
+ml_n = DistributionsInference.flat_dimension(ml_leaf)
+ml_res = optimize(ml_f, zeros(ml_n), LBFGS())
+ml_x, _ = DistributionsInference.to_constrained(
+    ml_prob, Optim.minimizer(ml_res))
+DistributionsInference.reconstruct(ml_leaf, ml_x).shape
+```
+
 ## Sampling with Turing
 
 [`as_turing`](@ref) wraps the same log-density as a `DynamicPPL` model, so the object is sampleable with Turing directly.

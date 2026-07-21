@@ -80,5 +80,16 @@ dedicated helper is needed for this: the existing `loglik` reducer hook plus
 this convention already cover it, so the helper question is closed rather
 than built (closes #44).
 
+Added `as_optimisation_objective` (the `Bijectors` extension, alongside
+`to_constrained`): a plain `AbstractVector -> Real` callable — the negative
+unconstrained log-posterior — that composes `to_constrained` with the core
+`logdensity`, so a standard external optimisation package (`Optim.jl`,
+`Optimization.jl`, or any package accepting a callable and an initial vector)
+finds the maximum-likelihood or maximum-a-posteriori point directly, with
+gradients through the existing AD wrapper. No estimator method and no
+optimisation package are added anywhere: this is the thin transform/objective
+wiring the fitting layer needed to make an external optimiser usable
+out of the box (closes #46).
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.

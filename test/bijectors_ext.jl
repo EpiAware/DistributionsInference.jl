@@ -162,3 +162,72 @@ end
         @test g[i] ≈ fd atol = 1e-4
     end
 end
+
+@testitem "as_optimisation_objective: the negative of to_constrained ∘ logdensity" setup=[TuringFixture] begin
+    using Bijectors
+
+    leaf = TwoParamLeaf(2.0, 1.0)
+    data = [1.5, 2.0, 3.2, 2.8]
+    prob = DistributionsInference.as_logdensity(leaf, data)
+    f = DistributionsInference.as_optimisation_objective(prob)
+
+    n = DistributionsInference.flat_dimension(leaf)
+    z = fill(0.2, n)
+    x, logjac = DistributionsInference.to_constrained(prob, z)
+    @test f(z) ≈ -(DistributionsInference.logdensity(prob, x) + logjac)
+    @test isfinite(f(zeros(n)))
+
+    # A length mismatch is rejected eagerly, like the rest of the codec (via
+    # `to_constrained`).
+    @test_throws DimensionMismatch f(z[1:(end - 1)])
+end
+
+@testitem "as_optimisation_objective: minimising it finds the MAP point (Optim.jl)" setup=[ToyFixture] begin
+    using Bijectors, Optim
+
+    mu, sigma = log(2.0), 0.2
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(mu, sigma))
+    data = [1.5, 2.0, 3.2, 2.8, 1.9, 4.1, 2.5, 3.0]
+    prob = DistributionsInference.as_logdensity(leaf, data)
+    f = DistributionsInference.as_optimisation_objective(prob)
+
+    res = optimize(f, [0.0], LBFGS())
+    z_hat = Optim.minimizer(res)
+    x_hat, _ = DistributionsInference.to_constrained(prob, z_hat)
+    fitted = DistributionsInference.reconstruct(prob.obj, x_hat)
+
+    # The MAP optimum is a stationary point of the unconstrained target: a
+    # symmetric finite-difference gradient check, independent of Optim's own
+    # convergence bookkeeping.
+    h = 1e-6
+    fd = (f(z_hat .+ h) - f(z_hat .- h)) / (2h)
+    @test fd ≈ 0.0 atol = 1e-3
+    @test fitted.shape > 0
+    @test fitted.scale == leaf.scale
+end
+
+@testitem "as_optimisation_objective: a diffuse prior tracks the MLE" setup=[ToyFixture] begin
+    using Bijectors, Optim, Distributions
+
+    # `logdensity` always scores an ESTIMATED row's own prior, so a genuine
+    # maximum-likelihood point needs the prior's curvature to be negligible
+    # next to the likelihood: a very diffuse prior on `shape` gives that,
+    # and the optimum tracks the closed-form Gamma-shape MLE.
+    diffuse = LogNormal(0.0, 100.0)
+    leaf = ToyGammaLeaf(2.0, 1.0, diffuse)
+    data = [1.5, 2.0, 3.2, 2.8, 1.9, 4.1, 2.5, 3.0]
+    prob = DistributionsInference.as_logdensity(leaf, data)
+    f = DistributionsInference.as_optimisation_objective(prob)
+
+    res = optimize(f, [0.0], LBFGS())
+    z_hat = Optim.minimizer(res)
+    x_hat, _ = DistributionsInference.to_constrained(prob, z_hat)
+
+    # A closed-form check independent of the optimiser: at the MLE, the
+    # data log-likelihood's own derivative in `shape` is zero (the diffuse
+    # prior contributes negligibly here).
+    loglik(shape) = sum(y -> logpdf(Gamma(shape, leaf.scale), y), data)
+    h = 1e-6
+    fd = (loglik(x_hat[1] + h) - loglik(x_hat[1] - h)) / (2h)
+    @test fd ≈ 0.0 atol = 1e-2
+end
