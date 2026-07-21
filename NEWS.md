@@ -100,5 +100,14 @@ now guard this ahead of time, raising a clear, named `ArgumentError` before
 route in `reconstruct`'s docstring: an ESTIMATED field's type must stay
 GENERIC so a tracer number can flow through it.
 
+The ComposedDistributions extension's `extra_prior_state`/`extra_logprior`
+now call ComposedDistributions' `centred_pool_rows`/`pool_centred_logprior`,
+dropping the leading underscore: the org's naming convention reserves a
+leading underscore for internal-only names, and these two are `public`
+(ComposedDistributions#212). ComposedDistributions keeps the old
+`_centred_pool_rows`/`_pool_centred_logprior` names as `public` transitional
+aliases, so this is a no-op release-wise; it only needs ComposedDistributions'
+rename to have landed first.
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.

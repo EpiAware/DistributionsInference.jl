@@ -112,11 +112,11 @@ end
 # `as_logdensity` construction, rather than inside `extra_logprior` itself,
 # turns a per-evaluation `params_table` walk into a one-off. Profiling (DI#28)
 # measured this walk at ~2-2.7 μs even on a tree with NO centred pooling at
-# all (`_centred_pool_rows` calls `params_table` before checking whether any
+# all (`centred_pool_rows` calls `params_table` before checking whether any
 # row actually carries the marker), comparable to `reconstruct`'s own cost —
 # not the "no extra cost" the previous version of this comment claimed.
 function extra_prior_state(d::AbstractComposedDistribution)
-    ComposedDistributions._centred_pool_rows(d)
+    ComposedDistributions.centred_pool_rows(d)
 end
 
 # `extra_logprior`: the centred-pooled population term, `0.0` when `d` has no
@@ -131,7 +131,7 @@ function extra_logprior(d::AbstractComposedDistribution, ::Any,
         x::AbstractVector, state)
     isempty(state) && return 0.0
     nt = ComposedDistributions.unflatten(d, x)
-    return ComposedDistributions._pool_centred_logprior(state, nt)
+    return ComposedDistributions.pool_centred_logprior(state, nt)
 end
 
 end # module DistributionsInferenceComposedDistributionsExt
