@@ -78,6 +78,19 @@ object with no estimated rows estimates nothing: the flat vector is empty and
 (the transform and its log-Jacobian) is a `Bijectors` extension concern, not
 this core engine's, mirroring ComposedDistributions' `to_constrained`.
 
+A CONDITIONALLY available exact likelihood — some objects can score their
+data through a closed form only under a structural condition, and otherwise
+only through an approximation — is a `loglik` a caller writes and passes in
+directly, not a helper this package adds (DistributionsInference#44: the
+hook plus this convention are enough on their own). Choose between the exact
+and approximate branch with an explicit predicate or by dispatch; NEVER by
+catching an exception thrown from the exact path, since that hides a genuine
+bug in the exact branch as if the exact form simply did not apply. Where the
+exact form does not apply, refuse loudly with a named structural reason (an
+`error` or `ArgumentError` naming what is missing), the same convention
+[`to_constrained`](@ref) and [`as_turing`](@ref) follow for a row kind they
+do not support.
+
 # Arguments
 - `obj`: the template fittable object, carrying its [`parameter_rows`](@ref).
 - `data`: the observed records.
@@ -112,6 +125,51 @@ leaf = ToyLeaf(2.0, 1.0)
 data = [1.5, 2.0, 3.2]
 prob = DistributionsInference.as_logdensity(leaf, data)
 DistributionsInference.flat_dimension(leaf)
+```
+
+A conditionally exact likelihood, chosen by predicate and passed straight in
+as `loglik` (no dedicated helper needed):
+
+```@example
+using DistributionsInference, Distributions
+
+struct ToyLeaf2
+    shape::Float64
+    scale::Float64
+end
+
+Distributions.logpdf(d::ToyLeaf2, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::ToyLeaf2)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::ToyLeaf2, x::AbstractVector)
+    return ToyLeaf2(x[1], d.scale)
+end
+
+has_exact_form(::ToyLeaf2) = false   # a structural property of the object
+
+function chosen_loglik(obj, data)
+    if has_exact_form(obj)
+        return sum(y -> logpdf(obj, y), data)  # closed form
+    else
+        error(\"no exact likelihood for ToyLeaf2: <named structural reason>\")
+    end
+end
+
+# GOOD: decide by an explicit predicate, refuse loudly when it does not
+# apply. NEVER decide by catching an exception from the exact path (a
+# genuine bug in the exact branch would then be silently misread as \"exact
+# form unavailable\").
+leaf2 = ToyLeaf2(2.0, 1.0)
+data2 = [1.5, 2.0, 3.2]
+prob2 = DistributionsInference.as_logdensity(
+    leaf2, data2; loglik = chosen_loglik)
+DistributionsInference.flat_dimension(leaf2)
 ```
 
 # See also
