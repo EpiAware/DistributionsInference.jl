@@ -49,4 +49,10 @@ public as_turing
 # docstring, in `bijectors.jl`) as a Bijectors-free stub; the transform itself
 # lives in the `DistributionsInferenceBijectorsExt` package extension, loaded
 # only when `Bijectors` is present.
-public to_constrained
+#
+# `as_optimisation_objective`: the negative unconstrained log-posterior as a
+# plain callable (DI#46), composing `to_constrained` with the core
+# `logdensity` so an external optimisation package finds the ML/MAP point
+# directly. Same Bijectors-free-stub/extension split as `to_constrained`; no
+# optimisation package is a dependency anywhere.
+public to_constrained, as_optimisation_objective

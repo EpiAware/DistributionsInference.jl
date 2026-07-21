@@ -12,7 +12,8 @@
 # `_validate_turing_rows`.
 module DistributionsInferenceBijectorsExt
 
-using DistributionsInference: DistributionsInference, FitLogDensity
+using DistributionsInference: DistributionsInference, FitLogDensity,
+                              logdensity
 using Bijectors: Bijectors, bijector, inverse, with_logabsdet_jacobian
 
 # The bijector for one ESTIMATED row's prior. A row with no per-row prior
@@ -52,6 +53,18 @@ function DistributionsInference.to_constrained(
     x = [xi for (xi, _) in xs_and_logj]
     logjac = isempty(xs_and_logj) ? zero(eltype(z)) : sum(last, xs_and_logj)
     return x, logjac
+end
+
+# `as_optimisation_objective(prob)`: a plain closure over `prob`, composing
+# `to_constrained` (this extension) with the core `logdensity` (DI#46). No
+# optimisation package is involved on this side either — the closure is just
+# a `AbstractVector -> Real` callable, which is all any external optimiser
+# needs.
+function DistributionsInference.as_optimisation_objective(prob::FitLogDensity)
+    return function (z::AbstractVector)
+        x, logjac = DistributionsInference.to_constrained(prob, z)
+        return -(logdensity(prob, x) + logjac)
+    end
 end
 
 end # module
