@@ -71,5 +71,14 @@ unreleased, so this ships without a deprecation path); most existing
 overrides need no precomputed state and can add an ignored trailing
 argument.
 
+Documented the rule for a conditionally available exact likelihood in
+`as_logdensity`'s `loglik` docstring: choose between the exact and
+approximate branch with an explicit predicate or by dispatch, never by
+catching an exception thrown from the exact path, and refuse loudly with a
+named structural reason where the exact form does not apply. Concluded no
+dedicated helper is needed for this: the existing `loglik` reducer hook plus
+this convention already cover it, so the helper question is closed rather
+than built (closes #44).
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.
