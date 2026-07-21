@@ -44,23 +44,33 @@ directly, so it is sampleable by any LogDensityProblems consumer.
   [`extra_logprior`](@ref) call, so a package whose extra term needs a
   structural walk of `obj` (DI#28's motivating case: which rows carry an
   object-dependent prior) pays it once here rather than on every evaluation.
+- `concrete_fields`: `_concrete_field_candidates(obj)`, collected once at
+  construction alongside `flat_priors`/`extra_state` — the concrete-field-
+  under-AD guard's (DI#48) own structural state, empty for a properly
+  generic object, so [`logdensity`](@ref)'s per-evaluation guard is a single
+  `isempty` check rather than a fresh `estimated_rows(obj)` walk on every
+  call.
 
 # See also
 - [`as_logdensity`](@ref): the assembler.
 - [`logdensity`](@ref): evaluate on a flat vector.
 "
-struct FitLogDensity{D, T, L, FP, ES}
+struct FitLogDensity{D, T, L, FP, ES, CF}
     obj::D
     data::T
     loglik::L
     flat_priors::FP
     extra_state::ES
+    concrete_fields::CF
 end
 
 function FitLogDensity(obj, data, loglik)
-    flat_priors = [row.prior for row in estimated_rows(obj)]
+    rows = estimated_rows(obj)
+    flat_priors = [row.prior for row in rows]
     extra_state = extra_prior_state(obj)
-    return FitLogDensity(obj, data, loglik, flat_priors, extra_state)
+    concrete_fields = _concrete_field_candidates(typeof(obj), rows)
+    return FitLogDensity(
+        obj, data, loglik, flat_priors, extra_state, concrete_fields)
 end
 
 @doc "
@@ -247,7 +257,7 @@ function logdensity(prob::FitLogDensity, x::AbstractVector)
         _throw_logdensity_dimmismatch(x, flat_priors, prob.obj)
     lp = isempty(x) ? 0.0 :
          sum(_row_logprior(flat_priors[i], x[i]) for i in eachindex(x))
-    _check_generic_fields(prob.obj, x)
+    _check_generic_fields(typeof(prob.obj), prob.concrete_fields, x)
     obj = reconstruct(prob.obj, x)
     lp += extra_logprior(prob.obj, obj, x, prob.extra_state)
     return lp + prob.loglik(obj, prob.data)
