@@ -146,17 +146,21 @@ jobs:
       # the root manifest is the only one Pkg reads. The action also writes a
       # `test/Manifest.toml` for non-workspace layouts; beside a workspace it
       # is dead weight that can only go stale, so drop it.
-      #
-      # The status dump is the audit trail for the run: it shows which floors
-      # the resolve actually landed on, which is the whole point of the job and
-      # the first thing to read when it fails.
-      - name: Drop the stray member manifest and report the floors
+      - name: Drop the stray member manifest
         shell: bash
-        run: |
-          rm -f test/Manifest.toml
-          # Reporting only — never the reason the job goes red.
-          julia --color=yes --project=test -e 'using Pkg; Pkg.status()' || true
+        run: rm -f test/Manifest.toml
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
           test_args: ${{ inputs.test_args }}
+      # Which floors the resolve actually landed on is the single most useful
+      # thing in this job's log, and it is what you need to raise a bound when
+      # the suite fails against them. It runs *after* the tests, and with
+      # `always()`, so it is the last thing printed on a red run instead of
+      # being buried thousands of lines up — the test output alone can run to
+      # thousands of lines, which puts anything printed before it out of reach
+      # of a log tail. Reporting only: it never changes the job's result.
+      - name: Report the resolved floors
+        if: always()
+        shell: bash
+        run: julia --color=yes --project=test -e 'using Pkg; Pkg.status()' || true

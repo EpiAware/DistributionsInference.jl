@@ -30,7 +30,14 @@ Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1"
 Distributions = "0.25"
 DocStringExtensions = "0.9"
-DynamicPPL = "0.39, 0.40, 0.41, 0.42"
+# 0.39 is dropped because it does not work on the Julia versions this package
+# supports: on 1.12 it fails to precompile, its EnzymeCore extension erroring
+# out while DynamicPPL itself is being compiled. The downgrade job found this
+# once it could actually resolve and run — every extension-dependent test
+# errored against the 0.39 floor, while everything not needing an extension
+# passed. The registry lets 0.39 claim 1.12, so nothing but running it catches
+# this.
+DynamicPPL = "0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
 LogDensityProblems = "2"
 LogExpFunctions = "0.3, 1"
