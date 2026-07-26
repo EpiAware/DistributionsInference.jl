@@ -71,45 +71,91 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ inputs.julia_version }}
+      # `julia-downgrade-compat` understands a `[sources]` entry that points at
+      # a local **path**: it feeds that package's own `[compat]` into the joint
+      # floor resolve and writes it back into the manifest afterwards. It does
+      # not — and cannot — do either for a **url** entry, because both steps
+      # need the package's `Project.toml` on disk. `test/Project.toml` pins
+      # ComposedDistributions, ModifiedDistributions and EpiAwarePackageTools
+      # by url, so all three were stripped before the resolve and never
+      # restored, which left the floors picked in ignorance of their
+      # constraints and the manifest missing the packages themselves.
+      #
+      # Restoring them afterwards is not a fix. The floors are already frozen
+      # by then, so every constraint the three carry has to be satisfiable
+      # against versions chosen without them, and any clash is unresolvable —
+      # first `DocStringExtensions` (EpiAwarePackageTools needs 0.9.5, the
+      # floor was 0.9.0), then `ConvolvedDistributions` (both pins need 0.2,
+      # incompatible with the OptimizationOptimJL 0.3.2 the floor resolve had
+      # settled on). Chasing those one at a time means bumping this package's
+      # public compat for test-only reasons, and OptimizationOptimJL is not
+      # even a direct dependency, so there is no entry here to bump.
+      #
+      # So convert them to what the action does support: clone each one at the
+      # rev `[sources]` names and rewrite the entry to a path. The three then
+      # take part in the floor resolve as first-class constraints, the
+      # resolver picks a mutually consistent set of floors, and the action
+      # writes them into both manifests itself. The clones live in the runner
+      # temp dir, so the checkout stays clean, and the rewrite is never
+      # committed.
+      - name: Vendor the url-pinned sources as path sources
+        shell: bash
+        env:
+          VENDOR_DIR: ${{ runner.temp }}/downgrade-sources
+        run: |
+          set -euo pipefail
+          mkdir -p "$VENDOR_DIR"
+          cat > "$RUNNER_TEMP/vendor_sources.jl" <<'JULIA'
+          using TOML
+
+          vendor = ENV["VENDOR_DIR"]
+          file = "test/Project.toml"
+          project = TOML.parsefile(file)
+          sources = get(project, "sources", Dict{String, Any}())
+          vendored = String[]
+
+          for name in sort!(collect(keys(sources)))
+              spec = sources[name]
+              (spec isa AbstractDict && haskey(spec, "url")) || continue
+              rev = get(spec, "rev", "main")
+              dest = joinpath(vendor, name)
+              run(`git clone --quiet --depth 1 --branch $rev $(spec["url"]) $dest`)
+              sources[name] = Dict{String, Any}(
+                  "path" => relpath(dest, dirname(abspath(file)))
+              )
+              push!(vendored, name)
+              @info "Vendored $name" url=spec["url"] rev dest
+          end
+
+          if isempty(vendored)
+              @info "No url-pinned sources found; nothing to vendor"
+          else
+              open(file, "w") do io
+                  TOML.print(io, project; sorted = true)
+              end
+              @info "Rewrote $file [sources] to local paths" vendored
+          end
+          JULIA
+          julia --color=yes "$RUNNER_TEMP/vendor_sources.jl"
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           mode: ${{ inputs.mode }}
           projects: ${{ inputs.projects }}
       - uses: julia-actions/cache@v3
-      # The action strips every `[sources]` package out of the project before
-      # the floor resolve — the resolver only knows registered packages — and
-      # afterwards restores only the *path*-sourced ones. It rebuilds each
-      # restored entry by reading that package's own `Project.toml` off disk,
-      # which a url-pinned source does not have. This package pins three
-      # unregistered deps by url in `test/Project.toml` (ComposedDistributions,
-      # ModifiedDistributions and EpiAwarePackageTools), so they are absent
-      # from the manifest the action writes and `Pkg.test` refuses to
-      # instantiate the test environment:
+      # `test` is a workspace member (`[workspace] projects = ["test"]`), so
+      # the root manifest is the only one Pkg reads. The action also writes a
+      # `test/Manifest.toml` for non-workspace layouts; beside a workspace it
+      # is dead weight that can only go stale, so drop it.
       #
-      #     `EpiAwarePackageTools` is a direct dependency, but does not appear
-      #     in the manifest.
-      #
-      # `Pkg.resolve()` is exactly what that message asks for, and it is safe
-      # here: it runs at `UPLEVEL_FIXED`, so every version already in the
-      # manifest — the floors the resolver just picked — is left alone, and
-      # only the missing packages are cloned and added. Resolving from the root
-      # project is what `Pkg.test` itself does, so the workspace member's
-      # `[sources]` are in scope and the shared root manifest is the one
-      # updated.
-      #
-      # `test/Manifest.toml` is dropped first. The action writes it for
-      # non-workspace layouts, but `test` is a workspace member here
-      # (`[workspace] projects = ["test"]`), so the root manifest is the only
-      # one that is read and a second copy beside it can only go stale.
-      #
-      # The status dump is the audit trail: if a future Pkg ever let this
-      # resolve quietly lift the floors, the printed versions would show it.
-      - name: Restore the url-sourced deps to the floor-resolved manifest
+      # The status dump is the audit trail for the run: it shows which floors
+      # the resolve actually landed on, which is the whole point of the job and
+      # the first thing to read when it fails.
+      - name: Drop the stray member manifest and report the floors
+        shell: bash
         run: |
           rm -f test/Manifest.toml
-          julia --color=yes --project=. -e 'using Pkg; Pkg.resolve()'
-          julia --color=yes --project=test -e 'using Pkg; Pkg.status()'
-        shell: bash
+          # Reporting only — never the reason the job goes red.
+          julia --color=yes --project=test -e 'using Pkg; Pkg.status()' || true
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
