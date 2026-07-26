@@ -76,6 +76,40 @@ jobs:
           mode: ${{ inputs.mode }}
           projects: ${{ inputs.projects }}
       - uses: julia-actions/cache@v3
+      # The action strips every `[sources]` package out of the project before
+      # the floor resolve — the resolver only knows registered packages — and
+      # afterwards restores only the *path*-sourced ones. It rebuilds each
+      # restored entry by reading that package's own `Project.toml` off disk,
+      # which a url-pinned source does not have. This package pins three
+      # unregistered deps by url in `test/Project.toml` (ComposedDistributions,
+      # ModifiedDistributions and EpiAwarePackageTools), so they are absent
+      # from the manifest the action writes and `Pkg.test` refuses to
+      # instantiate the test environment:
+      #
+      #     `EpiAwarePackageTools` is a direct dependency, but does not appear
+      #     in the manifest.
+      #
+      # `Pkg.resolve()` is exactly what that message asks for, and it is safe
+      # here: it runs at `UPLEVEL_FIXED`, so every version already in the
+      # manifest — the floors the resolver just picked — is left alone, and
+      # only the missing packages are cloned and added. Resolving from the root
+      # project is what `Pkg.test` itself does, so the workspace member's
+      # `[sources]` are in scope and the shared root manifest is the one
+      # updated.
+      #
+      # `test/Manifest.toml` is dropped first. The action writes it for
+      # non-workspace layouts, but `test` is a workspace member here
+      # (`[workspace] projects = ["test"]`), so the root manifest is the only
+      # one that is read and a second copy beside it can only go stale.
+      #
+      # The status dump is the audit trail: if a future Pkg ever let this
+      # resolve quietly lift the floors, the printed versions would show it.
+      - name: Restore the url-sourced deps to the floor-resolved manifest
+        run: |
+          rm -f test/Manifest.toml
+          julia --color=yes --project=. -e 'using Pkg; Pkg.resolve()'
+          julia --color=yes --project=test -e 'using Pkg; Pkg.status()'
+        shell: bash
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
