@@ -1,0 +1,166 @@
+# PACKAGE-OWNED — a local stand-in for EpiAware/.github's `downgrade.yml`.
+#
+# Why this exists rather than a call to the shared reusable:
+#
+# The shared `downgrade.yml` invokes `julia-actions/julia-downgrade-compat`
+# without a `projects` input, so the action falls back to its default of
+# `projects: '.'` and resolves the root project on its own. That is wrong for
+# this package's layout. The test environment is a workspace member
+# (`[workspace] projects = ["test"]` in `Project.toml`), so there is a single
+# `Manifest.toml` at the root and `Pkg.test` reads it — but a root-only resolve
+# never sees `test/Project.toml`, and so never sees the test-only deps or the
+# unregistered, `[sources]`-pinned ComposedDistributions and
+# ModifiedDistributions. The action then wrote a manifest the test environment
+# could not be instantiated from, and every run died on:
+#
+#     `ModifiedDistributions` is a direct dependency, but does not appear in
+#     the manifest.
+#
+# That failure was systemic, not PR-specific: `downgrade-compat` was the only
+# red check on `main` and it was red on every open pull request.
+#
+# Passing `projects: '., test'` selects the action's merged-resolution path,
+# which is written for exactly this layout: it merges the root and test
+# projects, strips the unregistered `[sources]` packages before the floor
+# resolve (the resolver only knows registered packages), then restores them —
+# and the package itself — as path entries in both the root and the test
+# manifest before fixing up each manifest's project hash.
+#
+# The shared reusable exposes no `projects` input, so it cannot be fixed from
+# the caller. Everything else here mirrors it one-for-one. Delete this file and
+# point `test.yaml`'s `downgrade-compat` job back at
+# `EpiAware/.github/.github/workflows/downgrade.yml` once that reusable gains a
+# `projects` input.
+
+name: Downgrade
+
+on:
+  workflow_call:
+    inputs:
+      julia_version:
+        description: 'Julia version to run the downgrade suite on'
+        required: false
+        type: string
+        default: '1.10'
+      mode:
+        description: 'julia-downgrade-compat mode (deps, alldeps, ...)'
+        required: false
+        type: string
+        default: 'deps'
+      projects:
+        description: >-
+          Comma-separated Julia projects to resolve. Defaults to the root and
+          the test environment so the workspace member is part of the resolve.
+        required: false
+        type: string
+        default: '., test'
+      test_args:
+        description: 'Extra args passed to julia-runtest test_args'
+        required: false
+        type: string
+        default: 'skip_quality'
+
+jobs:
+  downgrade-compat:
+    name: Downgrade Compat
+    runs-on: ubuntu-latest
+    # Single suite against oldest deps; cap to free a hung runner.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ inputs.julia_version }}
+      # `julia-downgrade-compat` understands a `[sources]` entry that points at
+      # a local **path**: it feeds that package's own `[compat]` into the joint
+      # floor resolve and writes it back into the manifest afterwards. It does
+      # not — and cannot — do either for a **url** entry, because both steps
+      # need the package's `Project.toml` on disk. `test/Project.toml` pins
+      # ComposedDistributions, ModifiedDistributions and EpiAwarePackageTools
+      # by url, so all three were stripped before the resolve and never
+      # restored, which left the floors picked in ignorance of their
+      # constraints and the manifest missing the packages themselves.
+      #
+      # Restoring them afterwards is not a fix. The floors are already frozen
+      # by then, so every constraint the three carry has to be satisfiable
+      # against versions chosen without them, and any clash is unresolvable —
+      # first `DocStringExtensions` (EpiAwarePackageTools needs 0.9.5, the
+      # floor was 0.9.0), then `ConvolvedDistributions` (both pins need 0.2,
+      # incompatible with the OptimizationOptimJL 0.3.2 the floor resolve had
+      # settled on). Chasing those one at a time means bumping this package's
+      # public compat for test-only reasons, and OptimizationOptimJL is not
+      # even a direct dependency, so there is no entry here to bump.
+      #
+      # So convert them to what the action does support: clone each one at the
+      # rev `[sources]` names and rewrite the entry to a path. The three then
+      # take part in the floor resolve as first-class constraints, the
+      # resolver picks a mutually consistent set of floors, and the action
+      # writes them into both manifests itself. The clones live in the runner
+      # temp dir, so the checkout stays clean, and the rewrite is never
+      # committed.
+      - name: Vendor the url-pinned sources as path sources
+        shell: bash
+        env:
+          VENDOR_DIR: ${{ runner.temp }}/downgrade-sources
+        run: |
+          set -euo pipefail
+          mkdir -p "$VENDOR_DIR"
+          cat > "$RUNNER_TEMP/vendor_sources.jl" <<'JULIA'
+          using TOML
+
+          vendor = ENV["VENDOR_DIR"]
+          file = "test/Project.toml"
+          project = TOML.parsefile(file)
+          sources = get(project, "sources", Dict{String, Any}())
+          vendored = String[]
+
+          for name in sort!(collect(keys(sources)))
+              spec = sources[name]
+              (spec isa AbstractDict && haskey(spec, "url")) || continue
+              rev = get(spec, "rev", "main")
+              dest = joinpath(vendor, name)
+              run(`git clone --quiet --depth 1 --branch $rev $(spec["url"]) $dest`)
+              sources[name] = Dict{String, Any}(
+                  "path" => relpath(dest, dirname(abspath(file)))
+              )
+              push!(vendored, name)
+              @info "Vendored $name" url=spec["url"] rev dest
+          end
+
+          if isempty(vendored)
+              @info "No url-pinned sources found; nothing to vendor"
+          else
+              open(file, "w") do io
+                  TOML.print(io, project; sorted = true)
+              end
+              @info "Rewrote $file [sources] to local paths" vendored
+          end
+          JULIA
+          julia --color=yes "$RUNNER_TEMP/vendor_sources.jl"
+      - uses: julia-actions/julia-downgrade-compat@v2
+        with:
+          mode: ${{ inputs.mode }}
+          projects: ${{ inputs.projects }}
+      - uses: julia-actions/cache@v3
+      # `test` is a workspace member (`[workspace] projects = ["test"]`), so
+      # the root manifest is the only one Pkg reads. The action also writes a
+      # `test/Manifest.toml` for non-workspace layouts; beside a workspace it
+      # is dead weight that can only go stale, so drop it.
+      - name: Drop the stray member manifest
+        shell: bash
+        run: rm -f test/Manifest.toml
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          test_args: ${{ inputs.test_args }}
+      # Which floors the resolve actually landed on is the single most useful
+      # thing in this job's log, and it is what you need to raise a bound when
+      # the suite fails against them. It runs *after* the tests, and with
+      # `always()`, so it is the last thing printed on a red run instead of
+      # being buried thousands of lines up — the test output alone can run to
+      # thousands of lines, which puts anything printed before it out of reach
+      # of a log tail. Reporting only: it never changes the job's result.
+      - name: Report the resolved floors
+        if: always()
+        shell: bash
+        run: julia --color=yes --project=test -e 'using Pkg; Pkg.status()' || true

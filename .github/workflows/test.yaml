@@ -25,7 +25,17 @@ jobs:
     secrets: inherit  # pragma: allowlist secret
 
   downgrade-compat:
-    uses: EpiAware/.github/.github/workflows/downgrade.yml@6fcdcde033ec670ac3832b239427fd2ded591bbc
+    # Package-owned deviation: this points at a local copy of the reusable
+    # rather than EpiAware/.github's `downgrade.yml`. The shared reusable calls
+    # `julia-actions/julia-downgrade-compat` without a `projects` input, so it
+    # floor-resolves the root project alone — which cannot work here, because
+    # the test environment is a workspace member sharing the root manifest, and
+    # its unregistered `[sources]` deps then go missing from that manifest. The
+    # reusable exposes no `projects` input, so the fix cannot be passed from
+    # this caller; see `.github/workflows/downgrade.yaml` for the full write-up
+    # and for when to switch back.
+    uses: ./.github/workflows/downgrade.yaml
     with:
       julia_version: '1'
+      projects: '., test'
     secrets: inherit  # pragma: allowlist secret
