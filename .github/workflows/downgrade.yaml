@@ -1,0 +1,82 @@
+# PACKAGE-OWNED — a local stand-in for EpiAware/.github's `downgrade.yml`.
+#
+# Why this exists rather than a call to the shared reusable:
+#
+# The shared `downgrade.yml` invokes `julia-actions/julia-downgrade-compat`
+# without a `projects` input, so the action falls back to its default of
+# `projects: '.'` and resolves the root project on its own. That is wrong for
+# this package's layout. The test environment is a workspace member
+# (`[workspace] projects = ["test"]` in `Project.toml`), so there is a single
+# `Manifest.toml` at the root and `Pkg.test` reads it — but a root-only resolve
+# never sees `test/Project.toml`, and so never sees the test-only deps or the
+# unregistered, `[sources]`-pinned ComposedDistributions and
+# ModifiedDistributions. The action then wrote a manifest the test environment
+# could not be instantiated from, and every run died on:
+#
+#     `ModifiedDistributions` is a direct dependency, but does not appear in
+#     the manifest.
+#
+# That failure was systemic, not PR-specific: `downgrade-compat` was the only
+# red check on `main` and it was red on every open pull request.
+#
+# Passing `projects: '., test'` selects the action's merged-resolution path,
+# which is written for exactly this layout: it merges the root and test
+# projects, strips the unregistered `[sources]` packages before the floor
+# resolve (the resolver only knows registered packages), then restores them —
+# and the package itself — as path entries in both the root and the test
+# manifest before fixing up each manifest's project hash.
+#
+# The shared reusable exposes no `projects` input, so it cannot be fixed from
+# the caller. Everything else here mirrors it one-for-one. Delete this file and
+# point `test.yaml`'s `downgrade-compat` job back at
+# `EpiAware/.github/.github/workflows/downgrade.yml` once that reusable gains a
+# `projects` input.
+
+name: Downgrade
+
+on:
+  workflow_call:
+    inputs:
+      julia_version:
+        description: 'Julia version to run the downgrade suite on'
+        required: false
+        type: string
+        default: '1.10'
+      mode:
+        description: 'julia-downgrade-compat mode (deps, alldeps, ...)'
+        required: false
+        type: string
+        default: 'deps'
+      projects:
+        description: >-
+          Comma-separated Julia projects to resolve. Defaults to the root and
+          the test environment so the workspace member is part of the resolve.
+        required: false
+        type: string
+        default: '., test'
+      test_args:
+        description: 'Extra args passed to julia-runtest test_args'
+        required: false
+        type: string
+        default: 'skip_quality'
+
+jobs:
+  downgrade-compat:
+    name: Downgrade Compat
+    runs-on: ubuntu-latest
+    # Single suite against oldest deps; cap to free a hung runner.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ inputs.julia_version }}
+      - uses: julia-actions/julia-downgrade-compat@v2
+        with:
+          mode: ${{ inputs.mode }}
+          projects: ${{ inputs.projects }}
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          test_args: ${{ inputs.test_args }}
