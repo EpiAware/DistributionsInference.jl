@@ -1,4 +1,20 @@
-# MANAGED by EpiAwarePackageTools.scaffold — do not edit by hand.
+# EPIAWARE_MANAGED_OVERRIDE: this file was MANAGED by
+# EpiAwarePackageTools.scaffold, but is package-owned until the shared
+# `EpiAware/.github` `downgrade.yml` reusable gains a `projects` input.
+#
+# The `downgrade-compat` job below is repointed at a local copy of that
+# reusable (see the comment on the job, and the write-up in
+# `.github/workflows/downgrade.yaml`). The kit's caller-preservation pass keys
+# off the `uses: <org>/.github/.github/workflows/<file>@<ref>` shape, so it
+# cannot see a caller repointed at a local path and re-emits the template's
+# job wholesale — which is how a sync silently reverted this deviation one day
+# after it was merged (#65, reverted by #66). The marker opts the file out of
+# resyncing so that cannot happen again.
+#
+# Cost of the marker: it preserves the *whole* file, so the `test` job above
+# stops tracking kit changes too. Dependabot still bumps the pinned refs here.
+# Remove this marker and hand the file back to the kit once the shared
+# reusable takes `projects`, then delete `.github/workflows/downgrade.yaml`.
 name: Test
 
 on:

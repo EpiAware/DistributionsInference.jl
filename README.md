@@ -124,7 +124,7 @@ for bug reports and feature requests only.
 
 <!-- standard-sections:start -->
 <!-- MANAGED by EpiAwarePackageTools.scaffold — do not edit between the
-     markers. These standard sections are re-rendered on every scaffold_update;
+     markers. These standard sections are re-rendered on every update;
      edit the package-owned sections outside them, or CITATION.cff. -->
 
 ## Contributing
