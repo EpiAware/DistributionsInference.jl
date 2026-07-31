@@ -30,13 +30,6 @@ Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1"
 Distributions = "0.25"
 DocStringExtensions = "0.9"
-# 0.39 is dropped because it does not work on the Julia versions this package
-# supports: on 1.12 it fails to precompile, its EnzymeCore extension erroring
-# out while DynamicPPL itself is being compiled. The downgrade job found this
-# once it could actually resolve and run — every extension-dependent test
-# errored against the 0.39 floor, while everything not needing an extension
-# passed. The registry lets 0.39 claim 1.12, so nothing but running it catches
-# this.
 DynamicPPL = "0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
 LogDensityProblems = "2"
@@ -46,10 +39,5 @@ Mooncake = "0.5"
 Statistics = "1"
 julia = "1.11, 1.12"
 
-# `docs` is deliberately not a workspace member: `FlexiChains` (a hard dep,
-# >=0.4) needs DimensionalData >=0.29.24, but the docs env's AlgebraOfGraphics
-# 0.13 (kit ad-backends tutorial) caps DimensionalData at 0.28.3 — an
-# unresolvable clash inside a shared workspace Manifest. Filed upstream as
-# EpiAwarePackageTools#283; re-add `docs` once that lands.
 [workspace]
 projects = ["test"]
