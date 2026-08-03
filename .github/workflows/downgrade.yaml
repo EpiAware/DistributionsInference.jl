@@ -80,8 +80,8 @@ jobs:
       # constraint, the resolver picks a mutually consistent set of floors, and
       # the action writes it into both manifests itself. The clones live in the
       # runner temp dir, so the checkout stays clean and the rewrite is never
-      # committed. ComposedDistributions and EpiAwarePackageTools are registered
-      # now and no longer go through here; ModifiedDistributions still does.
+      # committed. Nothing is url-pinned today, so this step finds nothing and
+      # says so; it is kept as a guard for the next unregistered dependency.
       - name: Vendor the url-pinned sources as path sources
         shell: bash
         env:

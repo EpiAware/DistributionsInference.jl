@@ -72,18 +72,16 @@ no ComposedDistributions-specific code at all once the row protocol is
 correct. Generalises ComposedDistributions' `as_logdensity`/`ComposedLogDensity`
 (closes #5).
 
-Added the `ModifiedDistributions` weakdep extension
-(`DistributionsInferenceModifiedDistributionsExt`): `parameter_rows` and
-`reconstruct` for a STANDALONE modifier distribution (`affine(Gamma(...))`,
-`thin(...)`, ...), not only as a leaf inside a composed tree. A modifier's
-fixed structure (an `Affine`'s scale/shift, a `Weighted`'s weight, a
-`Modified`'s hazard effect/link) is peeled through and not reported as a row,
-mirroring ComposedDistributions' own leaf-protocol precedent; a `thin`
-factor is the one modifier-owned parameter reported as an extra row. Every
-row is fixed by design (a bare `Distributions.jl` leaf carries no prior
-anywhere to mark one estimated) — `distribution_priors` plus a
-caller-supplied `loglik` rebuilding the concrete modifier from row values is
-the generic path to fitting one (closes #17).
+The `ModifiedDistributions` weakdep extension
+(`DistributionsInferenceModifiedDistributionsExt`) is parked and does not
+ship in this release. ModifiedDistributions.jl is not yet registered in
+General, and General will not accept a package that names an unregistered
+package in `[weakdeps]`. The extension, its tests and its dependency entries
+were removed in one commit, deliberately the last on the release branch and
+verified to revert without conflict, so a follow-up release un-parks the
+extension by reverting it. Nothing else in the package depends
+on it, so a standalone modifier distribution is simply not fittable through
+the protocol meanwhile (#17 stays open).
 
 `extra_logprior` gains a fourth argument, `state`: `extra_prior_state(obj)`,
 computed once when `as_logdensity` assembles a `FitLogDensity` and threaded

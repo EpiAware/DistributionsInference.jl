@@ -15,7 +15,6 @@ Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 ComposedDistributions = "2f642b71-32a9-4f47-97c4-6deb7517f7a7"
 DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
-ModifiedDistributions = "664e6f8c-d74f-44d3-9f37-f82699103046"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 
 [extensions]
@@ -24,7 +23,6 @@ DistributionsInferenceComposedDistributionsExt = "ComposedDistributions"
 DistributionsInferenceDynamicPPLExt = "DynamicPPL"
 DistributionsInferenceDynamicPPLFlexiChainsExt = ["DynamicPPL", "FlexiChains"]
 DistributionsInferenceFlexiChainsExt = "FlexiChains"
-DistributionsInferenceModifiedDistributionsExt = "ModifiedDistributions"
 DistributionsInferenceMooncakeExt = "Mooncake"
 
 [compat]
@@ -36,7 +34,6 @@ DynamicPPL = "0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
 LogDensityProblems = "2"
 LogExpFunctions = "0.3, 1"
-ModifiedDistributions = "0.1"
 Mooncake = "0.5"
 Statistics = "1"
 julia = "1.11"

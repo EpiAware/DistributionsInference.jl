@@ -20,7 +20,8 @@ dispatch of `distribution_params`/`readback`/`readback_draws`), `Bijectors`
 and `as_optimisation_objective` built on it), `ComposedDistributions` (the fit
 protocol over a composed tree's own codec, `extra_logprior` included) and
 `Mooncake` (gradient rules for `xlogy`/`xlog1py`, which the engine reaches
-through a Gamma log-density).
+through a Gamma log-density). The `ModifiedDistributions` extension is parked
+until that package registers in General (#17).
 
 ```@example
 using DistributionsInference

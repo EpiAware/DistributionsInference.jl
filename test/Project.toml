@@ -21,7 +21,6 @@ ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
-ModifiedDistributions = "664e6f8c-d74f-44d3-9f37-f82699103046"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
@@ -58,7 +57,6 @@ JET = "0.10.2"
 JuliaFormatter = "2"
 LinearAlgebra = "1"
 LogDensityProblems = "2"
-ModifiedDistributions = "0.1"
 Optim = "1"
 Pkg = "1"
 Random = "1"
@@ -71,10 +69,7 @@ Turing = "0.42, 0.43, 0.44, 0.45"
 # ComposedDistributions and EpiAwarePackageTools are both registered in
 # General now, so they resolve from the registry under the bounds above
 # rather than from a url pin. A url pin is the one thing
-# `julia-downgrade-compat` cannot follow, so every entry dropped from here
-# is one less obstacle to the downgrade job resolving the workspace (#40).
+# `julia-downgrade-compat` cannot follow, so this block being down to a single
+# path entry is what lets the downgrade job resolve the workspace (#40).
 [sources]
 DistributionsInference = {path = ".."}
-# ModifiedDistributions is unregistered, so it is pinned by git until it
-# registers (mirrors its own test env's ComposedDistributions pin).
-ModifiedDistributions = {rev = "main", url = "https://github.com/EpiAware/ModifiedDistributions.jl"}
