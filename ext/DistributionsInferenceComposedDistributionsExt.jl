@@ -4,6 +4,11 @@
 # already carries the flat-vector layout (stick-breaking coordinates, pooled
 # latents and hyperparameters, shared-tag dedup); this maps its `edge`/`param`
 # columns onto DistributionsInference's dotted-`name` row schema.
+#
+# Calling straight into that codec also inherits CD#189's world-age hazard: a
+# leaf whose protocol methods come from another package's extension can fail
+# inside the `@generated` `unflatten` if that extension loads late. Fixed
+# upstream, not worked around here.
 module DistributionsInferenceComposedDistributionsExt
 
 using ComposedDistributions: ComposedDistributions, AbstractComposedDistribution

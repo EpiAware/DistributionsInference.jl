@@ -17,6 +17,4 @@ Fixed: a `reconstruct` method whose estimated field is concretely typed (e.g. `s
 `logdensity` and the `DynamicPPL` extension's model now guard this with a named `ArgumentError` before `reconstruct` runs (#48).
 
 The `ModifiedDistributions` extension is parked until that package registers in General, which will not accept a package naming an unregistered one in `[weakdeps]` (#17).
-
-This file tracks major releases and milestones.
-[GitHub Releases](https://github.com/EpiAware/DistributionsInference.jl/releases), generated from the pull requests merged into each release, cover every release in between.
+The extension, its tests and its dependency entries came out in a single commit placed last on the release branch, so a follow-up release un-parks it by reverting that commit.

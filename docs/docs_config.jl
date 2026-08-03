@@ -7,6 +7,8 @@
 # multi-backend AD, plotting) each run in a fresh subprocess.
 const LIGHT_TUTORIALS = String[]
 
+# The `ad-backends.jl` page itself is kit-managed and re-applied on every
+# sync; only this registration is package-owned.
 const HEAVY_TUTORIALS = String[
     "ad-backends.jl"
 ]
@@ -28,6 +30,7 @@ const TUTORIAL_STUBS = Pair{String, String}[
 const FORCE_STUB_TUTORIALS = String["ad-backends.jl"]
 
 # Whether the README block and docs footer carry EpiAware ecosystem branding.
+# The content this turns on is kit-managed; only this line is package-owned.
 const ORG_BRANDING = false
 
 # URLs to skip during the (full-build) linkcheck. The docs site has never
@@ -46,7 +49,8 @@ const INDEX_REWRITES = Pair{String, String}[]
 const README_EXECUTE = true
 
 # README headings whose whole section is dropped from the home page. The
-# managed badge block is always stripped via its `<!-- badges -->` markers.
+# managed badge block is always stripped via its `<!-- badges:start -->` /
+# `<!-- badges:end -->` markers.
 const INDEX_STRIP_SECTIONS = String[]
 
 # Whether the build generates the benchmark page (`src/benchmarks.md`); `false`

@@ -4,9 +4,9 @@
 # root project alone. The test environment is a workspace member, so that
 # resolve never sees `test/Project.toml` and writes a manifest the tests cannot
 # be instantiated from. Passing `projects: '., test'` selects the action's
-# merged-resolution path instead. Everything else mirrors the reusable; delete
-# this file and point `test.yaml`'s `downgrade-compat` job back at it once it
-# gains a `projects` input.
+# merged-resolution path instead. Everything else mirrors the reusable; once
+# `EpiAware/.github/.github/workflows/downgrade.yml` gains a `projects` input,
+# delete this file and point `test.yaml`'s `downgrade-compat` job back at it.
 
 name: Downgrade
 
@@ -49,9 +49,11 @@ jobs:
       # `julia-downgrade-compat` handles a `[sources]` **path** entry (its
       # compat joins the floor resolve and it is written back to the manifest)
       # but not a **url** entry, which is stripped before the resolve and never
-      # restored. So clone each url-pinned source at the rev `[sources]` names,
-      # into the runner temp dir, and rewrite the entry to a path. Nothing is
-      # url-pinned today; kept as a guard for the next unregistered dependency.
+      # restored — and restoring it afterwards is no fix, since the floors are
+      # frozen by then and any clash is unresolvable. So clone each url-pinned
+      # source at the rev `[sources]` names, into the runner temp dir, and
+      # rewrite the entry to a path. Nothing is url-pinned today; kept as a
+      # guard for the next unregistered dependency.
       - name: Vendor the url-pinned sources as path sources
         shell: bash
         env:
