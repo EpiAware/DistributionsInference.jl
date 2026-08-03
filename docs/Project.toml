@@ -53,10 +53,13 @@ Distributions = "0.25"
 DynamicPPL = "0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
 Markdown = "1"
-# Mooncake is a direct dep so the AD-backends page can run its Mooncake
-# backends: the `ADFixtures` registry deliberately does not depend on it (its
-# Mooncake rules clash with ComposedDistributions' — DI#73), so it no longer
-# arrives transitively.
+# Mooncake is a direct dep because the `ADFixtures` registry deliberately does
+# not depend on it (its Mooncake rules clash with ComposedDistributions' —
+# DI#73), so it no longer arrives transitively. This makes Mooncake AVAILABLE
+# in the docs environment; it does not make the AD-backends page able to run
+# its Mooncake rows, because the kit-managed page has no `using Mooncake` and
+# a `[deps]` entry only installs a package rather than loading it. See the
+# `FORCE_STUB_TUTORIALS` note in docs/docs_config.jl.
 Mooncake = "0.5"
 Optim = "1"
 Random = "1"

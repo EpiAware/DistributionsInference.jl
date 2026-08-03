@@ -8,32 +8,58 @@
 # single source of truth for the AD infra) at scaffold time, so it covers
 # every backend the kit knows about; add/trim backends and categories to
 # match the package afterwards (this file is write-once).
+#
+# Each item calls the kit's `test_working_backend` directly rather than the
+# thin local in the managed `setup.jl`, because the local forwards only
+# `category` and these scenarios need a tighter tolerance than the harness
+# default (see `tolerances.jl`).
 
-@testitem "ForwardDiff gradients (marginal)" tags=[:ad, :forwarddiff] setup=[ADHelpers] begin
-    test_working_backend("ForwardDiff")
+@testitem "ForwardDiff gradients (marginal)" tags=[:ad, :forwarddiff] setup=[
+    ADHelpers, ADTolerances] begin
+    EpiAwarePackageTools.test_working_backend(
+        REG, "ForwardDiff"; rtol = AD_RTOL, atol = AD_ATOL,
+        scenario_kwargs = (; category = :marginal))
 end
 
-@testitem "ReverseDiff (tape) gradients (marginal)" tags=[:ad, :reversediff] setup=[ADHelpers] begin
-    test_working_backend("ReverseDiff (tape)")
+@testitem "ReverseDiff (tape) gradients (marginal)" tags=[:ad, :reversediff] setup=[
+    ADHelpers, ADTolerances] begin
+    EpiAwarePackageTools.test_working_backend(
+        REG, "ReverseDiff (tape)"; rtol = AD_RTOL, atol = AD_ATOL,
+        scenario_kwargs = (; category = :marginal))
 end
 
-@testitem "Enzyme forward gradients (marginal)" tags=[:ad, :enzyme, :enzyme_forward] setup=[ADHelpers] begin
-    test_working_backend("Enzyme forward")
+@testitem "Enzyme forward gradients (marginal)" tags=[:ad, :enzyme, :enzyme_forward] setup=[
+    ADHelpers, ADTolerances] begin
+    EpiAwarePackageTools.test_working_backend(
+        REG, "Enzyme forward"; rtol = AD_RTOL, atol = AD_ATOL,
+        scenario_kwargs = (; category = :marginal))
 end
 
-@testitem "Enzyme reverse gradients (marginal)" tags=[:ad, :enzyme, :enzyme_reverse] setup=[ADHelpers] begin
-    test_working_backend("Enzyme reverse")
+@testitem "Enzyme reverse gradients (marginal)" tags=[:ad, :enzyme, :enzyme_reverse] setup=[
+    ADHelpers, ADTolerances] begin
+    EpiAwarePackageTools.test_working_backend(
+        REG, "Enzyme reverse"; rtol = AD_RTOL, atol = AD_ATOL,
+        scenario_kwargs = (; category = :marginal))
 end
 
-@testitem "Mooncake reverse gradients (marginal)" tags=[:ad, :mooncake, :mooncake_reverse] setup=[ADHelpers] begin
-    test_working_backend("Mooncake reverse")
+@testitem "Mooncake reverse gradients (marginal)" tags=[:ad, :mooncake, :mooncake_reverse] setup=[
+    ADHelpers, ADTolerances] begin
+    EpiAwarePackageTools.test_working_backend(
+        REG, "Mooncake reverse"; rtol = AD_RTOL, atol = AD_ATOL,
+        scenario_kwargs = (; category = :marginal))
 end
 
-@testitem "Mooncake forward gradients (marginal)" tags=[:ad, :mooncake, :mooncake_forward] setup=[ADHelpers] begin
-    test_working_backend("Mooncake forward")
+@testitem "Mooncake forward gradients (marginal)" tags=[:ad, :mooncake, :mooncake_forward] setup=[
+    ADHelpers, ADTolerances] begin
+    EpiAwarePackageTools.test_working_backend(
+        REG, "Mooncake forward"; rtol = AD_RTOL, atol = AD_ATOL,
+        scenario_kwargs = (; category = :marginal))
 end
 
 # Add latent (or other) scenario groups as the package needs, e.g.:
-# @testitem "ForwardDiff gradients (latent)" tags=[:ad, :forwarddiff] setup=[ADHelpers] begin
-#     test_working_backend("ForwardDiff"; category = :latent)
+# @testitem "ForwardDiff gradients (latent)" tags=[:ad, :forwarddiff] setup=[
+#     ADHelpers, ADTolerances] begin
+#     EpiAwarePackageTools.test_working_backend(
+#         REG, "ForwardDiff"; rtol = AD_RTOL, atol = AD_ATOL,
+#         scenario_kwargs = (; category = :latent))
 # end

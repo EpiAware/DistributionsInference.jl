@@ -46,6 +46,15 @@ const TUTORIAL_STUBS = Pair{String, String}[
 # `FlexiChains` these docs load needs (kit#283; ComposedDistributions#147 is
 # the same conflict), so its deps were dropped from docs/Project.toml (#19).
 # Un-stub and restore the deps when the upstream ceiling lifts.
+#
+# A second thing blocks it, invisible while the page never executes: the page
+# loads no AD backend of its own and relied on the `ADFixtures` registry's
+# imports to put them in the session, and that registry no longer imports
+# Mooncake (DI#73). So `benchmark_differentiation` on the two `AutoMooncake`
+# rows will fail with a `_prepare_pullback_aux` `MethodError` until either the
+# managed page gains a `using Mooncake` or DI#73 lets the registry import it
+# again. Adding Mooncake to docs/Project.toml installs it but does not load
+# it, so that alone does not fix this.
 const FORCE_STUB_TUTORIALS = String["ad-backends.jl"]
 
 # Whether this package advertises itself as part of the EpiAware ecosystem: a

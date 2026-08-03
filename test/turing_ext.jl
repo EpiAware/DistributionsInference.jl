@@ -182,7 +182,8 @@ end
 end
 
 @testitem "as_turing: model log-density equals logdensity with 2 estimated parameters" setup=[TuringFixture] begin
-    using DistributionsInference, Distributions, DynamicPPL
+    using DistributionsInference, Distributions, DynamicPPL, ForwardDiff
+    using LogDensityProblems
 
     leaf = TwoParamLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2, 2.8, 1.9]
@@ -198,6 +199,19 @@ end
         model, @varname(d.leaf.shape) => x[1], @varname(d.leaf.scale) => x[2])
     @test DynamicPPL.logjoint(cm, DynamicPPL.VarInfo(cm)) ≈
           DistributionsInference.logdensity(prob, x)
+
+    # The same equality through `LogDensityProblems`, the interface a
+    # gradient-based sampler reaches, and then at the DERIVATIVE level. The AD
+    # matrix in `test/ADFixtures` takes both targets' references from
+    # ForwardDiff separately, so nothing there would notice the turing model
+    # drifting from the codec (a dropped `~` site, say); this comparison is
+    # what pins the two gradients together.
+    ldf = DynamicPPL.LogDensityFunction(model)
+    @test LogDensityProblems.logdensity(ldf, x) ≈
+          DistributionsInference.logdensity(prob, x)
+    @test ForwardDiff.gradient(θ -> LogDensityProblems.logdensity(ldf, θ), x) ≈
+          ForwardDiff.gradient(
+        θ -> DistributionsInference.logdensity(prob, θ), x)
 end
 
 @testitem "as_turing round-trip: NUTS chain reads back through readback" setup=[TuringFixture] begin

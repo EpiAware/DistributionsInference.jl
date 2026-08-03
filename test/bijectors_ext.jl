@@ -111,7 +111,12 @@ end
         leaf, Float64[]; loglik = zero_lik)
     @test DistributionsInference.flat_dimension(leaf) == 3
 
-    z = [0.35, -0.2, 0.6]
+    # Chosen so the three constrained values land in DISJOINT places: `mu` is
+    # negative, `sigma` is above 1, and `p` is inside `(0, 1)`. A permuted
+    # `to_constrained` result then violates a support check, which a `z`
+    # whose constrained image happens to be positive and below 1 in every row
+    # could not detect.
+    z = [-1.5, 2.0, 0.6]
     x, logjac = DistributionsInference.to_constrained(prob, z)
 
     # Each link checked against its own closed form, not against Bijectors'
@@ -128,9 +133,15 @@ end
     end
     @test DistributionsInference.logdensity(prob, x) + logjac ≈ target
 
-    # The reconstructed object lands in every row's support.
+    # Each field takes its OWN row of the constrained vector, checked against
+    # the already-verified `x` rather than against a support every row could
+    # satisfy, so a row-order slip in `to_constrained` fails here.
     rebuilt = DistributionsInference.reconstruct(leaf, x)
-    @test rebuilt.sigma > 0
+    @test rebuilt.mu ≈ x[1]
+    @test rebuilt.sigma ≈ x[2]
+    @test rebuilt.p ≈ x[3]
+    @test rebuilt.mu < 0
+    @test rebuilt.sigma > 1
     @test 0 < rebuilt.p < 1
 end
 

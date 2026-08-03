@@ -182,6 +182,17 @@ end
 # --- Scenario construction -------------------------------------------------
 
 # ForwardDiff reference gradient for a scenario function.
+#
+# Every scenario's reference comes from this one backend, so the matrix tests
+# CROSS-BACKEND AGREEMENT on the scenario's own function and nothing more. It
+# cannot catch a target that is wrong but differentiable (a dropped `logjac`,
+# say, or a dropped prior term), because all six backends would then
+# differentiate the same wrong function and agree. What pins the targets'
+# VALUES is the ordinary test suite: the closed-form link and log-Jacobian
+# checks and the `transformed(prior)` identity in `test/bijectors_ext.jl`, the
+# prior-plus-likelihood totals in `test/engine.jl`, and the model-equals-codec
+# checks in `test/turing_ext.jl`. A green matrix is evidence about backends,
+# not a correctness proof for the target.
 function _reference(f, θ, contexts)
     return DifferentiationInterface.gradient(
         f, AutoForwardDiff(), θ, contexts...)
@@ -216,9 +227,13 @@ end
 # The turing model `as_turing` builds (the `DynamicPPL` extension), reached
 # through the same `LogDensityProblems` interface a gradient-based sampler
 # uses. The model threads the draw through an abstractly-typed
-# `Vector{Real}` before `reconstruct`, a path no other scenario takes, and
-# its total is `logdensity(prob, x)` by construction — so this scenario's
-# reference gradient is the engine scenario's, computed independently.
+# `Vector{Real}` before `reconstruct`, a path no other scenario takes.
+#
+# Its reference gradient is ForwardDiff over THIS target, like every other
+# scenario, so the matrix only checks that the six backends agree on the
+# turing model. What ties the model to `logdensity(prob, x)` is
+# `test/turing_ext.jl`, whose "model log-density equals logdensity" items
+# compare both the value and the ForwardDiff gradient of the two.
 _turing_target(x, ldf) = LogDensityProblems.logdensity(ldf, x)
 
 # Gamma-distributed observations, shared by the Gamma-family scenarios.
