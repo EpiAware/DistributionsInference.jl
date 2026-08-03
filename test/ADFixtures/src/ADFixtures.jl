@@ -6,7 +6,7 @@
 # consumes these, and the AD-backends docs page renders its support table and
 # benchmark from the same set.
 #
-# The scenarios cover the three public differentiable paths through this
+# The scenarios cover the four public differentiable paths through this
 # package, so a backend-specific regression in any of them reds the matrix
 # rather than only the engine's own hot path (DI#33):
 #
@@ -21,6 +21,9 @@
 # 3. The same two paths over an actual `ComposedDistributions` tree, so
 #    `DistributionsInferenceComposedDistributionsExt` — the package's main
 #    consumer — is differentiated through, not only value-tested.
+# 4. `as_turing`'s model through `LogDensityProblems`, the way a
+#    gradient-based sampler reaches it, so the `DynamicPPL` extension's
+#    `Vector{Real}` path into `reconstruct` is covered too.
 #
 # `readback`/`readback_draws`/`distribution_params`/`to_flexichain` are
 # deliberately absent: they map an already-sampled chain of numbers onto a
@@ -39,7 +42,7 @@
 # `ADTypes` and need no Mooncake import here; `test/ad/setup.jl` does the
 # `using Mooncake` at test time, where the duplicate rules are only a load
 # warning. Drop this workaround once the duplication is resolved upstream
-# (DistributionsInference#69).
+# (DistributionsInference#73).
 #
 # If the package's log densities use EpiAwareADTools' AD-safe hooks
 # (`cdf_ad_safe`, `primal`, ...) to stay differentiable, add scenarios here that
@@ -55,13 +58,16 @@ import ForwardDiff, ReverseDiff, Enzyme
 using DistributionsInference
 using Distributions: Distributions, Beta, Gamma, LogNormal, Normal, logpdf,
                      truncated
-# Loading `Bijectors` and `ComposedDistributions` here is what puts
-# `DistributionsInferenceBijectorsExt` and
-# `DistributionsInferenceComposedDistributionsExt` in the session, so the
-# scenarios below differentiate through the extensions themselves rather than
-# through core-only code paths.
+# Loading `Bijectors`, `ComposedDistributions` and `DynamicPPL` here is what
+# puts `DistributionsInferenceBijectorsExt`,
+# `DistributionsInferenceComposedDistributionsExt` and
+# `DistributionsInferenceDynamicPPLExt` in the session, so the scenarios below
+# differentiate through the extensions themselves rather than through
+# core-only code paths.
 using Bijectors: Bijectors
 using ComposedDistributions: ComposedDistributions, compose, uncertain
+using DynamicPPL: DynamicPPL
+using LogDensityProblems: LogDensityProblems
 
 export scenarios, backends, broken_scenario_names,
        backend_broken_scenarios, backend_skip_scenarios
@@ -207,6 +213,14 @@ function _unconstrained_target(z, prob)
     return DistributionsInference.logdensity(prob, x) + logjac
 end
 
+# The turing model `as_turing` builds (the `DynamicPPL` extension), reached
+# through the same `LogDensityProblems` interface a gradient-based sampler
+# uses. The model threads the draw through an abstractly-typed
+# `Vector{Real}` before `reconstruct`, a path no other scenario takes, and
+# its total is `logdensity(prob, x)` by construction — so this scenario's
+# reference gradient is the engine scenario's, computed independently.
+_turing_target(x, ldf) = LogDensityProblems.logdensity(ldf, x)
+
 # Gamma-distributed observations, shared by the Gamma-family scenarios.
 const _GAMMA_DATA = [0.5, 1.2, 2.5, 3.8, 5.1]
 # Real-line observations for the Normal-family scenarios.
@@ -302,6 +316,13 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
 
     scen(_unconstrained_target, [0.7, 1.1], (Constant(composed_prob),),
         "unconstrained logdensity (ComposedDistributions tree)")
+
+    # --- The `DynamicPPL` extension's turing model ------------------------
+    turing_ldf = DynamicPPL.LogDensityFunction(
+        DistributionsInference.as_turing(
+        GammaShapeScaleFit(2.0, 1.5), _GAMMA_DATA))
+    scen(_turing_target, [2.2, 1.3], (Constant(turing_ldf),),
+        "as_turing model logdensity (Gamma shape and scale estimated)")
 
     return out
 end
