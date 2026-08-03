@@ -1,4 +1,4 @@
-# DistributionsInference × ComposedDistributions: `parameter_rows`,
+# DistributionsInference × ComposedDistributions (DI#5): `parameter_rows`,
 # `estimated_rows`, `flat_dimension`, `reconstruct` and `extra_logprior` for a
 # composed distribution over CD's public codec, checked against CD's own
 # equivalents across plain, pooled, `Resolve`-Dirichlet and shared-tag trees.
@@ -121,7 +121,7 @@ end
         centred_tree, reconstructed, x, state) ≈ expected
 
     # A tree with no centred pooling contributes nothing extra, and its cached
-    # state is empty rather than merely unused.
+    # state (DI#28) is empty rather than merely unused.
     plain_state = DistributionsInference.extra_prior_state(plain_tree)
     @test isempty(plain_state)
     @test DistributionsInference.extra_logprior(plain_tree,
@@ -168,7 +168,9 @@ end
 # The three round trips below exercise the trickiest ordering/dedup cases (a
 # tied leaf sampled once but read back onto every occurrence; a K-1
 # stick-breaking simplex; a pooled member's `.z` latent) through a real
-# `sample(..., NUTS(), ...)` chain rather than a hand-built one.
+# `sample(..., NUTS(), ...)` chain rather than a hand-built one. Ported from
+# ComposedDistributions' own `test/composers/turing_ext.jl` when CD dropped
+# its `as_turing`/`chain_to_params` surface (CD#221, CD#233).
 
 @testitem "as_turing round-trip: shared-tag readback lands on the right leaf" setup=[
     ComposedFixture] begin

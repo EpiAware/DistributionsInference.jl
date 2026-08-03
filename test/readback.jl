@@ -1,7 +1,9 @@
-# The dotted-name FlexiChains readback: `to_flexichain` and
-# `readback`/`readback_draws` selection semantics. Every method here lives in
-# `DistributionsInferenceFlexiChainsExt`, so each test item loads `FlexiChains`
-# itself rather than relying on a sibling item having done so.
+# The dotted-name FlexiChains readback: `to_flexichain`,
+# `readback`/`readback_draws` selection semantics (deliberately matching
+# ComposedDistributions' `chain_to_params`/`param_draws`), and the DI#3
+# acceptance criterion (a real AdvancedMH round-trip). Every method here
+# lives in `DistributionsInferenceFlexiChainsExt`, so each test item loads
+# `FlexiChains` itself rather than relying on a sibling item having done so.
 
 @testitem "the FlexiChains extension loads" begin
     using DistributionsInference

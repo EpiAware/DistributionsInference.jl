@@ -42,7 +42,8 @@ DifferentiationInterface = "0.6, 0.7"
 DifferentiationInterfaceTest = "0.9, 0.10, 0.11"
 Distributions = "0.25"
 Documenter = "1"
-# 0.39 fails to precompile on Julia 1.12 (its EnzymeCore extension errors).
+# Kept in step with the root Project.toml, which drops 0.39 because it fails
+# to precompile on Julia 1.12 (its EnzymeCore extension errors).
 DynamicPPL = "0.40, 0.41, 0.42"
 EpiAwarePackageTools = "0.2"
 ExplicitImports = "1"

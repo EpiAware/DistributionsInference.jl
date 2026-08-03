@@ -6,9 +6,10 @@ module DistributionsInferenceDynamicPPLExt
 # `name` becomes the `VarName` `<prefix>.<name>`, sampled from its own prior.
 #
 # `_row_varname` is the naming contract shared with the `VarName`-keyed
-# readback in `DistributionsInferenceDynamicPPLFlexiChainsExt`; it is declared
-# as a stub in `src/turing.jl` so that extension reaches it by dispatch rather
-# than through a sibling extension's module.
+# readback in `DistributionsInferenceDynamicPPLFlexiChainsExt` (DI#4, the
+# two-extension split); it is declared as a stub in `src/turing.jl` so that
+# extension reaches it by dispatch rather than through a sibling extension's
+# module.
 
 using DistributionsInference: DistributionsInference, FitLogDensity,
                               as_logdensity, estimated_rows, reconstruct,

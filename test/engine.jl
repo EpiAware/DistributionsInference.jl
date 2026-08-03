@@ -1,5 +1,6 @@
 # The PPL-neutral log-density engine: `as_logdensity`/`logdensity` over a
-# fit-protocol object, and its `LogDensityProblems` implementation.
+# fit-protocol object, its direct `LogDensityProblems` implementation (a hard
+# dep, no glue extension), and the acceptance criterion for #2.
 
 @testitem "engine: as_logdensity/logdensity evaluate the estimated posterior" setup=[ToyFixture] begin
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
@@ -121,8 +122,9 @@ end
     using DistributionsInference, Distributions
 
     # The counter pins that the concrete-field guard's candidate list is built
-    # once at construction, not per `logdensity` evaluation (DI#48).
-    # `parameter_rows` runs only via `estimated_rows`'s generic default.
+    # once at construction, not per `logdensity` evaluation (DI#48, which
+    # reintroduced the anti-pattern #41 had just fixed). `parameter_rows` runs
+    # only via `estimated_rows`'s generic default.
     calls = Ref(0)
 
     struct GuardCountedLeaf{S <: Real}

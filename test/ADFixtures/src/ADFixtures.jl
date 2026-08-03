@@ -73,11 +73,13 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
             res1 = res1, prep_args = prep_args,
             name = "fit-protocol engine logdensity"))
 
-    # The `xlogy` edge case: `shape == 1.0` routes a nonzero cotangent into
-    # `LogExpFunctions.xlogy`'s `iszero(x)` branch inside
+    # The `xlogy` edge case (DI#7, CD#99): `shape == 1.0` routes a nonzero
+    # cotangent into `LogExpFunctions.xlogy`'s `iszero(x)` branch inside
     # `Distributions.gammalogpdf`, where Mooncake derives `0` instead of
     # `log(y)` (chalk-lab/Mooncake.jl#1241). `DistributionsInferenceMooncakeExt`
-    # imports the `ChainRulesCore` rules as Mooncake primitives to fix this.
+    # imports the `ChainRulesCore` rules as Mooncake primitives to fix this; if
+    # those ever stop working, quarantine this scenario via
+    # `broken_scenario_names`/`backend_broken_scenarios` below.
     edge_leaf = GammaFit(2.0, 1.0)
     edge_prob = DistributionsInference.as_logdensity(
         edge_leaf, [0.5, 1.2, 2.5, 3.8, 5.1])

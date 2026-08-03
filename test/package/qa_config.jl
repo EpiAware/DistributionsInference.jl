@@ -21,7 +21,7 @@ const QA_CONFIG = (
 
     # ExplicitImports `ignore`: symbols the main module legitimately imports
     # non-publicly, e.g. (:_internal_helper,). Package extensions are handled
-    # automatically.
+    # automatically (#189).
     ei_ignore = (),
 
     # Docstring `crossref_ignore`: upstream names docstrings link to via

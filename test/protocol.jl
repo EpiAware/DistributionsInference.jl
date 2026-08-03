@@ -1,11 +1,12 @@
 # The fit protocol over a bare row vector (the identity fallback) and over a
-# toy protocol implementation.
+# toy protocol implementation, plus `reconstruct`'s round-trip contract (#2).
 
 @testsnippet ToyFixture begin
     using DistributionsInference, Distributions
 
     # A minimal fit-protocol object: a Gamma leaf with its shape ESTIMATED (an
-    # attached prior) and its scale fixed.
+    # attached prior) and its scale fixed. Implementable without loading us
+    # (CD#185).
     struct ToyGammaLeaf
         shape::Float64
         scale::Float64

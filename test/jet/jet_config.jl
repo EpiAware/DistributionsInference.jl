@@ -8,6 +8,7 @@
 #
 # A DynamicPPL `@model` package needs this, since the tilde macro hides `~`
 # assignments from JET's static analysis and yields false
-# `UndefVarErrorReport`s. To drop exactly those:
+# `UndefVarErrorReport`s (and `MethodErrorReport`s through the `:=` tracker).
+# To drop exactly those:
 #
 # const JET_REPORT_FILTER = dynamicppl_model_filter

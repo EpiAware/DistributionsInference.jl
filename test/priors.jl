@@ -1,6 +1,6 @@
 # Default-prior assembly over the fit protocol: `default_prior`'s per-row
 # heuristic (by name classification, not support) and `distribution_priors`'s
-# override/attached-prior/default precedence.
+# override/attached-prior/default precedence (CD#195/DI#20).
 
 @testitem "default_prior: classifies by the row's own name, not just support" begin
     using DistributionsInference, Distributions

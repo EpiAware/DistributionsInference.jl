@@ -1,9 +1,10 @@
 # DistributionsInference x ComposedDistributions: the fit protocol over a
 # composed distribution's public codec (`params_table`, `flat_dimension`,
 # `unflatten`, `reconstruct`). A translation layer only. CD's generated codec
-# already carries the flat-vector layout (stick-breaking coordinates, pooled
-# latents and hyperparameters, shared-tag dedup); this maps its `edge`/`param`
-# columns onto DistributionsInference's dotted-`name` row schema.
+# (CD#178, CD#190) already carries the flat-vector layout (stick-breaking
+# coordinates, pooled latents and hyperparameters, shared-tag dedup); this
+# maps its `edge`/`param` columns onto DistributionsInference's
+# dotted-`name` row schema.
 #
 # Calling straight into that codec also inherits CD#189's world-age hazard: a
 # leaf whose protocol methods come from another package's extension can fail
@@ -27,9 +28,10 @@ function _di_row(edge::Symbol, param::Symbol, value, support, prior)
         prior = _di_prior(prior), support = support)
 end
 
-# `params_table` does not itself run CD's pool-group and namespace checks, and
-# these entry points are the only place a DI caller touches the tree before
-# `reconstruct`, so run them here to fail early on a malformed tree.
+# `params_table` does not itself run CD's pool-group and namespace (CD#177)
+# checks, and these entry points are the only place a DI caller touches the
+# tree before `reconstruct`, so run them here to fail early on a malformed
+# tree.
 function _validated_params_table(d::AbstractComposedDistribution)
     ComposedDistributions._validate_pool_groups(d)
     ComposedDistributions._validate_tree_names(d)
@@ -56,6 +58,8 @@ function estimated_rows(d::AbstractComposedDistribution)
             for i in idx]
 end
 
+# The same must-override as above, and CD's own count rather than a re-derived
+# one, so the two cannot drift.
 flat_dimension(d::AbstractComposedDistribution) = ComposedDistributions.flat_dimension(d)
 
 function reconstruct(d::AbstractComposedDistribution, x::AbstractVector)
@@ -63,7 +67,7 @@ function reconstruct(d::AbstractComposedDistribution, x::AbstractVector)
 end
 
 # The centred-pooled rows depend only on `d`, not on `x`, so this walk runs
-# once at `as_logdensity` construction rather than per evaluation.
+# once at `as_logdensity` construction rather than per evaluation (DI#28).
 function extra_prior_state(d::AbstractComposedDistribution)
     ComposedDistributions.centred_pool_rows(d)
 end
