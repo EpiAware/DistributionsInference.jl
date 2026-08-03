@@ -8,23 +8,16 @@
 # this package's layout. The test environment is a workspace member
 # (`[workspace] projects = ["test"]` in `Project.toml`), so there is a single
 # `Manifest.toml` at the root and `Pkg.test` reads it — but a root-only resolve
-# never sees `test/Project.toml`, and so never sees the test-only deps or the
-# unregistered, `[sources]`-pinned ComposedDistributions and
-# ModifiedDistributions. The action then wrote a manifest the test environment
-# could not be instantiated from, and every run died on:
-#
-#     `ModifiedDistributions` is a direct dependency, but does not appear in
-#     the manifest.
-#
-# That failure was systemic, not PR-specific: `downgrade-compat` was the only
-# red check on `main` and it was red on every open pull request.
+# never sees `test/Project.toml`, and so never sees the test-only deps at all.
+# The action then wrote a manifest the test environment could not be
+# instantiated from, and every run died on a direct dependency missing from
+# the manifest. That failure was systemic, not PR-specific: `downgrade-compat`
+# was the only red check on `main` and it was red on every open pull request.
 #
 # Passing `projects: '., test'` selects the action's merged-resolution path,
 # which is written for exactly this layout: it merges the root and test
-# projects, strips the unregistered `[sources]` packages before the floor
-# resolve (the resolver only knows registered packages), then restores them —
-# and the package itself — as path entries in both the root and the test
-# manifest before fixing up each manifest's project hash.
+# projects, then restores the package itself as a path entry in both the root
+# and the test manifest before fixing up each manifest's project hash.
 #
 # The shared reusable exposes no `projects` input, so it cannot be fixed from
 # the caller. Everything else here mirrors it one-for-one. Delete this file and
@@ -75,29 +68,20 @@ jobs:
       # a local **path**: it feeds that package's own `[compat]` into the joint
       # floor resolve and writes it back into the manifest afterwards. It does
       # not — and cannot — do either for a **url** entry, because both steps
-      # need the package's `Project.toml` on disk. `test/Project.toml` pins
-      # ComposedDistributions, ModifiedDistributions and EpiAwarePackageTools
-      # by url, so all three were stripped before the resolve and never
-      # restored, which left the floors picked in ignorance of their
-      # constraints and the manifest missing the packages themselves.
+      # need the package's `Project.toml` on disk. A url-pinned package is
+      # stripped before the resolve and never restored, which leaves the floors
+      # picked in ignorance of its constraints and the manifest missing the
+      # package itself. Restoring it afterwards is no fix either, because the
+      # floors are frozen by then and any clash is unresolvable.
       #
-      # Restoring them afterwards is not a fix. The floors are already frozen
-      # by then, so every constraint the three carry has to be satisfiable
-      # against versions chosen without them, and any clash is unresolvable —
-      # first `DocStringExtensions` (EpiAwarePackageTools needs 0.9.5, the
-      # floor was 0.9.0), then `ConvolvedDistributions` (both pins need 0.2,
-      # incompatible with the OptimizationOptimJL 0.3.2 the floor resolve had
-      # settled on). Chasing those one at a time means bumping this package's
-      # public compat for test-only reasons, and OptimizationOptimJL is not
-      # even a direct dependency, so there is no entry here to bump.
-      #
-      # So convert them to what the action does support: clone each one at the
-      # rev `[sources]` names and rewrite the entry to a path. The three then
-      # take part in the floor resolve as first-class constraints, the
-      # resolver picks a mutually consistent set of floors, and the action
-      # writes them into both manifests itself. The clones live in the runner
-      # temp dir, so the checkout stays clean, and the rewrite is never
-      # committed.
+      # So convert whatever is left to what the action does support: clone each
+      # url-pinned source at the rev `[sources]` names and rewrite the entry to
+      # a path. It then takes part in the floor resolve as a first-class
+      # constraint, the resolver picks a mutually consistent set of floors, and
+      # the action writes it into both manifests itself. The clones live in the
+      # runner temp dir, so the checkout stays clean and the rewrite is never
+      # committed. ComposedDistributions and EpiAwarePackageTools are registered
+      # now and no longer go through here; ModifiedDistributions still does.
       - name: Vendor the url-pinned sources as path sources
         shell: bash
         env:

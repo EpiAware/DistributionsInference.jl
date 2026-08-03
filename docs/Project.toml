@@ -3,9 +3,8 @@
 # standard). Add doc-only deps (e.g. plotting, DocumenterCitations) here as the
 # docs grow. The package itself is pinned by path via `[sources]`.
 # The managed `docs/make.jl` calls `using EpiAwarePackageTools` (the shared docs
-# build machinery), so the kit is a docs dep too; until it is registered it is
-# pinned by git via `[sources]` (empty for the kit itself, which is the
-# package).
+# build machinery), so the kit is a docs dep too, resolved from the registry
+# under the bound below.
 # With `ad = true` the env also carries what the kit-managed AD-backends
 # tutorial page executes against: the package's `ADFixtures` registry (pinned
 # by path, same UUID as the AD test env) plus the benchmark and plotting stack.
@@ -40,16 +39,12 @@ EpiAwarePackageTools = "7aaea248-0d11-4a0d-a7dc-86da30abb951"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 DistributionsInference = "205dfa0f-445e-4692-a651-ee32c3bca9ae"
 
+# Only the local packages are pinned here. ComposedDistributions and
+# EpiAwarePackageTools are both registered in General and resolve from the
+# registry under the bounds below (mirrors test/Project.toml).
 [sources]
 DistributionsInference = {path = ".."}
 ADFixtures = {path = "../test/ADFixtures"}
-# ComposedDistributions is unregistered, so it is pinned by git until it
-# registers (mirrors test/Project.toml).
-ComposedDistributions = {rev = "main", url = "https://github.com/EpiAware/ComposedDistributions.jl"}
-# Until EpiAwarePackageTools is registered, it is pinned by git so
-# the env resolves out of the box. Switch to a local path to
-# develop the kit alongside this package.
-EpiAwarePackageTools = {url = "https://github.com/EpiAware/EpiAwarePackageTools.jl", rev = "main"}
 
 [compat]
 Bijectors = "0.13, 0.14, 0.15, 0.16"
@@ -66,4 +61,5 @@ Turing = "0.42, 0.43, 0.44, 0.45"
 Documenter = "1"
 DocumenterCitations = "1"
 DocumenterVitepress = "0.3"
+EpiAwarePackageTools = "0.2"
 Literate = "2"
