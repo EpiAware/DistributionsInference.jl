@@ -3,7 +3,95 @@
 # `readback`/`readback_draws` selection semantics (summary/draw/draws,
 # matching ComposedDistributions' `chain_to_params`/`param_draws`
 # docstrings), and the DI#3 acceptance criterion — a real LogDensityProblems
-# sampler (AdvancedMH) round-trips through `to_flexichain`/`readback`.
+# sampler (AdvancedMH) round-trips through `to_flexichain`/`readback`. Every
+# method here lives in the `DistributionsInferenceFlexiChainsExt` extension,
+# so each test item loads `FlexiChains` itself rather than relying on a
+# sibling item having done so, and the two items below cover the extension
+# boundary itself: that it loads, and what a caller sees before it does.
+
+@testitem "the FlexiChains extension loads" begin
+    using DistributionsInference
+    using FlexiChains: FlexiChains
+
+    @test Base.get_extension(
+        DistributionsInference, :DistributionsInferenceFlexiChainsExt) !==
+          nothing
+end
+
+@testitem "the readback names the chain type once FlexiChains is loaded" begin
+    using DistributionsInference, Distributions
+    using FlexiChains: FlexiChains
+
+    # The other half of the boundary the subprocess item below covers: with
+    # the extension live, a second argument that is not a chain is the
+    # caller's mistake (a raw draws matrix, an MCMCChains chain, a
+    # NamedTuple), so the message must name the type rather than blame the
+    # package that is already there.
+    rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
+        support = (0.0, Inf))]
+    for f in (DistributionsInference.distribution_params,
+        DistributionsInference.readback, DistributionsInference.readback_draws)
+        thrown = try
+            f(rows, [1.0 2.0])
+            nothing
+        catch e
+            e
+        end
+        @test thrown isa ArgumentError
+        @test occursin("has no method for a chain of type", thrown.msg)
+        @test !occursin("needs `FlexiChains`", thrown.msg)
+    end
+end
+
+@testitem "the readback names FlexiChains when it is not loaded" begin
+    using DistributionsInference
+
+    # The extension carrying every readback method loads once `FlexiChains`
+    # is in the session, and this process has it loaded (the items around
+    # this one `using` it), so the not-yet-loaded path is only reachable in a
+    # fresh process. Same project, so `DistributionsInference` resolves
+    # identically; `FlexiChains` is simply never brought in.
+    script = """
+    using DistributionsInference, Distributions
+
+    rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
+        support = (0.0, Inf))]
+    Base.get_extension(
+        DistributionsInference,
+        :DistributionsInferenceFlexiChainsExt) === nothing ||
+        error("the FlexiChains extension loaded without FlexiChains")
+
+    calls = [
+        () -> DistributionsInference.to_flexichain(rows, reshape([1.0], 1, :)),
+        () -> DistributionsInference.distribution_params(rows, nothing),
+        () -> DistributionsInference.readback(rows, nothing),
+        () -> DistributionsInference.readback_draws(rows, nothing)]
+    for call in calls
+        thrown = try
+            call()
+            nothing
+        catch e
+            e
+        end
+        thrown isa ArgumentError ||
+            error("expected an ArgumentError, got \$(repr(thrown))")
+        occursin("FlexiChains", thrown.msg) ||
+            error("the message does not name FlexiChains: \$(thrown.msg)")
+        occursin("DistributionsInferenceFlexiChainsExt", thrown.msg) ||
+            error("the message does not name the extension: \$(thrown.msg)")
+    end
+    print("clear-error-ok")
+    """
+
+    out = IOBuffer()
+    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project())
+           --startup-file=no -e $script`
+    ok = success(pipeline(cmd; stdout = out, stderr = out))
+    output = String(take!(out))
+    ok || println(output)
+    @test ok
+    @test occursin("clear-error-ok", output)
+end
 
 @testitem "to_flexichain: matrix and vector-of-vectors input agree" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
@@ -63,6 +151,8 @@ end
 end
 
 @testitem "to_flexichain: malformed draws raise" setup=[ToyFixture] begin
+    using FlexiChains: FlexiChains
+
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
 
     @test_throws DimensionMismatch DistributionsInference.to_flexichain(
@@ -74,6 +164,8 @@ end
 end
 
 @testitem "distribution_params: keyed by dotted name, params-first" setup=[ToyFixture] begin
+    using FlexiChains: FlexiChains
+
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     values = [1.0, 2.0, 3.0, 4.0]
     chain = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
@@ -144,6 +236,7 @@ end
 end
 
 @testitem "readback: summary/draw/draws selection semantics" setup=[ToyFixture] begin
+    using FlexiChains: FlexiChains
     using Statistics: median
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
@@ -171,6 +264,8 @@ end
 end
 
 @testitem "readback_draws: keeps every draw, restricted by `draws`" setup=[ToyFixture] begin
+    using FlexiChains: FlexiChains
+
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     values = [1.0, 2.0, 3.0, 4.0]
     chain = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
@@ -187,6 +282,8 @@ end
 end
 
 @testitem "readback: a chain missing an estimated parameter errors" setup=[ToyFixture] begin
+    using FlexiChains: FlexiChains
+
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     other_leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
 

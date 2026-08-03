@@ -3,21 +3,25 @@
 
 The inference layer for the EpiAware composable-modelling stack: a
 PPL-neutral fit protocol (parameter rows, flat dimension, reconstruct
-hook) and a `LogDensityProblems`-based log-density engine, together with a
-dotted-name `FlexiChains` readback that works without a probabilistic
-programming language. Extension packages layer `DynamicPPL`,
+hook) and a `LogDensityProblems`-based log-density engine, with no
+probabilistic programming language and no chain type in the core package.
+Extension packages layer `FlexiChains`, `DynamicPPL`,
 `ComposedDistributions`, `Bijectors`, and `Mooncake` support on top of this
 core (see `ComposedDistributions#185`).
 
 The protocol (`parameter_rows`, `reconstruct`), default-prior assembly over it
-(`default_prior`, `distribution_priors`), the engine (`as_logdensity`,
-`logdensity`, `FitLogDensity`), and the dotted-name `FlexiChains` readback
-(`to_flexichain`, `distribution_params`, `readback`, `readback_draws`) are
-implemented, together with the `DynamicPPL` extension (`as_turing`, and a
-`VarName`-keyed dispatch of `distribution_params`/`readback`/`readback_draws`)
-and the `Bijectors` extension (`to_constrained`, the prior-driven
-unconstrained <-> constrained transform); the remaining extension packages
-land in follow-up issues.
+(`default_prior`, `distribution_priors`) and the engine (`as_logdensity`,
+`logdensity`, `FitLogDensity`) are implemented here. Everything else arrives
+through an extension: `FlexiChains` (the dotted-name readback,
+`to_flexichain`, `distribution_params`, `readback`, `readback_draws`),
+`DynamicPPL` (`as_turing`), `DynamicPPL` x `FlexiChains` (the `VarName`-keyed
+dispatch of `distribution_params`/`readback`/`readback_draws`), `Bijectors`
+(`to_constrained`, the prior-driven unconstrained <-> constrained transform,
+and `as_optimisation_objective` built on it), `ComposedDistributions` (the fit
+protocol over a composed tree's own codec, `extra_logprior` included) and
+`Mooncake` (gradient rules for `xlogy`/`xlog1py`, which the engine reaches
+through a Gamma log-density). The `ModifiedDistributions` extension is parked
+until that package registers in General (#17).
 
 ```@example
 using DistributionsInference
@@ -30,9 +34,7 @@ module DistributionsInference
 using Distributions: Distributions
 using DocStringExtensions: @template, DOCSTRING, EXPORTS, IMPORTS,
                            TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
-using FlexiChains: FlexiChains
 using LogDensityProblems: LogDensityProblems
-using Statistics: mean
 
 # Register the standard EpiAware docstring conventions before any
 # docstrings are defined (see src/docstrings.jl).
@@ -54,8 +56,9 @@ include("priors.jl")
 
 # The dotted-name `FlexiChains` readback: build a chain from raw sampler
 # draws (`to_flexichain`) and read it back onto a fitted object
-# (`readback`, `readback_draws`). `FlexiChains` is a hard dependency, so
-# this needs no PPL and no glue extension.
+# (`readback`, `readback_draws`). Chain-free stubs whose methods live in the
+# weakdep `DistributionsInferenceFlexiChainsExt` extension (`ext/`); no PPL is
+# involved on either side of that split.
 include("readback.jl")
 
 # `as_turing`: a DynamicPPL model over a fittable object's estimated

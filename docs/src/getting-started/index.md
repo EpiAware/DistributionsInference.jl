@@ -8,6 +8,7 @@ loaded, and grow it into tutorials as the package develops.
 
 ```@example quickstart
 using DistributionsInference, Distributions, Random
+using FlexiChains: FlexiChains
 ```
 
 ## A first example: fit a toy object with no PPL

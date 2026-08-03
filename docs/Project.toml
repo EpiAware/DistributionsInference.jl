@@ -3,9 +3,8 @@
 # standard). Add doc-only deps (e.g. plotting, DocumenterCitations) here as the
 # docs grow. The package itself is pinned by path via `[sources]`.
 # The managed `docs/make.jl` calls `using EpiAwarePackageTools` (the shared docs
-# build machinery), so the kit is a docs dep too; until it is registered it is
-# pinned by git via `[sources]` (empty for the kit itself, which is the
-# package).
+# build machinery), so the kit is a docs dep too, resolved from the registry
+# under the bound below.
 # With `ad = true` the env also carries what the kit-managed AD-backends
 # tutorial page executes against: the package's `ADFixtures` registry (pinned
 # by path, same UUID as the AD test env) plus the benchmark and plotting stack.
@@ -16,7 +15,7 @@
 # NOTE: the ad-backends tutorial's plotting stack (AlgebraOfGraphics/
 # CairoMakie/DataFramesMeta) is removed so this env instantiates:
 # `AlgebraOfGraphics` caps `DimensionalData` at 0.28.3 (transitively) while
-# this package's hard `FlexiChains` dep needs >=0.29.24 (kit#283;
+# the `FlexiChains` these docs load needs >=0.29.24 (kit#283;
 # ComposedDistributions#147 is the same conflict). The tutorial renders from
 # its `TUTORIAL_STUBS` heading meanwhile. Restore the deps and re-add `docs`
 # as a workspace member once the upstream ceiling lifts.
@@ -43,20 +42,14 @@ DistributionsInference = "205dfa0f-445e-4692-a651-ee32c3bca9ae"
 [sources]
 DistributionsInference = {path = ".."}
 ADFixtures = {path = "../test/ADFixtures"}
-# ComposedDistributions is unregistered, so it is pinned by git until it
-# registers (mirrors test/Project.toml).
-ComposedDistributions = {rev = "main", url = "https://github.com/EpiAware/ComposedDistributions.jl"}
-# Until EpiAwarePackageTools is registered, it is pinned by git so
-# the env resolves out of the box. Switch to a local path to
-# develop the kit alongside this package.
-EpiAwarePackageTools = {url = "https://github.com/EpiAware/EpiAwarePackageTools.jl", rev = "main"}
 
 [compat]
 Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1, 0.2"
 DifferentiationInterfaceTest = "0.9, 0.10"
 Distributions = "0.25"
-DynamicPPL = "0.39, 0.40, 0.41, 0.42"
+# to precompile on Julia 1.12 (its EnzymeCore extension errors).
+DynamicPPL = "0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
 Markdown = "1"
 Optim = "1"
@@ -66,4 +59,5 @@ Turing = "0.42, 0.43, 0.44, 0.45"
 Documenter = "1"
 DocumenterCitations = "1"
 DocumenterVitepress = "0.3"
+EpiAwarePackageTools = "0.2"
 Literate = "2"

@@ -7,6 +7,7 @@ This page carries the `ToyDelay` object from the README's own quickstart further
 
 ```@example fitting
 using DistributionsInference, Distributions, Random
+using FlexiChains: FlexiChains
 
 struct ToyDelay{T <: Real}
     shape::T

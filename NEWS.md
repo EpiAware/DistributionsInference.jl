@@ -1,4 +1,13 @@
-## Unreleased
+## 0.1.0
+
+The first release. It contains the fit protocol a type opts into by naming
+its own scalar parameters, the PPL-neutral log-density engine built on that
+protocol, and the dotted-name chain readback that turns a sampler's draws
+back into a fitted object. The chain readback, Turing, Bijectors and
+ComposedDistributions support are weakdep extensions over the same protocol
+rather than requirements, so a project can start from the bare log-density
+and add a chain type or a PPL later. The details below are every change
+since the package was created.
 
 Added the fit protocol (`parameter_rows`, `estimated_rows`, `flat_dimension`,
 `reconstruct`) generalising ComposedDistributions' `params_table` shape, and
@@ -6,21 +15,41 @@ the PPL-neutral log-density engine built on it (`FitLogDensity`,
 `as_logdensity`, `logdensity`) with a direct `LogDensityProblems`
 implementation.
 
-Added the dotted-name `FlexiChains` readback (`to_flexichain`, `readback`,
-`readback_draws`): build a chain from raw draws of any
+Added the dotted-name chain readback (`to_flexichain`, `distribution_params`,
+`readback`, `readback_draws`): build a chain from raw draws of any
 `LogDensityProblems`-compatible sampler, keyed by the estimated parameter
 rows' dotted names, and read it back onto a fitted object, with no PPL
 involved anywhere. Generalises ComposedDistributions'
 `chain_to_params`/`param_draws` (closes #3).
 
+`FlexiChains` is a weak dependency, not a hard one (breaking). The four
+readback functions above stay documented, `public` names on the core module,
+but their implementations now live in package extensions. The dotted-name
+readback is in `DistributionsInferenceFlexiChainsExt`, which loads with
+`FlexiChains`; the `VarName`-keyed readback is in
+`DistributionsInferenceDynamicPPLFlexiChainsExt`, which needs `DynamicPPL` as
+well. Each of the four keeps a stub in the core package, so a call made before
+the extension it needs has loaded raises an `ArgumentError` naming the package
+and the extension rather than a bare `MethodError`. Using the readback
+therefore means installing and loading `FlexiChains` (`using FlexiChains`)
+alongside this package. Everything up to the readback (the fit
+protocol, the priors, the log-density engine and the Turing model) is
+unaffected and carries no chain dependency at all, so a project sampling
+through `LogDensityProblems` and handling its own draws now installs strictly
+less.
+
 Added the `DynamicPPL` weakdep extension (`DistributionsInferenceDynamicPPLExt`):
 `as_turing` builds a DynamicPPL model over a fittable object's estimated
 parameters, a light wrapper on `as_logdensity` whose `~` sites are named to
 match the readback's dotted names, so its total log-density equals the
-engine's `logdensity` at the corresponding point. `readback`/`readback_draws`
-gain a `VarName`-keyed dispatch, so a chain sampled from `as_turing` (e.g.
-with `chain_type = FlexiChains.VNChain`) reads back unchanged. Generalises
-ComposedDistributions' `as_turing`/FlexiChains `VarName` readback (closes #4).
+engine's `logdensity` at the corresponding point.
+`distribution_params`/`readback`/`readback_draws` also dispatch on a
+`VarName`-keyed chain, so a chain sampled from `as_turing` (e.g. with
+`chain_type = FlexiChains.VNChain`) reads back unchanged. That dispatch needs
+both packages and lives in its own extension,
+`DistributionsInferenceDynamicPPLFlexiChainsExt`. `as_turing` itself needs
+`DynamicPPL` alone. Generalises ComposedDistributions'
+`as_turing`/FlexiChains `VarName` readback (closes #4).
 
 Added the `Bijectors` weakdep extension (`DistributionsInferenceBijectorsExt`):
 `to_constrained(prob, z)` maps an unconstrained flat vector to the constrained
@@ -43,18 +72,16 @@ no ComposedDistributions-specific code at all once the row protocol is
 correct. Generalises ComposedDistributions' `as_logdensity`/`ComposedLogDensity`
 (closes #5).
 
-Added the `ModifiedDistributions` weakdep extension
-(`DistributionsInferenceModifiedDistributionsExt`): `parameter_rows` and
-`reconstruct` for a STANDALONE modifier distribution (`affine(Gamma(...))`,
-`thin(...)`, ...), not only as a leaf inside a composed tree. A modifier's
-fixed structure (an `Affine`'s scale/shift, a `Weighted`'s weight, a
-`Modified`'s hazard effect/link) is peeled through and not reported as a row,
-mirroring ComposedDistributions' own leaf-protocol precedent; a `thin`
-factor is the one modifier-owned parameter reported as an extra row. Every
-row is fixed by design (a bare `Distributions.jl` leaf carries no prior
-anywhere to mark one estimated) — `distribution_priors` plus a
-caller-supplied `loglik` rebuilding the concrete modifier from row values is
-the generic path to fitting one (closes #17).
+The `ModifiedDistributions` weakdep extension
+(`DistributionsInferenceModifiedDistributionsExt`) is parked and does not
+ship in this release. ModifiedDistributions.jl is not yet registered in
+General, and General will not accept a package that names an unregistered
+package in `[weakdeps]`. The extension, its tests and its dependency entries
+were removed in one commit, deliberately the last on the release branch and
+verified to revert without conflict, so a follow-up release un-parks the
+extension by reverting it. Nothing else in the package depends
+on it, so a standalone modifier distribution is simply not fittable through
+the protocol meanwhile (#17 stays open).
 
 `extra_logprior` gains a fourth argument, `state`: `extra_prior_state(obj)`,
 computed once when `as_logdensity` assembles a `FitLogDensity` and threaded

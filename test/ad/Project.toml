@@ -20,7 +20,6 @@ DistributionsInference = "205dfa0f-445e-4692-a651-ee32c3bca9ae"
 [sources]
 ADFixtures = {path = "../ADFixtures"}
 DistributionsInference = {path = "../.."}
-# Until EpiAwarePackageTools is registered, it is pinned by git so
-# the env resolves out of the box. Switch to a local path to
-# develop the kit alongside this package.
-EpiAwarePackageTools = {url = "https://github.com/EpiAware/EpiAwarePackageTools.jl", rev = "main"}
+
+[compat]
+EpiAwarePackageTools = "0.2"
