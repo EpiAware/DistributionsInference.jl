@@ -2,6 +2,9 @@
 # log-density engine (`engine.jl`) can assemble and evaluate a posterior over
 # its estimated parameters. A row whose `prior` is not `nothing` is ESTIMATED;
 # the engine's flat vector spans exactly those rows, in `parameter_rows` order.
+#
+# A downstream package opts in by extending `parameter_rows`/`reconstruct` on
+# its own type; DistributionsInference need not be loaded at that end (CD#185).
 
 @doc "
 

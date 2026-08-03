@@ -1,6 +1,7 @@
 # The PPL-neutral log-density engine: assembles a `FitLogDensity` from any
 # fit-protocol object (`protocol.jl`) and data, and evaluates its
 # (unnormalised) log-posterior over the estimated flat parameter vector.
+# Ported from ComposedDistributions (CD#185).
 
 _default_loglik(obj, data) = sum(record -> Distributions.logpdf(obj, record), data)
 
@@ -26,9 +27,11 @@ directly, so it is sampleable by any LogDensityProblems consumer.
 - `flat_priors`: the estimated rows' priors, in [`parameter_rows`](@ref) order,
   collected once at construction. An entry is `nothing` for an estimated row
   scored instead through [`extra_logprior`](@ref) (an object-dependent prior;
-  see [`parameter_rows`](@ref)), which then contributes no per-row term.
+  see [`parameter_rows`](@ref)), which then contributes no per-row term. A tree
+  mixing several prior families makes this vector abstractly typed, costing one
+  dynamic dispatch per row in [`logdensity`](@ref).
 - `extra_state`: [`extra_prior_state`](@ref)`(obj)`, collected once at
-  construction and threaded into every [`extra_logprior`](@ref) call.
+  construction and threaded into every [`extra_logprior`](@ref) call (#28).
 - `concrete_fields`: `_concrete_field_candidates(obj)`, the concrete-field-
   under-AD guard's structural state, collected once at construction and empty
   for a properly generic object.
@@ -70,7 +73,7 @@ object with no estimated rows estimates nothing: the flat vector is empty and
 (the transform and its log-Jacobian) is a `Bijectors` extension concern.
 
 A conditionally available exact likelihood is a `loglik` the caller writes and
-passes in, not a helper this package adds. Choose between the exact and
+passes in, not a helper this package adds (#44). Choose between the exact and
 approximate branch with an explicit predicate or by dispatch, NEVER by
 catching an exception from the exact path, which would hide a genuine bug in
 the exact branch. Where the exact form does not apply, refuse loudly with a
