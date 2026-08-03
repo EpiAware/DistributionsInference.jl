@@ -21,7 +21,5 @@ DistributionsInference = "205dfa0f-445e-4692-a651-ee32c3bca9ae"
 ADFixtures = {path = "../ADFixtures"}
 DistributionsInference = {path = "../.."}
 
-# EpiAwarePackageTools is registered in General, so it resolves from the
-# registry rather than a `[sources]` pin. Add a bound for each dep you add.
 [compat]
 EpiAwarePackageTools = "0.2"
