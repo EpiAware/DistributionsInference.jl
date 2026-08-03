@@ -55,11 +55,29 @@ function _flexichains_loaded()
         @__MODULE__, :DistributionsInferenceFlexiChainsExt) !== nothing
 end
 
-# A readback call made before `FlexiChains` was loaded. The extension carrying
-# every method is not in the session, so the call would otherwise fail with a
-# bare `MethodError` naming neither the missing package nor the extension:
-# name both, and the fix.
+# Whether `FlexiChains` itself is in the session, which is a different question
+# from whether the extension loaded: `Base.get_extension` returns `nothing`
+# both when the trigger package was never loaded and when the extension failed
+# to precompile or load, and the latter is reported only as a warning that is
+# easy to miss. Telling those apart is what stops the error below advising
+# `using FlexiChains` to someone who already ran it.
+const _FLEXICHAINS_PKGID = Base.PkgId(
+    Base.UUID("4a37a8b9-6e57-4b92-8664-298d46e639f7"), "FlexiChains")
+
+_flexichains_present() = haskey(Base.loaded_modules, _FLEXICHAINS_PKGID)
+
+# A readback call made while the extension carrying every method is absent. The
+# call would otherwise fail with a bare `MethodError` naming neither the
+# package nor the extension, so name both and the fix — and, when `FlexiChains`
+# is already loaded, point at the extension's own load failure instead.
 function _flexichains_required(f::Symbol)
+    _flexichains_present() && throw(ArgumentError(
+        "`$f` has no method: `FlexiChains` is loaded, but the " *
+        "`DistributionsInferenceFlexiChainsExt` package extension carrying " *
+        "the dotted-name chain readback is not in this session, so it " *
+        "failed to load. Check this session's precompilation warnings for " *
+        "that extension, and the installed `FlexiChains` version against " *
+        "this package's `[compat]` bound."))
     throw(ArgumentError(
         "`$f` needs `FlexiChains`: the dotted-name chain readback lives in " *
         "the `DistributionsInferenceFlexiChainsExt` package extension, " *

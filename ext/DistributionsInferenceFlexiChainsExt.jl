@@ -57,7 +57,8 @@ end
 # taken as the indices directly.
 _draw_indices(chain, ::Nothing) = Colon()
 function _draw_indices(chain, draws)
-    draws isa Function && return [i for i in 1:FlexiChains.niters(chain) if draws(i)]
+    draws isa Function &&
+        return [i for i in 1:FlexiChains.niters(chain) if draws(i)]
     return collect(draws)
 end
 

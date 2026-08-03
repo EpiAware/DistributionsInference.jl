@@ -18,6 +18,31 @@
           nothing
 end
 
+@testitem "the readback names the chain type once FlexiChains is loaded" begin
+    using DistributionsInference, Distributions
+    using FlexiChains: FlexiChains
+
+    # The other half of the boundary the subprocess item below covers: with
+    # the extension live, a second argument that is not a chain is the
+    # caller's mistake (a raw draws matrix, an MCMCChains chain, a
+    # NamedTuple), so the message must name the type rather than blame the
+    # package that is already there.
+    rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
+        support = (0.0, Inf))]
+    for f in (DistributionsInference.distribution_params,
+        DistributionsInference.readback, DistributionsInference.readback_draws)
+        thrown = try
+            f(rows, [1.0 2.0])
+            nothing
+        catch e
+            e
+        end
+        @test thrown isa ArgumentError
+        @test occursin("has no method for a chain of type", thrown.msg)
+        @test !occursin("needs `FlexiChains`", thrown.msg)
+    end
+end
+
 @testitem "the readback names FlexiChains when it is not loaded" begin
     using DistributionsInference
 
