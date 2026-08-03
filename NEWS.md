@@ -1,4 +1,12 @@
-## Unreleased
+## 0.1.0
+
+The first release. It contains the fit protocol a type opts into by naming
+its own scalar parameters, the PPL-neutral log-density engine built on that
+protocol, and the dotted-name chain readback that turns a sampler's draws
+back into a fitted object. Turing, Bijectors and ComposedDistributions
+support are weakdep extensions over the same protocol rather than
+requirements, so a project can start from the bare log-density and add a PPL
+later. The details below are every change since the package was created.
 
 Added the fit protocol (`parameter_rows`, `estimated_rows`, `flat_dimension`,
 `reconstruct`) generalising ComposedDistributions' `params_table` shape, and
