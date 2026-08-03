@@ -39,7 +39,7 @@ LogExpFunctions = "0.3, 1"
 ModifiedDistributions = "0.1"
 Mooncake = "0.5"
 Statistics = "1"
-julia = "1.11, 1.12"
+julia = "1.11"
 
 [workspace]
 projects = ["test"]
