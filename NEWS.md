@@ -136,5 +136,20 @@ leading underscore for internal-only names, and these two are `public`
 aliases, so this is a no-op release-wise; it only needs ComposedDistributions'
 rename to have landed first.
 
+Fixed: `to_constrained` built the whole list of per-row inverse bijectors
+before using it. That list is abstractly typed whenever an object mixes prior
+families, and Enzyme's reverse mode cannot build a shadow for such an array,
+so an object with (say) a `Normal` prior on one row and a truncated `Normal`
+on another failed to transform under that backend. Each row now builds and
+consumes its bijector in one step, and all six tested AD backends
+differentiate the unconstrained target (closes #33).
+
+The AD gradient suite now covers every public differentiable path on all six
+backends rather than the engine's single-parameter hot path alone: one and
+two estimated parameters across Gamma, Normal and unit-interval families,
+`to_constrained` composed with `logdensity` through log, identity and logit
+links, the same two paths over a `ComposedDistributions` tree, and
+`as_turing`'s model through `LogDensityProblems`.
+
 This file tracks notes for major releases and significant milestones; GitHub
 Releases (auto-generated from merged PRs) cover every release in between.
