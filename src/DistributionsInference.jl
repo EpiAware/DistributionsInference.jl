@@ -11,14 +11,16 @@ core (see `ComposedDistributions#185`).
 
 The protocol (`parameter_rows`, `reconstruct`), default-prior assembly over it
 (`default_prior`, `distribution_priors`) and the engine (`as_logdensity`,
-`logdensity`, `FitLogDensity`) are implemented here, together with the
-`FlexiChains` extension (the dotted-name readback: `to_flexichain`,
-`distribution_params`, `readback`, `readback_draws`), the `DynamicPPL`
-extension (`as_turing`), the `DynamicPPL` x `FlexiChains` extension (the
-`VarName`-keyed dispatch of `distribution_params`/`readback`/`readback_draws`)
-and the `Bijectors` extension (`to_constrained`, the prior-driven
-unconstrained <-> constrained transform); the remaining extension packages
-land in follow-up issues.
+`logdensity`, `FitLogDensity`) are implemented here. Everything else arrives
+through an extension: `FlexiChains` (the dotted-name readback,
+`to_flexichain`, `distribution_params`, `readback`, `readback_draws`),
+`DynamicPPL` (`as_turing`), `DynamicPPL` x `FlexiChains` (the `VarName`-keyed
+dispatch of `distribution_params`/`readback`/`readback_draws`), `Bijectors`
+(`to_constrained`, the prior-driven unconstrained <-> constrained transform,
+and `as_optimisation_objective` built on it), `ComposedDistributions` (the fit
+protocol over a composed tree's own codec, `extra_logprior` included) and
+`Mooncake` (gradient rules for `xlogy`/`xlog1py`, which the engine reaches
+through a Gamma log-density).
 
 ```@example
 using DistributionsInference

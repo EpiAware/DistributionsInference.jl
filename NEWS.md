@@ -24,12 +24,15 @@ involved anywhere. Generalises ComposedDistributions'
 
 `FlexiChains` is a weak dependency, not a hard one (breaking). The four
 readback functions above stay documented, `public` names on the core module,
-but every method of them now lives in the
-`DistributionsInferenceFlexiChainsExt` extension, which loads when
-`FlexiChains` does. Using the readback therefore means installing and loading
-`FlexiChains` (`using FlexiChains`) alongside this package; calling one of the
-four beforehand raises an `ArgumentError` naming the package and the extension
-rather than a bare `MethodError`. Everything up to the readback (the fit
+but their implementations now live in package extensions. The dotted-name
+readback is in `DistributionsInferenceFlexiChainsExt`, which loads with
+`FlexiChains`; the `VarName`-keyed readback is in
+`DistributionsInferenceDynamicPPLFlexiChainsExt`, which needs `DynamicPPL` as
+well. Each of the four keeps a stub in the core package, so a call made before
+the extension it needs has loaded raises an `ArgumentError` naming the package
+and the extension rather than a bare `MethodError`. Using the readback
+therefore means installing and loading `FlexiChains` (`using FlexiChains`)
+alongside this package. Everything up to the readback (the fit
 protocol, the priors, the log-density engine and the Turing model) is
 unaffected and carries no chain dependency at all, so a project sampling
 through `LogDensityProblems` and handling its own draws now installs strictly
@@ -39,11 +42,12 @@ Added the `DynamicPPL` weakdep extension (`DistributionsInferenceDynamicPPLExt`)
 `as_turing` builds a DynamicPPL model over a fittable object's estimated
 parameters, a light wrapper on `as_logdensity` whose `~` sites are named to
 match the readback's dotted names, so its total log-density equals the
-engine's `logdensity` at the corresponding point. The `VarName`-keyed dispatch
-of `distribution_params`/`readback`/`readback_draws`, so that a chain sampled
-from `as_turing` (e.g. with `chain_type = FlexiChains.VNChain`) reads back
-unchanged, needs both packages and lives in its own extension,
-`DistributionsInferenceDynamicPPLFlexiChainsExt`; `as_turing` itself needs
+engine's `logdensity` at the corresponding point.
+`distribution_params`/`readback`/`readback_draws` also dispatch on a
+`VarName`-keyed chain, so a chain sampled from `as_turing` (e.g. with
+`chain_type = FlexiChains.VNChain`) reads back unchanged. That dispatch needs
+both packages and lives in its own extension,
+`DistributionsInferenceDynamicPPLFlexiChainsExt`. `as_turing` itself needs
 `DynamicPPL` alone. Generalises ComposedDistributions'
 `as_turing`/FlexiChains `VarName` readback (closes #4).
 

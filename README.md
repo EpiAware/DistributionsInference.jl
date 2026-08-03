@@ -39,7 +39,6 @@ itself from a flat vector — no other change needed.
 
 ```julia
 using DistributionsInference, Distributions, Random
-using FlexiChains: FlexiChains
 
 struct ToyDelay
     shape::Float64
@@ -93,10 +92,12 @@ draws = toy_sample(prob, [2.0], 500)
 
 `readback` reduces the draws to a fitted `ToyDelay`, through the same
 dotted-name chain a real PPL's sampler would hand back.
-The chain readback is a package extension, so it needs `FlexiChains`
-installed and loaded (as above); everything before this point does not.
+The chain readback is a package extension, so add and load `FlexiChains` for
+this last step; everything above needs only `DistributionsInference`.
 
 ```julia
+using FlexiChains: FlexiChains  # Pkg.add("FlexiChains") if not installed
+
 chain = DistributionsInference.to_flexichain(leaf, draws)
 fit = DistributionsInference.readback(leaf, chain)
 fit.shape
