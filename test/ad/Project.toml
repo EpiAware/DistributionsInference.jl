@@ -5,6 +5,8 @@
 [deps]
 ADFixtures = "51837e51-2e8d-4c65-a757-038da73554aa"
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
+ComposedDistributions = "2f642b71-32a9-4f47-97c4-6deb7517f7a7"
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 DifferentiationInterfaceTest = "a82114a7-5aa3-49a8-9643-716bb13727a3"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
@@ -22,4 +24,6 @@ ADFixtures = {path = "../ADFixtures"}
 DistributionsInference = {path = "../.."}
 
 [compat]
+Bijectors = "0.13, 0.14, 0.15, 0.16"
+ComposedDistributions = "0.1"
 EpiAwarePackageTools = "0.2"
