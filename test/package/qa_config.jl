@@ -49,5 +49,30 @@ const QA_CONFIG = (
     #      prefixes = ("MyPkg", "SomeTrigger"),
     #      expect_phantoms = false,    # true if a third party adds phantoms
     #      broken = false)             # true to quarantine a known ambiguity
-    extensions = ()
+    #
+    # Every extension whose trigger packages are test deps is listed. The two
+    # chain extensions matter most: `to_flexichain`, `distribution_params`,
+    # `readback` and `readback_draws` each carry methods in the core module
+    # (the stubs), in the FlexiChains extension and in the DynamicPPL x
+    # FlexiChains extension, so three modules add methods to the same four
+    # generics and Aqua only sees the core one. Mooncake is not a test dep, so
+    # its extension cannot be loaded here and is left off.
+    extensions = (
+        (; name = :DistributionsInferenceFlexiChainsExt,
+            triggers = ("FlexiChains",),
+            prefixes = ("DistributionsInference", "FlexiChains")),
+        (; name = :DistributionsInferenceDynamicPPLFlexiChainsExt,
+            triggers = ("DynamicPPL", "FlexiChains"),
+            prefixes = ("DistributionsInference", "DynamicPPL",
+                "FlexiChains")),
+        (; name = :DistributionsInferenceDynamicPPLExt,
+            triggers = ("DynamicPPL",),
+            prefixes = ("DistributionsInference", "DynamicPPL")),
+        (; name = :DistributionsInferenceBijectorsExt,
+            triggers = ("Bijectors",),
+            prefixes = ("DistributionsInference", "Bijectors")),
+        (; name = :DistributionsInferenceComposedDistributionsExt,
+            triggers = ("ComposedDistributions",),
+            prefixes = ("DistributionsInference", "ComposedDistributions"))
+    )
 )
