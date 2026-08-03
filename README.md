@@ -103,16 +103,16 @@ The [getting started guide](https://distributionsinference.epiaware.org/dev/gett
 carries this same object further: reading every draw with `readback_draws`,
 and sampling with Turing instead of the toy sampler above.
 
+## Related packages
+
+- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) is the package this fit protocol was ported from; a package extension here reads a composed tree's generated codec directly, so its estimated leaves (including pooled and shared parameters) are fittable with no extra glue.
+- [ModifiedDistributions.jl](https://modifieddistributions.epiaware.org/dev/) support is landing next: a standalone extension will let a modified or weighted distribution opt into the same protocol.
+
 ## Where to learn more
 
 - Want to get started running code? See the [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/).
 - Want to understand the API? See the [API reference](https://distributionsinference.epiaware.org/dev/lib/public).
 - Want to see the code? Check out our [GitHub repository](https://github.com/EpiAware/DistributionsInference.jl).
-
-## Related packages
-
-- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) is the package this fit protocol was ported from; a package extension here reads a composed tree's generated codec directly, so its estimated leaves (including pooled and shared parameters) are fittable with no extra glue.
-- [ModifiedDistributions.jl](https://modifieddistributions.epiaware.org/dev/) support is landing next: a standalone extension will let a modified or weighted distribution opt into the same protocol.
 
 ## Getting help
 
