@@ -13,7 +13,10 @@
 # `obj`'s, so both mismatch directions (an empty-estimate `obj` against a
 # nonempty chain, and an estimating `obj` against a genuinely empty chain)
 # still raise the mismatch rather than one of them silently passing or
-# stack-overflowing.
+# stack-overflowing. The `VarName`-keyed readback itself lives in a separate
+# extension over both DynamicPPL and FlexiChains, so the last two items here
+# cover that boundary: the readback extension loads, and `as_turing` works in
+# a session carrying DynamicPPL alone.
 
 @testsnippet TuringFixture begin
     using DistributionsInference, Distributions
@@ -335,4 +338,67 @@ end
     empty_chain = FlexiChains.FlexiChain{VarName}(5, 1,
         Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}())
     @test_throws ArgumentError DistributionsInference.readback(leaf, empty_chain)
+end
+
+@testitem "the DynamicPPL x FlexiChains readback extension loads" begin
+    using DistributionsInference, DynamicPPL
+    using FlexiChains: FlexiChains
+
+    @test Base.get_extension(
+        DistributionsInference,
+        :DistributionsInferenceDynamicPPLFlexiChainsExt) !== nothing
+end
+
+@testitem "as_turing needs DynamicPPL alone, not FlexiChains" begin
+    using DistributionsInference
+
+    # The `VarName`-keyed readback needs both packages and lives in its own
+    # extension, so that a project sampling with Turing and reading the draws
+    # back some other way never has to install `FlexiChains`. This process has
+    # `FlexiChains` loaded (the items around this one `using` it), so the
+    # DynamicPPL-alone session is only reachable in a fresh process.
+    script = """
+    using DistributionsInference, Distributions, DynamicPPL
+
+    Base.get_extension(
+        DistributionsInference,
+        :DistributionsInferenceFlexiChainsExt) === nothing ||
+        error("the FlexiChains extension loaded without FlexiChains")
+
+    struct AloneLeaf{S <: Real}
+        shape::S
+        scale::Float64
+    end
+
+    Distributions.logpdf(d::AloneLeaf, y::Real) = logpdf(
+        Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::AloneLeaf)
+        return [(name = :shape, value = d.shape,
+                prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(
+            d::AloneLeaf, x::AbstractVector)
+        return AloneLeaf(x[1], d.scale)
+    end
+
+    leaf = AloneLeaf(2.0, 1.5)
+    model = DistributionsInference.as_turing(leaf, [1.5, 2.0, 3.2])
+    vi = DynamicPPL.VarInfo(model)
+    isfinite(DynamicPPL.logjoint(model, vi)) ||
+        error("the model's log-joint is not finite")
+    print("as-turing-alone-ok")
+    """
+
+    out = IOBuffer()
+    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project())
+           --startup-file=no -e $script`
+    ok = success(pipeline(cmd; stdout = out, stderr = out))
+    output = String(take!(out))
+    ok || println(output)
+    @test ok
+    @test occursin("as-turing-alone-ok", output)
 end

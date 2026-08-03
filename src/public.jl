@@ -31,10 +31,14 @@ public FitLogDensity, as_logdensity, logdensity
 # keyed by dotted name, before any rebuild); `readback` and `readback_draws`
 # read the chain back onto a fitted object (point summary/draw, and every
 # draw respectively) — `readback` is a thin layer over `distribution_params`,
-# `readback_draws` its own optimised implementation. `FlexiChains` is a hard
-# dependency, so this needs no PPL and no glue extension. All three also
-# dispatch on a `VarName`-keyed chain (e.g. sampled from `as_turing`) once
-# `DynamicPPL` is loaded (see `ext/DistributionsInferenceDynamicPPLExt.jl`).
+# `readback_draws` its own optimised implementation. Declared here (with their
+# docstrings, in `readback.jl`) as chain-free stubs; every method lives in the
+# `DistributionsInferenceFlexiChainsExt` package extension, loaded only when
+# `FlexiChains` is present, and calling one beforehand raises an
+# `ArgumentError` naming the package to load. No PPL is involved on either
+# side of that split. The last three also dispatch on a `VarName`-keyed chain
+# (e.g. sampled from `as_turing`) once `DynamicPPL` is loaded alongside
+# `FlexiChains` (see `ext/DistributionsInferenceDynamicPPLFlexiChainsExt.jl`).
 public to_flexichain, distribution_params, readback, readback_draws
 
 # `as_turing`: a DynamicPPL model over a fittable object's estimated

@@ -28,7 +28,9 @@ contract exactly: an estimated row's dotted `name` (e.g.
 `Symbol(\"onset.shape\")`) becomes the `VarName` `<prefix>.onset.shape`, so a
 chain from `sample(as_turing(obj, data), ...; chain_type =
 FlexiChains.VNChain)` reads back through [`readback`](@ref)/[`readback_draws`](@ref)
-unchanged (the `VarName`-keyed dispatch also lives in this extension).
+unchanged (that `VarName`-keyed dispatch lives in the
+`DistributionsInferenceDynamicPPLFlexiChainsExt` extension, so it needs
+`FlexiChains` loaded too; `as_turing` itself does not).
 
 An estimated row with no fixed `prior` (`prior === nothing`, scored instead
 through [`extra_logprior`](@ref) — an object-dependent prior, e.g. a
@@ -97,3 +99,15 @@ fitted.scale  # the fixed parameter, untouched
 - [`parameter_rows`](@ref) / [`reconstruct`](@ref): the fit protocol this reads.
 "
 function as_turing end
+
+# The `VarName` an estimated row's `~` site carries, given the model `prefix`
+# and the row's dotted `name` (e.g. prefix `:d`, name `Symbol("onset.shape")`
+# -> `d.onset.shape`). Internal, and a stub for the same reason `as_turing` is:
+# building a `VarName` needs `AbstractPPL`'s optic primitives, so the method
+# lives in `DistributionsInferenceDynamicPPLExt`. It is declared in the core
+# module rather than inside that extension so the `VarName`-keyed readback
+# (`DistributionsInferenceDynamicPPLFlexiChainsExt`, which must match a chain's
+# keys against exactly these names) reaches it by ordinary dispatch, rather
+# than reaching into a sibling extension's module or keeping a second copy of
+# the naming contract.
+function _row_varname end

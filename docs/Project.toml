@@ -15,7 +15,7 @@
 # NOTE: the ad-backends tutorial's plotting stack (AlgebraOfGraphics/
 # CairoMakie/DataFramesMeta) is removed so this env instantiates:
 # `AlgebraOfGraphics` caps `DimensionalData` at 0.28.3 (transitively) while
-# this package's hard `FlexiChains` dep needs >=0.29.24 (kit#283;
+# the `FlexiChains` these docs load needs >=0.29.24 (kit#283;
 # ComposedDistributions#147 is the same conflict). The tutorial renders from
 # its `TUTORIAL_STUBS` heading meanwhile. Restore the deps and re-add `docs`
 # as a workspace member once the upstream ceiling lifts.

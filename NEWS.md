@@ -3,10 +3,11 @@
 The first release. It contains the fit protocol a type opts into by naming
 its own scalar parameters, the PPL-neutral log-density engine built on that
 protocol, and the dotted-name chain readback that turns a sampler's draws
-back into a fitted object. Turing, Bijectors and ComposedDistributions
-support are weakdep extensions over the same protocol rather than
-requirements, so a project can start from the bare log-density and add a PPL
-later. The details below are every change since the package was created.
+back into a fitted object. The chain readback, Turing, Bijectors and
+ComposedDistributions support are weakdep extensions over the same protocol
+rather than requirements, so a project can start from the bare log-density
+and add a chain type or a PPL later. The details below are every change
+since the package was created.
 
 Added the fit protocol (`parameter_rows`, `estimated_rows`, `flat_dimension`,
 `reconstruct`) generalising ComposedDistributions' `params_table` shape, and
@@ -14,21 +15,37 @@ the PPL-neutral log-density engine built on it (`FitLogDensity`,
 `as_logdensity`, `logdensity`) with a direct `LogDensityProblems`
 implementation.
 
-Added the dotted-name `FlexiChains` readback (`to_flexichain`, `readback`,
-`readback_draws`): build a chain from raw draws of any
+Added the dotted-name chain readback (`to_flexichain`, `distribution_params`,
+`readback`, `readback_draws`): build a chain from raw draws of any
 `LogDensityProblems`-compatible sampler, keyed by the estimated parameter
 rows' dotted names, and read it back onto a fitted object, with no PPL
 involved anywhere. Generalises ComposedDistributions'
 `chain_to_params`/`param_draws` (closes #3).
 
+`FlexiChains` is a weak dependency, not a hard one (breaking). The four
+readback functions above stay documented, `public` names on the core module,
+but every method of them now lives in the
+`DistributionsInferenceFlexiChainsExt` extension, which loads when
+`FlexiChains` does. Using the readback therefore means installing and loading
+`FlexiChains` (`using FlexiChains`) alongside this package; calling one of the
+four beforehand raises an `ArgumentError` naming the package and the extension
+rather than a bare `MethodError`. Everything up to the readback (the fit
+protocol, the priors, the log-density engine and the Turing model) is
+unaffected and carries no chain dependency at all, so a project sampling
+through `LogDensityProblems` and handling its own draws now installs strictly
+less.
+
 Added the `DynamicPPL` weakdep extension (`DistributionsInferenceDynamicPPLExt`):
 `as_turing` builds a DynamicPPL model over a fittable object's estimated
 parameters, a light wrapper on `as_logdensity` whose `~` sites are named to
 match the readback's dotted names, so its total log-density equals the
-engine's `logdensity` at the corresponding point. `readback`/`readback_draws`
-gain a `VarName`-keyed dispatch, so a chain sampled from `as_turing` (e.g.
-with `chain_type = FlexiChains.VNChain`) reads back unchanged. Generalises
-ComposedDistributions' `as_turing`/FlexiChains `VarName` readback (closes #4).
+engine's `logdensity` at the corresponding point. The `VarName`-keyed dispatch
+of `distribution_params`/`readback`/`readback_draws`, so that a chain sampled
+from `as_turing` (e.g. with `chain_type = FlexiChains.VNChain`) reads back
+unchanged, needs both packages and lives in its own extension,
+`DistributionsInferenceDynamicPPLFlexiChainsExt`; `as_turing` itself needs
+`DynamicPPL` alone. Generalises ComposedDistributions'
+`as_turing`/FlexiChains `VarName` readback (closes #4).
 
 Added the `Bijectors` weakdep extension (`DistributionsInferenceBijectorsExt`):
 `to_constrained(prob, z)` maps an unconstrained flat vector to the constrained

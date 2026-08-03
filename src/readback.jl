@@ -1,10 +1,15 @@
 # Dotted-name FlexiChains readback: build a FlexiChain from the raw draws any
 # LogDensityProblems-compatible sampler hands back, keyed by the estimated
 # parameter rows' dotted names, and read it back onto a fitted object. No PPL
-# is involved anywhere in this file — `FlexiChains` is a hard dependency of
-# this package, so the naming contract this generalises (ComposedDistributions'
-# `chain_to_params`/`param_draws`, ComposedDistributions#185) needs no glue
-# extension here.
+# is involved anywhere (the naming contract this generalises,
+# ComposedDistributions' `chain_to_params`/`param_draws`,
+# ComposedDistributions#185, needs no glue extension), but the chain type
+# itself comes from `FlexiChains`, so the four functions are declared here as
+# FlexiChains-free stubs (with their docstrings, the single source of truth)
+# and implemented in the weakdep `DistributionsInferenceFlexiChainsExt`
+# extension (`ext/`), loaded only when `FlexiChains` is present. The draw-shape
+# validation the readback shares (`_draws_matrix`) mentions no chain type, so
+# it stays here.
 
 # Normalise raw sampler draws to a `dim x niter` matrix, checked against the
 # object's estimated dimension. A LogDensityProblems-compatible sampler hands
@@ -31,11 +36,48 @@ function _draws_matrix(draws::AbstractVector{<:AbstractVector}, dim::Int)
     return mat
 end
 
-function _draws_matrix(draws, dim::Int)
+_draws_matrix(draws, dim::Int) = _malformed_draws(draws)
+
+# `draws` in neither raw shape. Shared with `to_flexichain`'s own stub below,
+# which reports it for a `draws` the extension's methods never see.
+function _malformed_draws(draws)
     throw(ArgumentError(
         "draws must be an AbstractMatrix (dim x niter) or an " *
         "AbstractVector of AbstractVectors (niter draws of dim-length " *
         "vectors); got $(typeof(draws))"))
+end
+
+# Whether the readback extension is live in this session. Every method of the
+# four functions below lives there, so this is what separates "you have not
+# loaded FlexiChains" from "you passed the wrong chain type".
+function _flexichains_loaded()
+    return Base.get_extension(
+        @__MODULE__, :DistributionsInferenceFlexiChainsExt) !== nothing
+end
+
+# A readback call made before `FlexiChains` was loaded. The extension carrying
+# every method is not in the session, so the call would otherwise fail with a
+# bare `MethodError` naming neither the missing package nor the extension:
+# name both, and the fix.
+function _flexichains_required(f::Symbol)
+    throw(ArgumentError(
+        "`$f` needs `FlexiChains`: the dotted-name chain readback lives in " *
+        "the `DistributionsInferenceFlexiChainsExt` package extension, " *
+        "which loads only once `FlexiChains` is in the session. Run " *
+        "`using FlexiChains` first (and `Pkg.add(\"FlexiChains\")` if it is " *
+        "not installed yet)."))
+end
+
+# The fallback for a chain argument the extension's own methods did not match.
+# With `FlexiChains` loaded that can only be the wrong chain type, so say so
+# rather than blaming the (present) package.
+function _no_chain_method(f::Symbol, chain)
+    _flexichains_loaded() || _flexichains_required(f)
+    throw(ArgumentError(
+        "`$f` has no method for a chain of type $(typeof(chain)): it reads " *
+        "a `FlexiChains.FlexiChain` keyed by the estimated rows' dotted " *
+        "names (build one with `to_flexichain`), or a `VarName`-keyed chain " *
+        "once `DynamicPPL` is loaded alongside `FlexiChains`."))
 end
 
 @doc "
@@ -55,6 +97,11 @@ No `DynamicPPL`/`Turing` involvement: this works with the draws of ANY sampler
 that consumes [`as_logdensity`](@ref)`(obj, data)` through the
 `LogDensityProblems` interface.
 
+This has no method until `FlexiChains` is loaded; the chain construction lives
+in the `DistributionsInferenceFlexiChainsExt` extension, so the core package
+stays free of a `FlexiChains` dependency. Calling it beforehand raises an
+`ArgumentError` naming the package to load.
+
 # Arguments
 - `obj`: the fittable object the draws were sampled for.
 - `draws`: the raw draws, `dim x niter` or a `niter`-vector of `dim`-vectors.
@@ -62,6 +109,7 @@ that consumes [`as_logdensity`](@ref)`(obj, data)` through the
 # Examples
 ```@example
 using DistributionsInference, Distributions
+using FlexiChains: FlexiChains
 
 struct FlexiLeaf
     shape::Float64
@@ -78,7 +126,6 @@ end
 leaf = FlexiLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]  # 1 estimated parameter, 4 draws
 chain = DistributionsInference.to_flexichain(leaf, reshape(draws, 1, :))
-using FlexiChains: FlexiChains
 FlexiChains.parameters(chain)
 ```
 
@@ -87,38 +134,12 @@ FlexiChains.parameters(chain)
 - [`readback_draws`](@ref): the vectorised, every-draw form.
 "
 function to_flexichain(obj, draws)
-    rows = estimated_rows(obj)
-    dim = length(rows)
-    mat = _draws_matrix(draws, dim)
-    niter = size(mat, 2)
-    data = Dict{FlexiChains.ParameterOrExtra{<:Symbol}, Matrix}()
-    for i in eachindex(rows)
-        data[FlexiChains.Parameter(rows[i].name)] = reshape(mat[i, :], niter, 1)
-    end
-    return FlexiChains.FlexiChain{Symbol}(niter, 1, data)
+    _flexichains_loaded() || _flexichains_required(:to_flexichain)
+    # `FlexiChains` IS loaded, so a `draws` in either accepted raw shape would
+    # have matched the extension's own (typed) methods: reaching this fallback
+    # can only mean the shape is wrong.
+    return _malformed_draws(draws)
 end
-
-# The named column for one estimated row, erroring with the dotted name (not
-# a bare KeyError) when `chain` does not carry it — signals a chain that was
-# not built (via `to_flexichain`) against this `obj`.
-function _chain_column(chain, name::Symbol)
-    FlexiChains.has_parameter(chain, name) ||
-        throw(ArgumentError("parameter $(repr(name)) not found in chain"))
-    return chain[name]
-end
-
-# The iteration indices a `draws` selector picks out, mirroring
-# ComposedDistributions' `_draw_indices`: `nothing` is every iteration; a
-# predicate filters the index range; anything else (a range / index vector) is
-# taken as the indices directly.
-_draw_indices(chain, ::Nothing) = Colon()
-function _draw_indices(chain, draws)
-    draws isa Function && return [i for i in 1:FlexiChains.niters(chain) if draws(i)]
-    return collect(draws)
-end
-
-_select_draws(col, ::Colon) = vec(col)
-_select_draws(col, sel) = vec(col)[sel]
 
 @doc "
 
@@ -138,6 +159,12 @@ The argument order is `obj` first, `chain` second — matching
 ComposedDistributions' `chain_to_params(template, chain)` (the function this
 generalises, CD#195/DI#20): keeping one order across the module avoids a
 silent argument swap between sibling calls.
+
+This has no method until `FlexiChains` is loaded; the read lives in the
+`DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
+sampled from [`as_turing`](@ref)) is read by the
+`DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
+`DynamicPPL` loaded as well.
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
@@ -160,6 +187,7 @@ own implementation), not a case with a sensible silent resolution.
 # Examples
 ```@example
 using DistributionsInference, Distributions
+using FlexiChains: FlexiChains
 
 struct ParamsLeaf
     shape::Float64
@@ -184,41 +212,8 @@ DistributionsInference.distribution_params(leaf, chain)
 - [`readback_draws`](@ref): the vectorised, every-draw form (its own
   optimised implementation, not layered on this — see its docstring).
 "
-function distribution_params(obj, chain::FlexiChains.FlexiChain;
-        summary = mean, draw = nothing, draws = nothing)
-    rows = estimated_rows(obj)
-    isempty(rows) && return NamedTuple()
-    names = Tuple(row.name for row in rows)
-    _check_unique_names(names)
-    vals = if draw !== nothing
-        [vec(_chain_column(chain, row.name))[draw] for row in rows]
-    else
-        sel = _draw_indices(chain, draws)
-        [summary(_select_draws(_chain_column(chain, row.name), sel))
-         for row in rows]
-    end
-    return NamedTuple{names}(Tuple(vals))
-end
-
-# `NamedTuple{names}(...)` fails on a repeated name with a bare "duplicate
-# field name" error that does not say which object or row is at fault. A
-# duplicate can only come from a `parameter_rows(obj)` implementation that
-# gives two estimated rows the same dotted `name` (a protocol bug, not a
-# normal case: every row is meant to name one distinct parameter) — refuse
-# it here, at the earliest point the duplicate is visible, with a message
-# that names the object and the repeated name(s), rather than let it surface
-# later as a puzzling `NamedTuple` construction error.
-function _check_unique_names(names::Tuple)
-    length(names) == length(Set(names)) && return nothing
-    counts = Dict{Symbol, Int}()
-    for n in names
-        counts[n] = get(counts, n, 0) + 1
-    end
-    dupes = [n for (n, c) in counts if c > 1]
-    throw(ArgumentError(
-        "distribution_params: duplicate estimated parameter name(s) " *
-        "$(dupes); parameter_rows(obj) must give every estimated row a " *
-        "unique dotted name"))
+function distribution_params(obj, chain; kwargs...)
+    return _no_chain_method(:distribution_params, chain)
 end
 
 @doc "
@@ -230,6 +225,12 @@ flat estimated parameter vector and rebuilds a concrete object via
 [`reconstruct`](@ref): a point summary by default (`summary` applied to each
 estimated row's draws, default `mean`), a single iteration (`draw`), or a
 summary restricted to a subset of iterations (`draws`).
+
+This has no method until `FlexiChains` is loaded; the read lives in the
+`DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
+sampled from [`as_turing`](@ref)) is read by the
+`DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
+`DynamicPPL` loaded as well.
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
@@ -246,6 +247,7 @@ summary restricted to a subset of iterations (`draws`).
 # Examples
 ```@example
 using DistributionsInference, Distributions
+using FlexiChains: FlexiChains
 
 struct ReadbackLeaf
     shape::Float64
@@ -273,11 +275,8 @@ DistributionsInference.readback(leaf, chain).shape
 - [`to_flexichain`](@ref): build the chain this reads.
 - [`readback_draws`](@ref): the vectorised, every-draw form.
 "
-function readback(obj, chain::FlexiChains.FlexiChain; summary = mean,
-        draw = nothing, draws = nothing)
-    nt = distribution_params(obj, chain; summary = summary, draw = draw,
-        draws = draws)
-    return reconstruct(obj, collect(values(nt)))
+function readback(obj, chain; kwargs...)
+    return _no_chain_method(:readback, chain)
 end
 
 @doc "
@@ -289,6 +288,12 @@ where `readback` reduces the chain to one reconstructed object,
 `readback_draws` keeps every draw, returning a vector of reconstructed
 objects (one per selected iteration) — e.g. for a per-draw
 posterior-predictive summary.
+
+This has no method until `FlexiChains` is loaded; the read lives in the
+`DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
+sampled from [`as_turing`](@ref)) is read by the
+`DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
+`DynamicPPL` loaded as well.
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
@@ -302,6 +307,7 @@ posterior-predictive summary.
 # Examples
 ```@example
 using DistributionsInference, Distributions
+using FlexiChains: FlexiChains
 
 struct DrawsLeaf
     shape::Float64
@@ -339,13 +345,6 @@ length(DistributionsInference.readback_draws(leaf, chain))
   not this function) layers on.
 - [`to_flexichain`](@ref): build the chain this reads.
 "
-function readback_draws(obj, chain::FlexiChains.FlexiChain; draws = nothing)
-    rows = estimated_rows(obj)
-    sel = _draw_indices(chain, draws)
-    idx = sel isa Colon ? (1:FlexiChains.niters(chain)) : sel
-    isempty(rows) && return [reconstruct(obj, Float64[]) for _ in idx]
-    # Materialise each estimated row's column once, then index per draw, so
-    # this stays O(niter) rather than re-extracting every column per draw.
-    cols = [vec(_chain_column(chain, row.name)) for row in rows]
-    return [reconstruct(obj, [col[i] for col in cols]) for i in idx]
+function readback_draws(obj, chain; kwargs...)
+    return _no_chain_method(:readback_draws, chain)
 end

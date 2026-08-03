@@ -24,9 +24,9 @@ The inference layer for the EpiAware composable-modelling stack: a PPL-neutral f
   nothing else about a type needs to change to be fitted.
 - Reading a fitted chain back onto a concrete object is the same one call
   whether the chain came from a hand-rolled sampler or from Turing.
-- Turing and Bijectors support are opt-in layers over the same protocol, not
-  requirements, so a project can start with the bare log-density and add a
-  PPL later without rewriting its model.
+- Turing, Bijectors and the chain readback are opt-in layers over the same
+  protocol, not requirements, so a project can start with the bare
+  log-density and add a PPL later without rewriting its model.
 - Ported from ComposedDistributions.jl's own fit protocol, so a composed
   distribution and a plain hand-written type share one estimation surface.
 
@@ -39,6 +39,7 @@ itself from a flat vector — no other change needed.
 
 ```julia
 using DistributionsInference, Distributions, Random
+using FlexiChains: FlexiChains
 
 struct ToyDelay
     shape::Float64
@@ -92,6 +93,8 @@ draws = toy_sample(prob, [2.0], 500)
 
 `readback` reduces the draws to a fitted `ToyDelay`, through the same
 dotted-name chain a real PPL's sampler would hand back.
+The chain readback is a package extension, so it needs `FlexiChains`
+installed and loaded (as above); everything before this point does not.
 
 ```julia
 chain = DistributionsInference.to_flexichain(leaf, draws)

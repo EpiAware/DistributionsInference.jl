@@ -13,26 +13,25 @@ module DistributionsInferenceDynamicPPLExt
 # with the data likelihood plus `extra_logprior` added via `@addlogprob!`
 # from the codec's `reconstruct`.
 #
-# This same file hosts the `VarName`-keyed FlexiChains readback (DI#4): a
-# chain sampled from `as_turing` (keyed by `VarName`, e.g. via `chain_type =
-# FlexiChains.VNChain`) is renamed onto the estimated rows' dotted `Symbol`
-# names and handed to the core `readback`/`readback_draws`
-# (`src/readback.jl`), so the DynamicPPL naming contract needs no separate
-# readback surface — the docstrings on those two functions stay the single
-# source of truth (no split-across-modules duplicate, mirroring
-# ComposedDistributionsFlexiChainsExt's `update` convention).
+# The `VarName`-keyed chain readback that pairs with this model (DI#4) needs
+# `FlexiChains` as well as `DynamicPPL`, so it lives in its own extension,
+# `DistributionsInferenceDynamicPPLFlexiChainsExt`. Keeping the split means
+# `as_turing` stays available to a project that loads `DynamicPPL` alone: the
+# model itself never touches a chain type. The `VarName` naming contract the
+# two extensions share is `_row_varname` below, whose method this extension
+# owns (it is declared as a stub in `src/turing.jl` so the readback extension
+# reaches it by ordinary dispatch rather than through a sibling extension's
+# module).
 
 using DistributionsInference: DistributionsInference, FitLogDensity,
                               as_logdensity, estimated_rows, reconstruct,
                               extra_logprior, _check_generic_fields
-import DistributionsInference: as_turing, distribution_params, readback,
-                               readback_draws
+import DistributionsInference: as_turing, _row_varname
 using DynamicPPL: DynamicPPL, @model, NamedDist, VarName
-using FlexiChains: FlexiChains
 
-# `AbstractPPL` (re-exported through DynamicPPL/FlexiChains) owns the
-# `VarName` optic types. There is no public constructor for a runtime dotted
-# optic, so the two optic primitives are reached through the parent module:
+# `AbstractPPL` (re-exported through DynamicPPL) owns the `VarName` optic
+# types. There is no public constructor for a runtime dotted optic, so the
+# two optic primitives are reached through the parent module:
 # `Property{sym}(child)` for a `.sym` access and `Iden()` for the leaf. These
 # are the same primitives DynamicPPL's own `@varname` lowers to (mirrors
 # ComposedDistributionsDynamicPPLExt's `_dotted_varname`).
@@ -46,8 +45,8 @@ const _Iden = _AbstractPPL.Iden
 # `Symbol("onset.shape")` -> `"d.onset.shape"`). The optic is built
 # outermost-property-first (`reverse`) so the earliest segment renders
 # nearest the prefix. The same construction, run in reverse (row name ->
-# VarName), is what `_to_symbol_chain` below matches a readback chain's keys
-# against.
+# VarName), is what the readback extension's `_to_symbol_chain` matches a
+# chain's keys against — hence the core stub this method fills in.
 function _row_varname(prefix::Symbol, name::Symbol)
     segs = Tuple(Symbol(s) for s in split(string(name), "."))
     optic = foldl((acc, s) -> _Property{s}(acc), reverse(segs); init = _Iden())
@@ -100,64 +99,6 @@ function as_turing(obj, data;
     prob = as_logdensity(obj, data; loglik = loglik)
     vns = [_row_varname(prefix, row.name) for row in rows]
     return _fit_turing_model(prob, vns)
-end
-
-# Rename a `VarName`-keyed chain's parameters onto the estimated rows' dotted
-# `Symbol` names, so it matches what the core `to_flexichain` would have
-# built, and the existing `Symbol`-keyed readback machinery
-# (`distribution_params`/`_chain_column` in `src/readback.jl`) reads it
-# unchanged. A chain parameter that is not one of `obj`'s estimated rows'
-# `VarName`s signals a chain that was not sampled from `as_turing(obj, ...)`
-# at this `prefix` (wrong prefix, or a mismatched template), so it errors
-# rather than silently dropping the column.
-function _to_symbol_chain(obj, chain::FlexiChains.FlexiChain{<:VarName},
-        prefix::Symbol)
-    lookup = Dict(_row_varname(prefix, row.name) => row.name
-    for row in estimated_rows(obj))
-    if isempty(FlexiChains.parameters(chain))
-        # `FlexiChains.map_parameters` infers the wrong key type on a CHAIN
-        # with zero parameters (an empty `Set` there resolves to `Union{}`,
-        # not `Symbol`, and building a `FlexiChain{Union{}}` stack-overflows
-        # on its own `NamedTuple` reconstruction): build a fresh empty
-        # `Symbol`-keyed chain directly instead, mirroring `to_flexichain`'s
-        # own 0-estimated construction in `src/readback.jl`. Guarding on the
-        # CHAIN being empty (not `lookup`/`obj`'s estimated rows) matters: an
-        # `obj` with estimated rows against a genuinely empty chain is a
-        # mismatch, and still needs to reach the core readback's
-        # `has_parameter` check below to be reported as one, rather than
-        # silently reading back the template unchanged.
-        return FlexiChains.FlexiChain{Symbol}(
-            FlexiChains.niters(chain), FlexiChains.nchains(chain),
-            Dict{FlexiChains.ParameterOrExtra{<:Symbol}, Matrix}())
-    end
-    return FlexiChains.map_parameters(chain) do vn
-        haskey(lookup, vn) || throw(ArgumentError(
-            "chain parameter $vn is not one of $(typeof(obj))'s estimated " *
-            "rows at prefix $(repr(prefix))"))
-        lookup[vn]
-    end
-end
-
-# `distribution_params`/`readback`/`readback_draws` for a `VarName`-keyed
-# chain (e.g. sampled from `as_turing` with `chain_type =
-# FlexiChains.VNChain`): convert onto the dotted `Symbol` naming via
-# `_to_symbol_chain`, then delegate to the core `Symbol`-keyed method.
-# `prefix` matches the `prefix` `as_turing` was called with (default `:d`);
-# every other keyword forwards to the core method.
-function distribution_params(obj, chain::FlexiChains.FlexiChain{<:VarName};
-        prefix::Symbol = :d, kwargs...)
-    return distribution_params(
-        obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
-end
-
-function readback(obj, chain::FlexiChains.FlexiChain{<:VarName};
-        prefix::Symbol = :d, kwargs...)
-    return readback(obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
-end
-
-function readback_draws(obj, chain::FlexiChains.FlexiChain{<:VarName};
-        prefix::Symbol = :d, kwargs...)
-    return readback_draws(obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
 end
 
 end # module DistributionsInferenceDynamicPPLExt
