@@ -1,15 +1,9 @@
 # PACKAGE-OWNED — scaffold writes this once and never overwrites it.
 #
-# Minimal AD-fixture registry implementing the EpiAwarePackageTools `ADRegistry`
+# AD-fixture registry implementing the EpiAwarePackageTools `ADRegistry`
 # contract: scenarios (each with a ForwardDiff reference), a backend list, and
-# broken/skip bookkeeping. The shared harness (driven from `test/ad/setup.jl`)
-# consumes these. Replace the placeholder scenario with the package's own
-# differentiable log densities and add the backends it supports.
-#
-# If the package's log densities use EpiAwareADTools' AD-safe hooks
-# (`cdf_ad_safe`, `primal`, ...) to stay differentiable, add scenarios here that
-# exercise those paths, so the per-backend matrix covers them. See
-# https://github.com/EpiAware/EpiAwareADTools.jl.
+# broken/skip bookkeeping. The shared harness, driven from `test/ad/setup.jl`,
+# consumes these.
 module ADFixtures
 
 using ADTypes: AutoForwardDiff, AutoReverseDiff, AutoMooncake,
@@ -23,9 +17,8 @@ using Distributions: Distributions, Gamma, LogNormal, logpdf
 export scenarios, backends, broken_scenario_names,
        backend_broken_scenarios, backend_skip_scenarios
 
-# A minimal fit-protocol object whose engine log-density the scenarios
-# differentiate: a Gamma leaf with the shape estimated (LogNormal prior)
-# and the scale fixed, mirroring the test suite's toy.
+# The fit-protocol object whose engine log-density the scenarios
+# differentiate: a Gamma leaf with the shape estimated and the scale fixed.
 struct GammaFit{T <: Real}
     shape::T
     scale::T
@@ -55,16 +48,13 @@ end
     scenarios(; with_reference = false, category = :marginal)
 
 The AD gradient scenarios. Each is a `DIT.Scenario{:gradient, :out}` whose
-`res1` carries a ForwardDiff reference when `with_reference = true`. Replace the
-placeholder with the package's own differentiable log densities; group them by
-`category` if the package distinguishes scenario groups (e.g. `:marginal` vs
-`:latent`).
+`res1` carries a ForwardDiff reference when `with_reference = true`. Use
+`category` to select a scenario group (e.g. `:marginal` vs `:latent`).
 """
 function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
     out = DIT.Scenario{:gradient, :out}[]
 
-    # The engine's own hot path: the gradient of `logdensity(prob, θ)` for a
-    # fit-protocol object with one estimated parameter, flowing through the
+    # The engine's hot path: the gradient of `logdensity(prob, θ)` through the
     # per-row prior sum, `reconstruct`, and the data likelihood.
     leaf = GammaFit(2.0, 1.0)
     prob = DistributionsInference.as_logdensity(
@@ -83,16 +73,11 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
             res1 = res1, prep_args = prep_args,
             name = "fit-protocol engine logdensity"))
 
-    # The `xlogy` edge case (DI#7, ComposedDistributions#99): a Gamma-family
-    # estimated parameter landing exactly on `shape == 1.0` routes a nonzero
-    # cotangent into `LogExpFunctions.xlogy`'s `iszero(x)` branch inside
-    # `Distributions.gammalogpdf`. Mooncake had no rule for the two-argument
-    # `xlogy`/`xlog1py` and derives one from the primal branch, giving `0`
-    # instead of the correct `log(y)` (chalk-lab/Mooncake.jl#1241).
-    # `DistributionsInferenceMooncakeExt` now imports the `ChainRulesCore`
-    # rules for `xlogy`/`xlog1py` as Mooncake primitives, so this scenario is
-    # not broken on Mooncake (see `broken_scenario_names`/
-    # `backend_broken_scenarios` below if that ever regresses).
+    # The `xlogy` edge case: `shape == 1.0` routes a nonzero cotangent into
+    # `LogExpFunctions.xlogy`'s `iszero(x)` branch inside
+    # `Distributions.gammalogpdf`, where Mooncake derives `0` instead of
+    # `log(y)` (chalk-lab/Mooncake.jl#1241). `DistributionsInferenceMooncakeExt`
+    # imports the `ChainRulesCore` rules as Mooncake primitives to fix this.
     edge_leaf = GammaFit(2.0, 1.0)
     edge_prob = DistributionsInference.as_logdensity(
         edge_leaf, [0.5, 1.2, 2.5, 3.8, 5.1])
@@ -114,10 +99,8 @@ end
 """
     backends()
 
-The AD backends to test, as `(; name, backend)` named tuples. Seeded to match
-every backend `test/ad/scenarios.jl` emits a testitem for, so a fresh package
-passes its AD suite out of the box; trim to the subset the package actually
-supports.
+The AD backends to test, as `(; name, backend)` named tuples. One entry per
+testitem in `test/ad/scenarios.jl`.
 """
 function backends()
     return [

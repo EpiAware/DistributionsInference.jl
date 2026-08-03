@@ -1,29 +1,12 @@
 # PACKAGE-OWNED — a local stand-in for EpiAware/.github's `downgrade.yml`.
 #
-# Why this exists rather than a call to the shared reusable:
-#
-# The shared `downgrade.yml` invokes `julia-actions/julia-downgrade-compat`
-# without a `projects` input, so the action falls back to its default of
-# `projects: '.'` and resolves the root project on its own. That is wrong for
-# this package's layout. The test environment is a workspace member
-# (`[workspace] projects = ["test"]` in `Project.toml`), so there is a single
-# `Manifest.toml` at the root and `Pkg.test` reads it — but a root-only resolve
-# never sees `test/Project.toml`, and so never sees the test-only deps at all.
-# The action then wrote a manifest the test environment could not be
-# instantiated from, and every run died on a direct dependency missing from
-# the manifest. That failure was systemic, not PR-specific: `downgrade-compat`
-# was the only red check on `main` and it was red on every open pull request.
-#
-# Passing `projects: '., test'` selects the action's merged-resolution path,
-# which is written for exactly this layout: it merges the root and test
-# projects, then restores the package itself as a path entry in both the root
-# and the test manifest before fixing up each manifest's project hash.
-#
-# The shared reusable exposes no `projects` input, so it cannot be fixed from
-# the caller. Everything else here mirrors it one-for-one. Delete this file and
-# point `test.yaml`'s `downgrade-compat` job back at
-# `EpiAware/.github/.github/workflows/downgrade.yml` once that reusable gains a
-# `projects` input.
+# The shared reusable exposes no `projects` input, so the action resolves the
+# root project alone. The test environment is a workspace member, so that
+# resolve never sees `test/Project.toml` and writes a manifest the tests cannot
+# be instantiated from. Passing `projects: '., test'` selects the action's
+# merged-resolution path instead. Everything else mirrors the reusable; delete
+# this file and point `test.yaml`'s `downgrade-compat` job back at it once it
+# gains a `projects` input.
 
 name: Downgrade
 
@@ -57,31 +40,18 @@ jobs:
   downgrade-compat:
     name: Downgrade Compat
     runs-on: ubuntu-latest
-    # Single suite against oldest deps; cap to free a hung runner.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ inputs.julia_version }}
-      # `julia-downgrade-compat` understands a `[sources]` entry that points at
-      # a local **path**: it feeds that package's own `[compat]` into the joint
-      # floor resolve and writes it back into the manifest afterwards. It does
-      # not — and cannot — do either for a **url** entry, because both steps
-      # need the package's `Project.toml` on disk. A url-pinned package is
-      # stripped before the resolve and never restored, which leaves the floors
-      # picked in ignorance of its constraints and the manifest missing the
-      # package itself. Restoring it afterwards is no fix either, because the
-      # floors are frozen by then and any clash is unresolvable.
-      #
-      # So convert whatever is left to what the action does support: clone each
-      # url-pinned source at the rev `[sources]` names and rewrite the entry to
-      # a path. It then takes part in the floor resolve as a first-class
-      # constraint, the resolver picks a mutually consistent set of floors, and
-      # the action writes it into both manifests itself. The clones live in the
-      # runner temp dir, so the checkout stays clean and the rewrite is never
-      # committed. Nothing is url-pinned today, so this step finds nothing and
-      # says so; it is kept as a guard for the next unregistered dependency.
+      # `julia-downgrade-compat` handles a `[sources]` **path** entry (its
+      # compat joins the floor resolve and it is written back to the manifest)
+      # but not a **url** entry, which is stripped before the resolve and never
+      # restored. So clone each url-pinned source at the rev `[sources]` names,
+      # into the runner temp dir, and rewrite the entry to a path. Nothing is
+      # url-pinned today; kept as a guard for the next unregistered dependency.
       - name: Vendor the url-pinned sources as path sources
         shell: bash
         env:
@@ -126,10 +96,8 @@ jobs:
           mode: ${{ inputs.mode }}
           projects: ${{ inputs.projects }}
       - uses: julia-actions/cache@v3
-      # `test` is a workspace member (`[workspace] projects = ["test"]`), so
-      # the root manifest is the only one Pkg reads. The action also writes a
-      # `test/Manifest.toml` for non-workspace layouts; beside a workspace it
-      # is dead weight that can only go stale, so drop it.
+      # `test` is a workspace member, so the root manifest is the only one Pkg
+      # reads; the action's `test/Manifest.toml` can only go stale.
       - name: Drop the stray member manifest
         shell: bash
         run: rm -f test/Manifest.toml
@@ -137,13 +105,8 @@ jobs:
       - uses: julia-actions/julia-runtest@v1
         with:
           test_args: ${{ inputs.test_args }}
-      # Which floors the resolve actually landed on is the single most useful
-      # thing in this job's log, and it is what you need to raise a bound when
-      # the suite fails against them. It runs *after* the tests, and with
-      # `always()`, so it is the last thing printed on a red run instead of
-      # being buried thousands of lines up — the test output alone can run to
-      # thousands of lines, which puts anything printed before it out of reach
-      # of a log tail. Reporting only: it never changes the job's result.
+      # Runs after the tests so the floors land at the end of a red log rather
+      # than thousands of lines up. Reporting only, never changes the result.
       - name: Report the resolved floors
         if: always()
         shell: bash

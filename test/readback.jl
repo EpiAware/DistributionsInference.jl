@@ -1,13 +1,7 @@
-# The dotted-name FlexiChains readback: `to_flexichain` (matrix and
-# vector-of-vectors input, the 0-estimated edge case, malformed input),
-# `readback`/`readback_draws` selection semantics (summary/draw/draws,
-# matching ComposedDistributions' `chain_to_params`/`param_draws`
-# docstrings), and the DI#3 acceptance criterion — a real LogDensityProblems
-# sampler (AdvancedMH) round-trips through `to_flexichain`/`readback`. Every
-# method here lives in the `DistributionsInferenceFlexiChainsExt` extension,
-# so each test item loads `FlexiChains` itself rather than relying on a
-# sibling item having done so, and the two items below cover the extension
-# boundary itself: that it loads, and what a caller sees before it does.
+# The dotted-name FlexiChains readback: `to_flexichain` and
+# `readback`/`readback_draws` selection semantics. Every method here lives in
+# `DistributionsInferenceFlexiChainsExt`, so each test item loads `FlexiChains`
+# itself rather than relying on a sibling item having done so.
 
 @testitem "the FlexiChains extension loads" begin
     using DistributionsInference
@@ -22,10 +16,8 @@ end
     using DistributionsInference, Distributions
     using FlexiChains: FlexiChains
 
-    # The other half of the boundary the subprocess item below covers: with
-    # the extension live, a second argument that is not a chain is the
-    # caller's mistake (a raw draws matrix, an MCMCChains chain, a
-    # NamedTuple), so the message must name the type rather than blame the
+    # With the extension live, a non-chain second argument is the caller's
+    # mistake, so the message must name the type rather than blame the
     # package that is already there.
     rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
         support = (0.0, Inf))]
@@ -46,11 +38,8 @@ end
 @testitem "the readback names FlexiChains when it is not loaded" begin
     using DistributionsInference
 
-    # The extension carrying every readback method loads once `FlexiChains`
-    # is in the session, and this process has it loaded (the items around
-    # this one `using` it), so the not-yet-loaded path is only reachable in a
-    # fresh process. Same project, so `DistributionsInference` resolves
-    # identically; `FlexiChains` is simply never brought in.
+    # Sibling items in this process `using FlexiChains`, so the
+    # extension-not-loaded path is only reachable in a fresh process.
     script = """
     using DistributionsInference, Distributions
 
@@ -141,8 +130,6 @@ end
     @test isempty(FlexiChains.parameters(chain_mat))
     @test isempty(FlexiChains.parameters(chain_vec))
 
-    # A chain with no parameters still readback the (unchanged) fixed object,
-    # once per iteration.
     fitted = DistributionsInference.readback(fixed_leaf, chain_mat)
     @test fitted == fixed_leaf
     all_fitted = DistributionsInference.readback_draws(fixed_leaf, chain_mat)
@@ -175,17 +162,15 @@ end
     @test keys(nt) == (:shape,)   # only the estimated row, not `scale`
     @test nt.shape ≈ 2.5          # default summary is `mean`
 
-    # Same selection semantics as `readback` (it is the primitive underneath).
+    # Same selection semantics as `readback`, the primitive underneath.
     @test DistributionsInference.distribution_params(
         leaf, chain; draw = 2).shape ≈ 2.0
     @test DistributionsInference.distribution_params(
         leaf, chain; draws = 2:3).shape ≈ 2.5
 
-    # `readback` collapses this to a flat vector (estimated_rows order) and
-    # reconstructs: the two agree exactly.
+    # `readback` collapses this to a flat vector in `estimated_rows` order.
     @test DistributionsInference.readback(leaf, chain).shape == nt.shape
 
-    # The 0-estimated edge case returns an empty NamedTuple, not an error.
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     fixed_chain = DistributionsInference.to_flexichain(fixed_leaf, zeros(0, 3))
     @test DistributionsInference.distribution_params(fixed_leaf, fixed_chain) ==
@@ -212,11 +197,9 @@ end
     using DistributionsInference, Distributions
     using FlexiChains: FlexiChains
 
-    # Two rows sharing a dotted name: a `parameter_rows` protocol bug (each
-    # row is meant to identify one distinct parameter), not a case with a
-    # sensible dedupe. `NamedTuple{names}(...)` would otherwise fail with a
-    # bare "duplicate field name" error naming neither the object nor the
-    # repeated name.
+    # Two rows sharing a dotted name is a `parameter_rows` protocol bug with
+    # no sensible dedupe; `NamedTuple{names}(...)` would otherwise fail with a
+    # bare "duplicate field name" naming neither the object nor the name.
     rows = [
         (name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
             support = (0.0, Inf)),
@@ -246,20 +229,17 @@ end
     # Default summary is `mean` over every draw.
     @test DistributionsInference.readback(leaf, chain).shape ≈ 2.5
 
-    # A custom summary reducer.
     @test DistributionsInference.readback(leaf, chain; summary = median).shape ≈ 2.5
     @test DistributionsInference.readback(leaf, chain; summary = maximum).shape ≈ 4.0
 
     # A single draw overrides `summary`.
     @test DistributionsInference.readback(leaf, chain; draw = 2).shape ≈ 2.0
 
-    # `draws` restricts to a subset of iterations before reducing: an index
-    # range/vector, or a predicate over the iteration index.
+    # `draws` restricts to a subset of iterations before reducing.
     @test DistributionsInference.readback(leaf, chain; draws = 2:3).shape ≈ 2.5
     @test DistributionsInference.readback(leaf, chain; draws = [1, 4]).shape ≈ 2.5
     @test DistributionsInference.readback(leaf, chain; draws = i -> i > 2).shape ≈ 3.5
 
-    # The fixed parameter is always held at its template value.
     @test DistributionsInference.readback(leaf, chain).scale == leaf.scale
 end
 
@@ -301,12 +281,9 @@ end
     using LinearAlgebra: I
     using Random
 
-    # Data drawn from Gamma(shape = true_shape, scale); the scale is fixed at
-    # its true value in the template so only the shape is estimated, exactly
-    # as in the engine's own acceptance test (test/engine.jl) — here the
-    # sampler is a real `LogDensityProblems` consumer (AdvancedMH's
-    # random-walk Metropolis), not a hand-rolled loop, and its draws are read
-    # back through `to_flexichain`/`readback` rather than indexed by hand.
+    # As in the engine's own acceptance test, but with a real
+    # `LogDensityProblems` consumer rather than a hand-rolled loop, and draws
+    # read back through `to_flexichain`/`readback`.
     rng = Random.Xoshiro(1)
     true_shape = 3.0
     scale = 1.5
@@ -316,17 +293,15 @@ end
     prob = DistributionsInference.as_logdensity(leaf, data)
     @test LogDensityProblems.dimension(prob) == 1
 
-    # Guard the support the same way the engine's own acceptance test does
-    # (test/engine.jl): the shape prior is defined only for positive values,
-    # and AdvancedMH's random-walk proposal does not respect that on its own.
+    # The shape prior is defined only for positive values and AdvancedMH's
+    # random-walk proposal does not respect that on its own.
     model = AdvancedMH.DensityModel() do x
         any(<=(0), x) ? -Inf : LogDensityProblems.logdensity(prob, x)
     end
     spl = RWMH(MvNormal(zeros(1), 0.05^2 * I))
     transitions = sample(
         rng, model, spl, 5000; param_names = ["shape"], progress = false)
-    # AdvancedMH hands draws back as a vector of `Transition`s; `.params` is
-    # the raw niter-vector-of-dim-vectors shape `to_flexichain` accepts.
+    # `.params` is the niter-vector-of-dim-vectors `to_flexichain` accepts.
     draws = [t.params for t in transitions][2001:end]
 
     chain = DistributionsInference.to_flexichain(leaf, draws)
@@ -336,10 +311,8 @@ end
     prior_mean = mean(LogNormal(log(2.0), 0.5))
     @test abs(fitted.shape - true_shape) < abs(prior_mean - true_shape)
     @test abs(fitted.shape - true_shape) < 0.5
-    @test fitted.scale == scale  # the fixed parameter is untouched
+    @test fitted.scale == scale
 
-    # `readback_draws`'s own posterior mean agrees with `readback`'s point
-    # summary.
     all_fitted = DistributionsInference.readback_draws(leaf, chain)
     @test length(all_fitted) == length(draws)
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape

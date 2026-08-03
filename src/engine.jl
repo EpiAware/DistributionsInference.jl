@@ -1,14 +1,7 @@
 # The PPL-neutral log-density engine: assembles a `FitLogDensity` from any
 # fit-protocol object (`protocol.jl`) and data, and evaluates its
 # (unnormalised) log-posterior over the estimated flat parameter vector.
-# `LogDensityProblems` is a hard dependency here, so the interface is
-# implemented directly on `FitLogDensity` — no glue extension is needed, unlike
-# ComposedDistributions' weakdep `LogDensityProblemsExt`. Ported from
-# ComposedDistributions' `ComposedLogDensity`/`as_logdensity`/`logdensity`
-# (ComposedDistributions#185), generalised from a composed distribution's
-# nested tree to the row-based fit protocol.
 
-# Default likelihood: sum `logpdf(obj, record)` over the observed records.
 _default_loglik(obj, data) = sum(record -> Distributions.logpdf(obj, record), data)
 
 @doc "
@@ -31,25 +24,14 @@ directly, so it is sampleable by any LogDensityProblems consumer.
 - `loglik`: a reducer `(obj, data) -> Real` (default sums `logpdf(obj,
   record)`).
 - `flat_priors`: the estimated rows' priors, in [`parameter_rows`](@ref) order,
-  collected once at construction so [`logdensity`](@ref) does not re-derive
-  them on every evaluation. An entry is `nothing` for an estimated row scored
-  instead through [`extra_logprior`](@ref) (an object-dependent prior; see
-  [`parameter_rows`](@ref)), which then contributes no per-row term. A tree
-  mixing several prior families (a `LogNormal` here, a `Beta` there) makes
-  this vector abstractly typed, so [`logdensity`](@ref) pays one dynamic
-  dispatch per row; a tuple-of-priors specialisation is the natural
-  follow-up if profiling ever shows this matters.
+  collected once at construction. An entry is `nothing` for an estimated row
+  scored instead through [`extra_logprior`](@ref) (an object-dependent prior;
+  see [`parameter_rows`](@ref)), which then contributes no per-row term.
 - `extra_state`: [`extra_prior_state`](@ref)`(obj)`, collected once at
-  construction alongside `flat_priors` and threaded into every
-  [`extra_logprior`](@ref) call, so a package whose extra term needs a
-  structural walk of `obj` (DI#28's motivating case: which rows carry an
-  object-dependent prior) pays it once here rather than on every evaluation.
-- `concrete_fields`: `_concrete_field_candidates(obj)`, collected once at
-  construction alongside `flat_priors`/`extra_state` — the concrete-field-
-  under-AD guard's (DI#48) own structural state, empty for a properly
-  generic object, so [`logdensity`](@ref)'s per-evaluation guard is a single
-  `isempty` check rather than a fresh `estimated_rows(obj)` walk on every
-  call.
+  construction and threaded into every [`extra_logprior`](@ref) call.
+- `concrete_fields`: `_concrete_field_candidates(obj)`, the concrete-field-
+  under-AD guard's structural state, collected once at construction and empty
+  for a properly generic object.
 
 # See also
 - [`as_logdensity`](@ref): the assembler.
@@ -85,21 +67,15 @@ vector via [`logdensity`](@ref), on the CONSTRAINED scale: each prior is
 scored directly against its row's value with no Jacobian correction. An
 object with no estimated rows estimates nothing: the flat vector is empty and
 `logdensity` is just the data likelihood. Sampling on the unconstrained scale
-(the transform and its log-Jacobian) is a `Bijectors` extension concern, not
-this core engine's, mirroring ComposedDistributions' `to_constrained`.
+(the transform and its log-Jacobian) is a `Bijectors` extension concern.
 
-A CONDITIONALLY available exact likelihood — some objects can score their
-data through a closed form only under a structural condition, and otherwise
-only through an approximation — is a `loglik` a caller writes and passes in
-directly, not a helper this package adds (DistributionsInference#44: the
-hook plus this convention are enough on their own). Choose between the exact
-and approximate branch with an explicit predicate or by dispatch; NEVER by
-catching an exception thrown from the exact path, since that hides a genuine
-bug in the exact branch as if the exact form simply did not apply. Where the
-exact form does not apply, refuse loudly with a named structural reason (an
-`error` or `ArgumentError` naming what is missing), the same convention
-[`to_constrained`](@ref) and [`as_turing`](@ref) follow for a row kind they
-do not support.
+A conditionally available exact likelihood is a `loglik` the caller writes and
+passes in, not a helper this package adds. Choose between the exact and
+approximate branch with an explicit predicate or by dispatch, NEVER by
+catching an exception from the exact path, which would hide a genuine bug in
+the exact branch. Where the exact form does not apply, refuse loudly with a
+named structural reason, the convention [`to_constrained`](@ref) and
+[`as_turing`](@ref) follow for a row kind they do not support.
 
 # Arguments
 - `obj`: the template fittable object, carrying its [`parameter_rows`](@ref).
@@ -138,7 +114,7 @@ DistributionsInference.flat_dimension(leaf)
 ```
 
 A conditionally exact likelihood, chosen by predicate and passed straight in
-as `loglik` (no dedicated helper needed):
+as `loglik`:
 
 ```@example
 using DistributionsInference, Distributions
@@ -171,10 +147,8 @@ function chosen_loglik(obj, data)
     end
 end
 
-# GOOD: decide by an explicit predicate, refuse loudly when it does not
-# apply. NEVER decide by catching an exception from the exact path (a
-# genuine bug in the exact branch would then be silently misread as \"exact
-# form unavailable\").
+# Decide by an explicit predicate and refuse loudly when it does not apply,
+# never by catching an exception from the exact path.
 leaf2 = ToyLeaf2(2.0, 1.0)
 data2 = [1.5, 2.0, 3.2]
 prob2 = DistributionsInference.as_logdensity(
@@ -190,9 +164,8 @@ function as_logdensity(obj, data; loglik = _default_loglik)
     return FitLogDensity(obj, data, loglik)
 end
 
-# Hoisted into its own `@noinline` function so the error-message construction
-# (which interpolates `obj` via `show`) stays out of the hot evaluation path;
-# mirrors ComposedDistributions' `_throw_logdensity_dimmismatch`.
+# `@noinline` keeps the error-message construction (which `show`s `obj`) out
+# of the hot evaluation path.
 @noinline function _throw_logdensity_dimmismatch(x, flat_priors, obj)
     throw(DimensionMismatch(
         "flat parameter vector has length $(length(x)) but $obj has " *
@@ -263,17 +236,14 @@ function logdensity(prob::FitLogDensity, x::AbstractVector)
     return lp + prob.loglik(obj, prob.data)
 end
 
-# A single row's per-row prior contribution: `nothing` (a fixed parameter, or
-# an ESTIMATED one scored instead through `extra_logprior`, per the
-# `parameter_rows` convention) contributes nothing here; any other prior
-# scores directly against its flat value.
+# A `nothing` prior (a fixed row, or an estimated one scored through
+# `extra_logprior`) contributes nothing here.
 _row_logprior(prior, xi) = prior === nothing ? zero(xi) : Distributions.logpdf(prior, xi)
 
-# --- LogDensityProblems interface (hard dep; no glue extension needed) -----
+# --- LogDensityProblems interface ------------------------------------------
 
-# The engine supplies the log-density itself; a gradient is delegated to
-# LogDensityProblemsAD downstream, so only the zeroth-order capability is
-# claimed here.
+# Gradients are delegated to LogDensityProblemsAD downstream, so only the
+# zeroth-order capability is claimed.
 function LogDensityProblems.capabilities(::Type{<:FitLogDensity})
     return LogDensityProblems.LogDensityOrder{0}()
 end
@@ -282,8 +252,8 @@ function LogDensityProblems.dimension(prob::FitLogDensity)
     return flat_dimension(prob.obj)
 end
 
-# Qualified call on the right-hand side: `logdensity` above is this module's
-# own evaluator, distinct from `LogDensityProblems.logdensity` being defined.
+# The unqualified `logdensity` on the right is this module's own evaluator,
+# not the `LogDensityProblems` function being defined.
 function LogDensityProblems.logdensity(prob::FitLogDensity, x::AbstractVector)
     return logdensity(prob, x)
 end

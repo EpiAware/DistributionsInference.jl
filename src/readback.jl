@@ -1,21 +1,12 @@
 # Dotted-name FlexiChains readback: build a FlexiChain from the raw draws any
 # LogDensityProblems-compatible sampler hands back, keyed by the estimated
-# parameter rows' dotted names, and read it back onto a fitted object. No PPL
-# is involved anywhere (the naming contract this generalises,
-# ComposedDistributions' `chain_to_params`/`param_draws`,
-# ComposedDistributions#185, needs no glue extension), but the chain type
-# itself comes from `FlexiChains`, so the four functions are declared here as
-# FlexiChains-free stubs (with their docstrings, the single source of truth)
-# and implemented in the weakdep `DistributionsInferenceFlexiChainsExt`
-# extension (`ext/`), loaded only when `FlexiChains` is present. The draw-shape
-# validation the readback shares (`_draws_matrix`) mentions no chain type, so
-# it stays here.
+# parameter rows' dotted names, and read it back onto a fitted object. The
+# four functions are declared here as FlexiChains-free stubs carrying the
+# docstrings, and implemented in `DistributionsInferenceFlexiChainsExt`.
 
 # Normalise raw sampler draws to a `dim x niter` matrix, checked against the
-# object's estimated dimension. A LogDensityProblems-compatible sampler hands
-# draws back as either shape: a `dim x niter` matrix (e.g. stacked HMC
-# momenta), or a `niter`-length vector of `dim`-length vectors (e.g. AdvancedMH
-# `Transition.params` collected over iterations).
+# object's estimated dimension. Samplers hand draws back either as a
+# `dim x niter` matrix or as a `niter`-length vector of `dim`-length vectors.
 function _draws_matrix(draws::AbstractMatrix, dim::Int)
     size(draws, 1) == dim || throw(DimensionMismatch(
         "draws matrix has $(size(draws, 1)) row(s) but $dim parameter(s) " *
@@ -38,8 +29,6 @@ end
 
 _draws_matrix(draws, dim::Int) = _malformed_draws(draws)
 
-# `draws` in neither raw shape. Shared with `to_flexichain`'s own stub below,
-# which reports it for a `draws` the extension's methods never see.
 function _malformed_draws(draws)
     throw(ArgumentError(
         "draws must be an AbstractMatrix (dim x niter) or an " *
@@ -47,29 +36,23 @@ function _malformed_draws(draws)
         "vectors); got $(typeof(draws))"))
 end
 
-# Whether the readback extension is live in this session. Every method of the
-# four functions below lives there, so this is what separates "you have not
-# loaded FlexiChains" from "you passed the wrong chain type".
+# Whether the readback extension is live in this session, which separates "you
+# have not loaded FlexiChains" from "you passed the wrong chain type".
 function _flexichains_loaded()
     return Base.get_extension(
         @__MODULE__, :DistributionsInferenceFlexiChainsExt) !== nothing
 end
 
-# Whether `FlexiChains` itself is in the session, which is a different question
-# from whether the extension loaded: `Base.get_extension` returns `nothing`
-# both when the trigger package was never loaded and when the extension failed
-# to precompile or load, and the latter is reported only as a warning that is
-# easy to miss. Telling those apart is what stops the error below advising
-# `using FlexiChains` to someone who already ran it.
+# Whether `FlexiChains` itself is in the session, a different question from
+# whether the extension loaded: `Base.get_extension` returns `nothing` both
+# when the trigger package was never loaded and when the extension failed to
+# load. Telling those apart stops the error below advising `using FlexiChains`
+# to someone who already ran it.
 const _FLEXICHAINS_PKGID = Base.PkgId(
     Base.UUID("4a37a8b9-6e57-4b92-8664-298d46e639f7"), "FlexiChains")
 
 _flexichains_present() = haskey(Base.loaded_modules, _FLEXICHAINS_PKGID)
 
-# A readback call made while the extension carrying every method is absent. The
-# call would otherwise fail with a bare `MethodError` naming neither the
-# package nor the extension, so name both and the fix — and, when `FlexiChains`
-# is already loaded, point at the extension's own load failure instead.
 function _flexichains_required(f::Symbol)
     _flexichains_present() && throw(ArgumentError(
         "`$f` has no method: `FlexiChains` is loaded, but the " *
@@ -86,9 +69,8 @@ function _flexichains_required(f::Symbol)
         "not installed yet)."))
 end
 
-# The fallback for a chain argument the extension's own methods did not match.
-# With `FlexiChains` loaded that can only be the wrong chain type, so say so
-# rather than blaming the (present) package.
+# The fallback for a chain argument the extension's own methods did not match:
+# with `FlexiChains` loaded that can only be the wrong chain type.
 function _no_chain_method(f::Symbol, chain)
     _flexichains_loaded() || _flexichains_required(f)
     throw(ArgumentError(
@@ -116,9 +98,7 @@ that consumes [`as_logdensity`](@ref)`(obj, data)` through the
 `LogDensityProblems` interface.
 
 This has no method until `FlexiChains` is loaded; the chain construction lives
-in the `DistributionsInferenceFlexiChainsExt` extension, so the core package
-stays free of a `FlexiChains` dependency. Calling it beforehand raises an
-`ArgumentError` naming the package to load.
+in the `DistributionsInferenceFlexiChainsExt` extension.
 
 # Arguments
 - `obj`: the fittable object the draws were sampled for.
@@ -153,9 +133,8 @@ FlexiChains.parameters(chain)
 "
 function to_flexichain(obj, draws)
     _flexichains_loaded() || _flexichains_required(:to_flexichain)
-    # `FlexiChains` IS loaded, so a `draws` in either accepted raw shape would
-    # have matched the extension's own (typed) methods: reaching this fallback
-    # can only mean the shape is wrong.
+    # With the extension loaded, either accepted raw shape would have matched
+    # its typed methods, so reaching here means the shape is wrong.
     return _malformed_draws(draws)
 end
 
@@ -163,20 +142,13 @@ end
 
 Read a dotted-name `FlexiChain`'s parameter values, keyed by name.
 
-`distribution_params(obj, chain)` is the params-first readback primitive
-(CD#195/DI#20): the estimated parameter values read from `chain`, keyed by
-each [`estimated_rows`](@ref)`(obj)` row's dotted `name`, *before* any object
-is rebuilt — a single `draw`'s values, or each row's draws reduced by
-`summary` over the `draws` selection (default: the mean over every draw).
+`distribution_params(obj, chain)` is the params-first readback primitive: the
+estimated parameter values read from `chain`, keyed by each
+[`estimated_rows`](@ref)`(obj)` row's dotted `name`, *before* any object is
+rebuilt — a single `draw`'s values, or each row's draws reduced by `summary`
+over the `draws` selection (default: the mean over every draw).
 [`readback`](@ref) is a thin layer on top: it collapses this result to a flat
-vector (`estimated_rows` order is fixed, so `values(...)` recovers it) and
-calls [`reconstruct`](@ref).
-
-The argument order is `obj` first, `chain` second — matching
-`to_flexichain(obj, draws)` and `readback(obj, chain)` in this same file, and
-ComposedDistributions' `chain_to_params(template, chain)` (the function this
-generalises, CD#195/DI#20): keeping one order across the module avoids a
-silent argument swap between sibling calls.
+vector and calls [`reconstruct`](@ref).
 
 This has no method until `FlexiChains` is loaded; the read lives in the
 `DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
@@ -196,11 +168,9 @@ sampled from [`as_turing`](@ref)) is read by the
 - `draws`: a subset of iterations to reduce over (a range / index vector, or a
   predicate over the iteration index); `nothing` uses every iteration.
 
-Two estimated rows sharing a dotted `name` is refused with a clear
-`ArgumentError` naming the duplicate: a `NamedTuple` cannot key two entries
-by the same name, and a repeated name can only mean `parameter_rows(obj)`
-gave two distinct parameters the same identifier (a protocol bug in `obj`'s
-own implementation), not a case with a sensible silent resolution.
+Two estimated rows sharing a dotted `name` is refused with an `ArgumentError`
+naming the duplicate: a `NamedTuple` cannot key two entries by the same name,
+and a repeated name means a protocol bug in `obj`'s `parameter_rows`.
 
 # Examples
 ```@example
@@ -350,12 +320,10 @@ length(DistributionsInference.readback_draws(leaf, chain))
 
 !!! note \"Not layered on `distribution_params`\"
     Unlike [`readback`](@ref), this does *not* call
-    [`distribution_params`](@ref) once per draw: `distribution_params`
-    re-fetches and re-validates every estimated row's column on each call,
-    which would be O(niter x nrows) column look-ups here instead of the
-    O(nrows) this implementation does by materialising each column once
-    up front. The two stay independent implementations of the same
-    per-draw extraction for this reason.
+    [`distribution_params`](@ref) once per draw, which would re-fetch and
+    re-validate every estimated row's column on each call. It materialises
+    each column once instead, so the two are independent implementations of
+    the same per-draw extraction.
 
 # See also
 - [`readback`](@ref): the single-draw / reduced read this vectorises.

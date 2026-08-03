@@ -1,25 +1,12 @@
-# DistributionsInference x Bijectors: the prior-driven unconstrained <->
-# constrained transform for the PPL-neutral engine. Each ESTIMATED flat row's
-# constraint is carried by its prior itself, so `bijector(prior)` per row
-# gives the flat transform with no bespoke domain table. Loaded only when
-# Bijectors is available. Ported from ComposedDistributions'
-# `ComposedDistributionsBijectorsExt` (ComposedDistributions#185), generalised
-# from a composed tree's `flat_priors` (which may carry a `CentredPoolPrior`
-# marker row) to the row-based fit protocol's `FitLogDensity` — a row with no
-# per-row prior (`prior === nothing`, scored instead through `extra_logprior`)
-# has no family this generic extension can read a bijector off, so it is
-# rejected rather than special-cased, mirroring the `DynamicPPL` extension's
-# `_validate_turing_rows`.
+# DistributionsInference x Bijectors: the unconstrained <-> constrained
+# transform. Each estimated row carries its constraint in its own prior, so
+# `bijector(prior)` per row gives the flat transform with no domain table.
 module DistributionsInferenceBijectorsExt
 
 using DistributionsInference: DistributionsInference, FitLogDensity,
                               logdensity
 using Bijectors: Bijectors, bijector, inverse, with_logabsdet_jacobian
 
-# The bijector for one ESTIMATED row's prior. A row with no per-row prior
-# (an object-dependent prior, scored instead through `extra_logprior`) has no
-# family to read a bijector off, so it is rejected with a clear pointer at the
-# row's position rather than a bare `MethodError` from `bijector(nothing)`.
 function _row_bijector(prior, i)
     prior === nothing && throw(ArgumentError(
         "to_constrained has no bijector for estimated row $i: its prior is " *
@@ -29,20 +16,14 @@ function _row_bijector(prior, i)
     return bijector(prior)
 end
 
-# The per-row inverse bijectors (unconstrained -> constrained), one per
-# ESTIMATED flat parameter, in table-row order. `FitLogDensity` already
-# carries `flat_priors` (flattened once at construction), so no table walk is
-# needed here.
+# The per-row inverse bijectors (unconstrained -> constrained), in row order.
 function _inverse_bijectors(prob::FitLogDensity)
     return [inverse(_row_bijector(prior, i))
             for (i, prior) in enumerate(prob.flat_priors)]
 end
 
-# `to_constrained(prob, z)`: push each unconstrained coordinate through its
-# row's inverse bijector, accumulating the log-Jacobian. Every transform here
-# is univariate (one scalar prior per row), so the estimated dimension is
-# unchanged and the map is element-wise; the total log-Jacobian is the sum of
-# the per-row terms.
+# Every transform is univariate (one scalar prior per row), so the map is
+# element-wise and the log-Jacobian is the sum of the per-row terms.
 function DistributionsInference.to_constrained(
         prob::FitLogDensity, z::AbstractVector)
     binvs = _inverse_bijectors(prob)
@@ -55,11 +36,6 @@ function DistributionsInference.to_constrained(
     return x, logjac
 end
 
-# `as_optimisation_objective(prob)`: a plain closure over `prob`, composing
-# `to_constrained` (this extension) with the core `logdensity` (DI#46). No
-# optimisation package is involved on this side either — the closure is just
-# a `AbstractVector -> Real` callable, which is all any external optimiser
-# needs.
 function DistributionsInference.as_optimisation_objective(prob::FitLogDensity)
     return function (z::AbstractVector)
         x, logjac = DistributionsInference.to_constrained(prob, z)
