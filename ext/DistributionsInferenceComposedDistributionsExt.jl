@@ -7,8 +7,8 @@
 #
 # Calling straight into that codec also inherits CD#189's world-age hazard: a
 # leaf whose protocol methods come from another package's extension can fail
-# inside the `@generated` `unflatten` if that extension loads late. Fixed
-# upstream, not worked around here.
+# inside the `@generated` `unflatten` if that extension loads late. The fix
+# belongs upstream (CD#189), not here.
 module DistributionsInferenceComposedDistributionsExt
 
 using ComposedDistributions: ComposedDistributions, AbstractComposedDistribution

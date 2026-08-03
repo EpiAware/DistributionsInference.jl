@@ -65,7 +65,7 @@ const HISTORY_SUITES = String[]
 # history tables.
 const HISTORY_COMMITS = 5
 
-# The ratio of a suite's median at the most recent shown revision against its
-# value at the oldest that flags "⚠ reg". Must be > 1.0, else an unchanged or
-# improved suite flags.
+# A suite flags "⚠ reg" when its median at the most recent shown revision,
+# divided by its median at the oldest, exceeds this. Must be > 1.0, else an
+# unchanged or improved suite flags.
 const HISTORY_REGRESSION_THRESHOLD = 1.1

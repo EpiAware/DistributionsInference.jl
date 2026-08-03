@@ -9,7 +9,4 @@ EditURL = "https://github.com/EpiAware/DistributionsInference.jl/blob/main/NEWS.
 
 # Release notes
 
-This page tracks major releases and milestones.
-[GitHub Releases](https://github.com/EpiAware/DistributionsInference.jl/releases), generated from the pull requests merged into each release, cover every release in between.
-
 """
