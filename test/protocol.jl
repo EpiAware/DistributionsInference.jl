@@ -40,6 +40,39 @@
     end
 end
 
+@testitem "parameter_rows/reconstruct: a type omitting the protocol is named" begin
+    using DistributionsInference
+
+    # The two generic fallbacks are the protocol's only error surface for a
+    # type that never implemented it, so the message has to name the offending
+    # type AND the method to add. An `Int` stands in for any such type: it
+    # matches neither the bare-row-vector identity nor a user method.
+    rows_err = try
+        DistributionsInference.parameter_rows(1)
+        nothing
+    catch caught
+        caught
+    end
+    @test rows_err isa ArgumentError
+    @test occursin("no `parameter_rows` method for Int", rows_err.msg)
+    @test occursin("parameter_rows(obj)", rows_err.msg)
+
+    rec_err = try
+        DistributionsInference.reconstruct(1, [1.0])
+        nothing
+    catch caught
+        caught
+    end
+    @test rec_err isa ArgumentError
+    @test occursin("no `reconstruct` method for Int", rec_err.msg)
+    @test occursin("reconstruct(obj, x::AbstractVector)", rec_err.msg)
+
+    # Everything built on `parameter_rows` inherits the same clear error
+    # rather than a `MethodError` from somewhere further in.
+    @test_throws ArgumentError DistributionsInference.estimated_rows(1)
+    @test_throws ArgumentError DistributionsInference.flat_dimension(1)
+end
+
 @testitem "parameter_rows: bare row vector is its own identity" setup=[ToyFixture] begin
     rows = [
         (name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
@@ -184,8 +217,11 @@ end
     data = [1.5, 2.0, 3.2]
     prob = DistributionsInference.as_logdensity(leaf, data)
 
-    # Ordinary (non-AD) use: a plain Float64 vector is unaffected.
-    @test isfinite(DistributionsInference.logdensity(prob, [2.5]))
+    # Ordinary (non-AD) use: a plain Float64 vector is unaffected, and still
+    # scores exactly the prior plus the data likelihood.
+    @test DistributionsInference.logdensity(prob, [2.5]) ≈
+          logpdf(LogNormal(log(2.0), 0.2), 2.5) +
+          sum(y -> logpdf(Gamma(2.5, 1.0), y), data)
 
     # A `Dual`-valued flat vector: the guard raises a clear, named
     # `ArgumentError` instead of the opaque `MethodError` `reconstruct` would

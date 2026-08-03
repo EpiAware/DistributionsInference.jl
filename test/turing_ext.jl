@@ -303,6 +303,66 @@ end
     @test all(==(fixed_leaf), all_fitted)
 end
 
+@testitem "as_turing: the concrete-field guard fires at the turing call site too" begin
+    using DistributionsInference, Distributions, DynamicPPL, ForwardDiff
+    using LogDensityProblems
+
+    # DI#48's guard runs at BOTH call sites: `logdensity` (covered in
+    # `test/protocol.jl`) and the turing model built here. Only the second
+    # sees a `Vector{Real}` whose elements are tracer numbers while the
+    # container's own eltype says nothing, which is exactly why the check is
+    # per element rather than on the container. Without the guard a
+    # gradient-based sampler on this model dies with an opaque `MethodError`
+    # from `TuringConcreteLeaf`'s own inner constructor.
+    struct TuringConcreteLeaf
+        shape::Float64
+        scale::Float64
+    end
+
+    function Distributions.logpdf(d::TuringConcreteLeaf, y::Real)
+        return logpdf(Gamma(d.shape, d.scale), y)
+    end
+
+    function DistributionsInference.parameter_rows(d::TuringConcreteLeaf)
+        return [
+            (name = :shape, value = d.shape,
+                prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(
+            d::TuringConcreteLeaf, x::AbstractVector)
+        return TuringConcreteLeaf(x[1], d.scale)
+    end
+
+    leaf = TuringConcreteLeaf(2.0, 1.0)
+    data = [1.5, 2.0, 3.2]
+    model = DistributionsInference.as_turing(leaf, data)
+    ldf = DynamicPPL.LogDensityFunction(model)
+
+    # Ordinary (non-AD) evaluation is unaffected: the model still scores the
+    # same total the codec does at the same point.
+    x = [2.5]
+    prob = DistributionsInference.as_logdensity(leaf, data)
+    @test LogDensityProblems.logdensity(ldf, x) ≈
+          DistributionsInference.logdensity(prob, x)
+
+    # A gradient threads `Dual`s through the model's `Vector{Real}`, where
+    # the guard raises its named `ArgumentError`.
+    err = try
+        ForwardDiff.gradient(
+            θ -> LogDensityProblems.logdensity(ldf, θ), x)
+        nothing
+    catch caught
+        caught
+    end
+    @test err isa ArgumentError
+    @test occursin("shape", err.msg)
+    @test occursin("TuringConcreteLeaf", err.msg)
+    @test occursin("generically typed", err.msg)
+end
+
 @testitem "as_turing rejects an estimated row with no per-row prior" setup=[TuringFixture] begin
     using DistributionsInference
 
