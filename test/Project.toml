@@ -15,7 +15,6 @@ EpiAwarePackageTools = "7aaea248-0d11-4a0d-a7dc-86da30abb951"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
-JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
@@ -40,7 +39,8 @@ Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1, 0.2"
 DifferentiationInterface = "0.6, 0.7"
 DifferentiationInterfaceTest = "0.9, 0.10, 0.11"
-Distributions = "0.25"
+# Floored at 0.25.117: see the root Project.toml comment on this same bound.
+Distributions = "0.25.117"
 Documenter = "1"
 # Kept in step with the root Project.toml, which drops 0.39 because it fails
 # to precompile on Julia 1.12 (its EnzymeCore extension errors).
@@ -49,7 +49,11 @@ EpiAwarePackageTools = "0.2"
 ExplicitImports = "1"
 FlexiChains = "0.4, 0.5, 0.6"
 ForwardDiff = "0.10, 1"
-JET = "0.10.2, 0.11, 0.12"
+# JET is not a dep here: `test_linting` (test/package/quality.jl) runs it
+# out-of-process against the isolated env in test/jet, which carries its own
+# bound. Depending on it here too forces the whole shared test env to jointly
+# satisfy JET's compat — and JET dropped Julia 1.11 support at 0.10.0, which
+# made this env unresolvable on the `test (1.11, *)` CI leg.
 JuliaFormatter = "2"
 LinearAlgebra = "1"
 LogDensityProblems = "2"
