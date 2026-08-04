@@ -4,7 +4,7 @@ A distribution becomes fittable by naming its own scalar parameters and how to r
 No probabilistic programming language is required to reach that point.
 The log-density this produces is PPL-neutral, and Turing (or any other PPL) is an optional layer on top, not a requirement.
 
-This page carries the `ToyDelay` distribution from the README's own quickstart further, sampling it with a `LogDensityProblems`-compatible sampler and with Turing, then reading a fitted chain back onto the distribution either way, before showing the same calls working unchanged against a `ComposedDistributions` tree.
+Where the README fits an ordinary `Gamma`, this page uses a `ToyDelay` type of its own, sampling it with a `LogDensityProblems`-compatible sampler and with Turing, then reading a fitted chain back onto the distribution either way, before showing the same calls working unchanged against a `ComposedDistributions` tree.
 
 ```@example fitting
 using DistributionsInference, Distributions, Random
