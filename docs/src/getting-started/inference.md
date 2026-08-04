@@ -223,9 +223,9 @@ event(DistributionsInference.readback(tree, tree_turing_chain), :onset_admit)
 
 A tree with a *centred* `pool` (ComposedDistributions' partial-pooling spec) is the one case `as_turing` refuses: a centred pool's member row has no fixed `~` prior of its own (it is scored against the reconstructed population instead, through [`extra_logprior`](@ref)), and DynamicPPL has no sampling path for that yet, so `as_turing` raises a clear error naming the affected rows rather than silently mis-scoring them; fit that tree through `as_logdensity` and a `LogDensityProblems`-compatible sampler instead, exactly as in the section above.
 
-A `ComposedDistributions` tree also keeps its own native `update(tree, chain)` (documented on ComposedDistributions' own inference guide, linked below); this page shows `readback` because it is the one spelling that works identically whether the object came from this package, from ComposedDistributions, or from a hand-written type like `ToyDelay`.
+A `ComposedDistributions` tree pairs `readback`'s output directly with its own `update(tree, params)` (documented on ComposedDistributions' verb map, linked below) — chain readback itself is this package's job, not ComposedDistributions'; this page shows `readback` because it is the one spelling that works identically whether the object came from this package, from ComposedDistributions, or from a hand-written type like `ToyDelay`.
 
 ## See also
 
 - [Public API](@ref public-api) for the full protocol surface (`parameter_rows`, `reconstruct`, `distribution_priors`, `distribution_params`, and the rest).
-- ComposedDistributions' own [inference guide](https://composeddistributions.epiaware.org/dev/getting-started/inference) for the tree-shaped verbs (`compose`, `uncertain`, `pool`, `update`) this page's composed-distribution example builds on.
+- ComposedDistributions' [verb map](https://composeddistributions.epiaware.org/dev/getting-started/concepts) for the tree-shaped verbs (`compose`, `uncertain`, `pool`, `update`) this page's composed-distribution example builds on.

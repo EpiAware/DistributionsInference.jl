@@ -31,7 +31,7 @@ const FORCE_STUB_TUTORIALS = String["ad-backends.jl"]
 
 # Whether the README block and docs footer carry EpiAware ecosystem branding.
 # The content this turns on is kit-managed; only this line is package-owned.
-const ORG_BRANDING = false
+const ORG_BRANDING = true
 
 # URLs to skip during the (full-build) linkcheck. The docs site has never
 # deployed, so the subdomain has no TLS certificate and every self-link fails;
