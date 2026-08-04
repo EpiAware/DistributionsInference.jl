@@ -16,5 +16,10 @@ EpiAwarePackageTools = {url = "https://github.com/EpiAware/EpiAwarePackageTools.
 # Pin JET to its current 0.x series so a new minor (which is a breaking bump
 # under Julia's 0.x semver) cannot silently tighten static analysis and turn
 # the managed check red without a deliberate bump (see kit #77, #60, #73).
+#
+# The 0.9.19 alternative is needed alongside 0.11: JET dropped Julia 1.11
+# support at 0.10.0 (upstream requires 1.12+ from 0.10.2 on), and this
+# subprocess runs under whatever Julia the outer CI leg uses. 0.9.19 is the
+# last 0.9.x release, so it is the floor that still supports Julia 1.11.
 [compat]
-JET = "0.11"
+JET = "0.9.19, 0.11"

@@ -28,7 +28,11 @@ DistributionsInferenceMooncakeExt = "Mooncake"
 [compat]
 Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1, 0.2"
-Distributions = "0.25"
+# Floored at 0.25.117: DynamicPPL's `debug_utils.jl` references
+# `Distributions.ProductNamedTupleDistribution`, added in that release. An
+# unbounded "0.25" lets `downgrade-compat` resolve an older Distributions
+# that DynamicPPL/Bijectors then fail to precompile against.
+Distributions = "0.25.117"
 DocStringExtensions = "0.9"
 DynamicPPL = "0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
