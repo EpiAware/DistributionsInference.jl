@@ -64,25 +64,22 @@ prob = DistributionsInference.as_logdensity(delay, data)
 DistributionsInference.flat_dimension(delay)
 ```
 
-Any `LogDensityProblems`-compatible sampler can drive `prob`; here is the
-tiniest one, a ten-line random-walk Metropolis, so this stays self-contained.
+`prob` is a `LogDensityProblems` problem, so any sampler that consumes that
+interface can drive it. Here that is `AdvancedMH`'s random-walk Metropolis,
+wrapped in a guard because a random-walk proposal does not respect `shape`'s
+positive support on its own.
 
 ```julia
-function toy_sample(prob, x0, n; step = 0.2, rng = Xoshiro(1))
-    x, lp = copy(x0), DistributionsInference.logdensity(prob, x0)
-    draws = Vector{Vector{Float64}}(undef, n)
-    for i in 1:n
-        prop = x .+ step .* randn(rng, length(x))
-        if all(>(0), prop)
-            lp_prop = DistributionsInference.logdensity(prob, prop)
-            log(rand(rng)) < lp_prop - lp && ((x, lp) = (prop, lp_prop))
-        end
-        draws[i] = copy(x)
-    end
-    return draws
-end
+using AdvancedMH  # Pkg.add("AdvancedMH") if not installed
+using LinearAlgebra: I
 
-draws = toy_sample(prob, [2.0], 500)
+model = AdvancedMH.DensityModel() do x
+    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(prob, x)
+end
+sampler = RWMH(MvNormal(zeros(1), 0.05^2 * I))
+transitions = sample(Xoshiro(1), model, sampler, 2000;
+    param_names = ["shape"], progress = false)
+draws = [t.params for t in transitions][1001:end]
 ```
 
 `readback` reduces the draws to a fitted `ToyDelay`, through the same
@@ -99,8 +96,8 @@ fit.shape
 ```
 
 The [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/)
-carries this same object further: reading every draw with `readback_draws`,
-and sampling with Turing instead of the toy sampler above.
+carries this same distribution further: reading every draw with
+`readback_draws`, and sampling with Turing instead of AdvancedMH.
 
 ## Related packages
 

@@ -64,25 +64,22 @@ DistributionsInference.logdensity(prob, [2.5])
 ```
 
 `prob` implements the `LogDensityProblems` interface, so any compatible
-sampler can drive it. Here is the tiniest one, a ten-line random-walk
-Metropolis, so this example stays self-contained with no extra dependency.
+sampler can drive it. `AdvancedMH`'s random-walk Metropolis is one, and needs
+only a `DensityModel` wrapping the log-density. The wrapper returns `-Inf`
+off `shape`'s positive support, because a random-walk proposal does not
+respect that support on its own.
 
 ```@example quickstart
-function toy_sample(prob, x0, n; step = 0.2, rng = Xoshiro(1))
-    x, lp = copy(x0), DistributionsInference.logdensity(prob, x0)
-    draws = Vector{Vector{Float64}}(undef, n)
-    for i in 1:n
-        prop = x .+ step .* randn(rng, length(x))
-        if all(>(0), prop)
-            lp_prop = DistributionsInference.logdensity(prob, prop)
-            log(rand(rng)) < lp_prop - lp && ((x, lp) = (prop, lp_prop))
-        end
-        draws[i] = copy(x)
-    end
-    return draws
-end
+using AdvancedMH
+using LinearAlgebra: I
 
-draws = toy_sample(prob, [2.0], 500)
+model = AdvancedMH.DensityModel() do x
+    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(prob, x)
+end
+sampler = RWMH(MvNormal(zeros(1), 0.05^2 * I))
+transitions = sample(Xoshiro(1), model, sampler, 2000;
+    param_names = ["shape"], progress = false)
+draws = [t.params for t in transitions][1001:end]
 length(draws)
 ```
 
@@ -107,16 +104,16 @@ length(DistributionsInference.readback_draws(delay, chain))
 ```
 
 Loading `DynamicPPL` activates [`as_turing`](@ref), a light wrapper over the
-same `prob` that samples with Turing instead of the toy sampler above; the
-same [`readback`](@ref) call reads its chain back too.
-[Fitting an object](@ref fitting) carries `leaf` through both routes in
+same `prob` that samples with Turing instead of AdvancedMH; the same
+[`readback`](@ref) call reads its chain back too.
+[Fitting an object](@ref fitting) carries `delay` through both routes in
 full, then runs the identical calls against a `ComposedDistributions` tree
 in place of a hand-written distribution.
 
 ## Learning more
 
 - Carry this example further in [Fitting an object](@ref fitting): sampling
-  with Turing as well as the toy sampler above, and fitting a
+  with Turing as well as AdvancedMH, and fitting a
   `ComposedDistributions` tree with the same calls.
 - Want the full interface? See the [Public API](@ref public-api).
 - Want the packages DistributionsInference works alongside? See

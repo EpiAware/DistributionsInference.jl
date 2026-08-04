@@ -4,7 +4,7 @@ A distribution becomes fittable by naming its own scalar parameters and how to r
 No probabilistic programming language is required to reach that point.
 The log-density this produces is PPL-neutral, and Turing (or any other PPL) is an optional layer on top, not a requirement.
 
-This page carries the `ToyDelay` object from the README's own quickstart further: sampling with a hand-rolled `LogDensityProblems`-compatible sampler and with Turing, then reading a fitted chain back onto the object either way, before showing the same calls working unchanged against a `ComposedDistributions` tree.
+This page carries the `ToyDelay` distribution from the README's own quickstart further, sampling it with a `LogDensityProblems`-compatible sampler and with Turing, then reading a fitted chain back onto the distribution either way, before showing the same calls working unchanged against a `ComposedDistributions` tree.
 
 ```@example fitting
 using DistributionsInference, Distributions, Random
@@ -71,24 +71,20 @@ An ESTIMATED (Monte Carlo) likelihood — one whose reducer draws random replica
 ## Sampling without a probabilistic programming language
 
 `prob` is a `LogDensityProblems` problem, so any consumer of that interface can sample it directly, with no PPL in the loop.
-A ten-line random-walk Metropolis sampler is enough to show the shape of the workflow; a real project would reach for a library sampler such as AdvancedMH or, with a gradient backend added through `LogDensityProblemsAD`, AdvancedHMC.
+`AdvancedMH`'s random-walk Metropolis is the smallest such consumer to reach for; a gradient backend added through `LogDensityProblemsAD` opens up AdvancedHMC the same way.
+`DensityModel` takes the log-density as a plain function, and the wrapper below returns `-Inf` off `shape`'s positive support, which a random-walk proposal does not respect on its own.
 
 ```@example fitting
-function toy_sample(prob, x0, n; step = 0.2, rng = Xoshiro(1))
-    x, lp = copy(x0), DistributionsInference.logdensity(prob, x0)
-    draws = Vector{Vector{Float64}}(undef, n)
-    for i in 1:n
-        prop = x .+ step .* randn(rng, length(x))
-        if all(>(0), prop)
-            lp_prop = DistributionsInference.logdensity(prob, prop)
-            log(rand(rng)) < lp_prop - lp && ((x, lp) = (prop, lp_prop))
-        end
-        draws[i] = copy(x)
-    end
-    return draws
-end
+using AdvancedMH
+using LinearAlgebra: I
 
-draws = toy_sample(prob, [2.0], 500)
+model = AdvancedMH.DensityModel() do x
+    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(prob, x)
+end
+sampler = RWMH(MvNormal(zeros(1), 0.05^2 * I))
+transitions = sample(Xoshiro(1), model, sampler, 2000;
+    param_names = ["shape"], progress = false)
+draws = [t.params for t in transitions][1001:end]
 length(draws)
 ```
 
@@ -180,7 +176,7 @@ Random.seed!(1)
 turing_chain = sample(model, NUTS(), 200; chain_type = VNChain, progress = false)
 ```
 
-[`readback`](@ref) and [`readback_draws`](@ref) read a `VNChain` back onto the object exactly as they read the hand-rolled sampler's chain above; the dotted-name convention is the same either way, so a project can switch samplers without touching its readback code.
+[`readback`](@ref) and [`readback_draws`](@ref) read a `VNChain` back onto the distribution exactly as they read the AdvancedMH chain above; the dotted-name convention is the same either way, so a project can switch samplers without touching its readback code.
 
 ```@example fitting
 DistributionsInference.readback(delay, turing_chain).shape
@@ -204,10 +200,15 @@ DistributionsInference.flat_dimension(tree)
 ```
 
 The one estimated parameter is `onset_admit`'s shape (the [`uncertain`](@ref) leaf); `admit_death` stays fixed, exactly like `ToyDelay`'s `scale` above.
-Sampling and reading the fit back are the same calls against `tree` instead of `leaf`, `to_flexichain`/`readback` or `as_turing` alike; the hand-rolled sampler from earlier on this page needs no change at all.
+Sampling and reading the fit back are the same calls against `tree` instead of `delay`, `to_flexichain`/`readback` or `as_turing` alike; the AdvancedMH sampler from earlier on this page needs no change beyond pointing it at `tree_prob`.
 
 ```@example fitting
-tree_draws = toy_sample(tree_prob, [2.0], 500)
+tree_mh_model = AdvancedMH.DensityModel() do x
+    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(tree_prob, x)
+end
+tree_transitions = sample(Xoshiro(1), tree_mh_model, sampler, 2000;
+    param_names = ["onset_admit.shape"], progress = false)
+tree_draws = [t.params for t in tree_transitions][1001:end]
 tree_chain = DistributionsInference.to_flexichain(tree, tree_draws)
 fitted_tree = DistributionsInference.readback(tree, tree_chain)
 event(fitted_tree, :onset_admit)
