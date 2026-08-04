@@ -45,8 +45,7 @@ const QA_CONFIG = (
     #      broken = false)             # true to quarantine a known ambiguity
     #
     # Every extension whose triggers are test deps is listed; Aqua only sees
-    # the core module's own methods. Mooncake is not a test dep, so its
-    # extension cannot be loaded here.
+    # the core module's own methods.
     extensions = (
         (; name = :DistributionsInferenceFlexiChainsExt,
             triggers = ("FlexiChains",),
