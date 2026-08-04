@@ -39,11 +39,8 @@ Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1, 0.2"
 DifferentiationInterface = "0.6, 0.7"
 DifferentiationInterfaceTest = "0.9, 0.10, 0.11"
-# Floored at 0.25.117: see the root Project.toml comment on this same bound.
 Distributions = "0.25.117"
 Documenter = "1"
-# Kept in step with the root Project.toml, which drops 0.39 because it fails
-# to precompile on Julia 1.12 (its EnzymeCore extension errors).
 DynamicPPL = "0.40, 0.41, 0.42"
 EpiAwarePackageTools = "0.2"
 ExplicitImports = "1"
@@ -61,7 +58,5 @@ TestItemRunner = "1"
 TestItems = "1"
 Turing = "0.42, 0.43, 0.44, 0.45, 0.46"
 
-# Keep to path entries only: `julia-downgrade-compat` cannot follow a url pin
-# and would fail to resolve the workspace (#40).
 [sources]
 DistributionsInference = {path = ".."}
