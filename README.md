@@ -10,32 +10,27 @@
 | [![cov ForwardDiff](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-forwarddiff)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-forwarddiff) | [![cov ReverseDiff](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-reversediff)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-reversediff) | [![cov Enzyme forward](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-enzyme-forward)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-enzyme-forward) | [![cov Enzyme reverse](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-enzyme-reverse)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-enzyme-reverse) | [![cov Mooncake reverse](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-mooncake-reverse)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-mooncake-reverse) | [![cov Mooncake forward](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-mooncake-forward)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-mooncake-forward) |
 <!-- badges:end -->
 
-The inference layer for the EpiAware composable-modelling stack: a PPL-neutral fit protocol and log-density engine, so any object that names its own parameters is fittable without committing to a probabilistic programming language.
+The inference layer for the EpiAware composable-modelling stack.
+A distribution names its own parameters and becomes fittable through a PPL-neutral log-density, with no commitment to a probabilistic programming language.
 
 ## Why DistributionsInference?
 
-- Fitting an object today usually means committing to one PPL's macros; here
-  a type opts in by naming its own scalar parameters, and it becomes
-  fittable everywhere, hand-rolled sampler and PPL alike.
-- The log-density this produces has no PPL dependency, so it evaluates
-  through whatever `LogDensityProblems`-compatible sampler a project already
-  uses.
-- A parameter becomes estimated by attaching a prior at the row level;
-  nothing else about a type needs to change to be fitted.
-- Reading a fitted chain back onto a concrete object is the same one call
-  whether the chain came from a hand-rolled sampler or from Turing.
-- Turing, Bijectors and the chain readback are opt-in layers over the same
-  protocol, not requirements, so a project can start with the bare
-  log-density and add a PPL later without rewriting its model.
-- Ported from ComposedDistributions.jl's own fit protocol, so a composed
-  distribution and a plain hand-written type share one estimation surface.
+- Fitting a distribution usually means rewriting it inside one probabilistic programming language's macros; here a distribution names its own scalar parameters and is fitted as it stands.
+- `as_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, so anything that works with `LogDensityProblems` works on the distribution.
+- A distribution declares its parameters as a table of rows, one row per scalar parameter carrying its name, value, prior and support.
+  Attaching a prior to a row is what makes that parameter estimated.
+  The rows are plain `NamedTuple`s, so the inventory is a row table any Tables.jl consumer reads, without this package depending on Tables.jl.
+- `readback` post-processes sampler output onto a fitted distribution in one call.
+  It is generic across samplers and extensible to a new chain type by adding a method.
+- Package extensions cover distributions packages in the EpiAware ecosystem, so fitting a model built with them takes no extra glue.
+  ComposedDistributions.jl is covered today, and a composed tree is fitted through the same calls as a hand-written distribution.
 
 ## Getting started
 
 See [documentation](https://distributionsinference.epiaware.org/dev/) for a full walkthrough.
 
-A type becomes fittable by naming its scalar parameters and how to rebuild
-itself from a flat vector — no other change needed.
+A distribution becomes fittable by naming its scalar parameters and how to
+rebuild itself from a flat vector, with no other change needed.
 
 ```julia
 using DistributionsInference, Distributions, Random
@@ -109,7 +104,7 @@ and sampling with Turing instead of the toy sampler above.
 
 ## Related packages
 
-- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) is the package this fit protocol was ported from; a package extension here reads a composed tree's generated codec directly, so its estimated leaves (including pooled and shared parameters) are fittable with no extra glue.
+- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) builds distributions by composition; a package extension here reads a composed tree's generated codec directly, so its estimated leaves (including pooled and shared parameters) are fittable with no extra glue.
 
 ## Where to learn more
 
