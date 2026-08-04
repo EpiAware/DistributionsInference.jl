@@ -4,7 +4,7 @@
 @testsnippet ToyFixture begin
     using DistributionsInference, Distributions
 
-    # A minimal fit-protocol object: a Gamma leaf with its shape ESTIMATED (an
+    # A minimal fit-protocol object: a Gamma leaf with its shape estimated (an
     # attached prior) and its scale fixed. Implementable without loading us
     # (CD#185).
     struct ToyGammaLeaf
@@ -40,7 +40,7 @@ end
 
     # The two generic fallbacks are the protocol's only error surface for a
     # type that never implemented it, so the message has to name the offending
-    # type AND the method to add. An `Int` stands in for any such type: it
+    # type and the method to add. An `Int` stands in for any such type: it
     # matches neither the bare-row-vector identity nor a user method.
     rows_err = try
         DistributionsInference.parameter_rows(1)
@@ -177,7 +177,7 @@ end
 @testitem "reconstruct: a concrete estimated field is guarded against a tracer number (DI#48)" begin
     using DistributionsInference, Distributions, ForwardDiff
 
-    # The bug this guards: an ESTIMATED field typed to a CONCRETE Float64
+    # The bug this guards: an estimated field typed to a concrete Float64
     # rejects a `ForwardDiff.Dual` with an opaque `MethodError` inside
     # `reconstruct`.
     struct ConcreteFitLeaf
@@ -221,7 +221,7 @@ end
     @test occursin("ConcreteFitLeaf", err.msg)
     @test occursin("generically typed", err.msg)
 
-    # A GENERICALLY typed field: the same `Dual`-valued vector flows through
+    # A generically typed field: the same `Dual`-valued vector flows through
     # untouched, no guard fires.
     struct GenericFitLeaf{S <: Real}
         shape::S

@@ -1,7 +1,8 @@
 # # [Fitting a composed distribution](@id composed-distributions)
 #
-# A tree built with [ComposedDistributions](https://composeddistributions.epiaware.org/dev/)
-# is fittable with no protocol methods written at all.
+# A tree built with
+# [ComposedDistributions](https://composeddistributions.epiaware.org/dev/) is
+# fittable with no protocol methods written at all.
 # Loading both packages activates an extension that maps the tree's own
 # `params_table` onto this package's row schema, so every verb from
 # [Fitting a custom distribution](@ref custom-distribution) works on the tree
@@ -22,7 +23,7 @@ tree = compose((
 
 # ## What the tree declares
 #
-# `parameter_rows` reports every parameter in the tree, keyed by
+# [`parameter_rows`](@ref) reports every parameter in the tree, keyed by
 # `edge.parameter`.
 # The `onset_admit` shape carries the prior attached by `uncertain`, so it is
 # estimated; everything else has no prior and stays at its value.
@@ -65,8 +66,8 @@ fitted = point_estimate(tree, chain)
 
 event(fitted, :onset_admit)
 
-# `distribution_to_turing` builds the same model over a tree, one site per
-# estimated row.
+# [`distribution_to_turing`](@ref) builds the same model over a tree, one site
+# per estimated row.
 
 using DynamicPPL, Turing
 using FlexiChains: VNChain
@@ -136,7 +137,7 @@ catch err
 end
 
 # The log-density route has no such gap, so a centred tree fits through
-# `distribution_to_logdensity` and a gradient-free sampler.
+# [`distribution_to_logdensity`](@ref) and a gradient-free sampler.
 
 centred_prob = distribution_to_logdensity(centred, centred_data)
 centred_model = AdvancedMH.DensityModel() do x

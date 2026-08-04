@@ -15,11 +15,11 @@ using FlexiChains: FlexiChains
 
 # ## Declaring the parameters
 #
-# `parameter_rows` returns one row per scalar parameter, carrying its name,
-# current value, prior and support.
+# [`parameter_rows`](@ref) returns one row per scalar parameter, carrying its
+# name, current value, prior and support.
 # A row with a prior is estimated; a row with `prior = nothing` is held fixed.
-# `reconstruct` is the one place the type says how to rebuild itself from the
-# flat vector the engine works over.
+# [`reconstruct`](@ref DistributionsInference.reconstruct) is the one place the
+# type says how to rebuild itself from the flat vector the engine works over.
 
 struct ToyDelay{T <: Real}
     shape::T
@@ -219,4 +219,6 @@ DistributionsInference.reconstruct(ml_delay, ml_x).shape
 #   routes against a tree built by `ComposedDistributions`, with no protocol
 #   methods written at all.
 # - [Public API](@ref public-api) lists the rest of the protocol
-#   (`with_priors`, `estimated_rows`, `extra_logprior`).
+#   ([`with_priors`](@ref),
+#   [`estimated_rows`](@ref DistributionsInference.estimated_rows),
+#   [`extra_logprior`](@ref DistributionsInference.extra_logprior)).

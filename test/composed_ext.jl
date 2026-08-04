@@ -37,7 +37,7 @@
     resolve_tree = update(fixed_resolve, (branch_probs = Dirichlet(ones(2)),))
 
     # A shared tag tied across two branches: one uncertain parameter,
-    # inventoried and estimated ONCE under the tag edge.
+    # inventoried and estimated once under the tag edge.
     shared_leaf = shared(:rate, uncertain(Gamma(2.0, 1.0);
         shape = LogNormal(log(2.0), 0.2)))
     shared_tree = compose((a = shared_leaf, b = shared_leaf))
@@ -192,7 +192,7 @@ end
     Random.seed!(23)
     chain = sample(model, NUTS(), 200; progress = false)
 
-    # Exactly ONE site for the tie, at the tag's dotted name, not one per
+    # Exactly one site for the tie, at the tag's dotted name, not one per
     # occurrence.
     fitted = DistributionsInference.point_estimate(shared_tree, chain)
     @test ComposedDistributions.event(fitted, :a) ==

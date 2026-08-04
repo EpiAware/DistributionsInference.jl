@@ -1,5 +1,5 @@
 # DistributionsInference × Bijectors extension: `to_constrained` maps an
-# unconstrained flat vector to the constrained ESTIMATED parameters plus a
+# unconstrained flat vector to the constrained estimated parameters plus a
 # log-Jacobian, built per row from `FitLogDensity`'s `flat_priors`.
 
 @testitem "Bijectors extension loads" begin
@@ -97,7 +97,7 @@ end
         leaf, Float64[]; loglik = zero_lik)
     @test DistributionsInference.flat_dimension(leaf) == 3
 
-    # Chosen so the three constrained values land in DISJOINT places: `mu` is
+    # Chosen so the three constrained values land in disjoint places: `mu` is
     # negative, `sigma` is above 1, and `p` is inside `(0, 1)`. A permuted
     # `to_constrained` result then violates a support check, which a `z`
     # whose constrained image happens to be positive and below 1 in every row
@@ -119,7 +119,7 @@ end
     end
     @test DistributionsInference.logdensity(prob, x) + logjac ≈ target
 
-    # Each field takes its OWN row of the constrained vector, checked against
+    # Each field takes its own row of the constrained vector, checked against
     # the already-verified `x` rather than against a support every row could
     # satisfy, so a row-order slip in `to_constrained` fails here.
     rebuilt = DistributionsInference.reconstruct(leaf, x)
@@ -274,7 +274,7 @@ end
 @testitem "logdensity_to_objective: a diffuse prior tracks the MLE" setup=[ToyFixture] begin
     using Bijectors, Optim, Distributions
 
-    # `logdensity` always scores an ESTIMATED row's own prior, so an MLE point
+    # `logdensity` always scores an estimated row's own prior, so an MLE point
     # needs the prior's curvature to be negligible next to the likelihood.
     diffuse = LogNormal(0.0, 100.0)
     leaf = ToyGammaLeaf(2.0, 1.0, diffuse)

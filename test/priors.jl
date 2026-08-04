@@ -114,7 +114,7 @@ end
         attached; default = nothing)
     @test only(from_attached).prior == override
 
-    # A row set where only SOME rows lack a prior still fails, naming the one
+    # A row set where only some rows lack a prior still fails, naming the one
     # that does — the mixed case a whole-object check would miss.
     mixed = [
         (name = :shape, value = 2.0, prior = override, support = (0.0, Inf)),

@@ -203,7 +203,7 @@ end
 # uses. The model threads the draw through an abstractly-typed
 # `Vector{Real}` before `reconstruct`, a path no other scenario takes.
 #
-# Its reference gradient is ForwardDiff over THIS target, like every other
+# Its reference gradient is ForwardDiff over this target, like every other
 # scenario, so the matrix only checks that the six backends agree on the
 # turing model. What ties the model to `logdensity(prob, x)` is
 # `test/turing_ext.jl`, whose "model log-density equals logdensity" items

@@ -15,7 +15,7 @@ A distribution names its own parameters and becomes fittable through a PPL-neutr
 
 ## Why DistributionsInference?
 
-- Fitting a distribution usually means rewriting it inside one probabilistic programming language's macros; here a distribution names its own scalar parameters and is fitted as it stands.
+- Fitting a distribution usually means rewriting it inside one probabilistic programming language's macros; here a distribution names its own scalar parameters once and every sampler reads that one declaration.
 - `distribution_to_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, so anything that works with `LogDensityProblems` works on the distribution.
 - A distribution declares its parameters as a table of rows, one row per scalar parameter carrying its name, value, prior and support.
   Attaching a prior to a row is what makes that parameter estimated.
@@ -30,7 +30,8 @@ See [documentation](https://distributionsinference.epiaware.org/dev/) for a full
 
 Start with an ordinary `Distributions.jl` distribution, a `Gamma`, and no type of your own.
 The package ships no `parameter_rows`/`reconstruct` methods for `Distributions.jl` types, so those two methods are yours to write, once per family.
-That is a gap in the package rather than a step the design asks for; nothing else about the distribution changes.
+Writing them is the protocol rather than boilerplate the design could drop; the gap is that no methods ship for the `Distributions.jl` families yet.
+Nothing else about the distribution changes.
 
 ```julia
 using DistributionsInference, Distributions, Random
@@ -71,6 +72,7 @@ sampler = RWMH(MvNormal(zeros(2), 0.05^2 * I))
 transitions = sample(Xoshiro(1), model, sampler, 4000;
     param_names = ["shape", "scale"], progress = false)
 draws = [t.params for t in transitions][2001:end]
+length(draws)
 ```
 
 `point_estimate` reads the draws back onto the distribution, through the same dotted-name chain a real PPL's sampler would hand back.

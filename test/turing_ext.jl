@@ -8,7 +8,7 @@
     using DistributionsInference, Distributions
 
     # `NUTS` evaluates `reconstruct` at a `ForwardDiff.Dual`-valued flat
-    # vector, so the ESTIMATED field's type must be generic; a concretely
+    # vector, so the estimated field's type must be generic; a concretely
     # `Float64` field (like `ToyFixture`'s `ToyGammaLeaf`) errors under `NUTS`.
     struct TuringGammaLeaf{S <: Real}
         shape::S
@@ -30,7 +30,7 @@
         return TuringGammaLeaf(x[1], d.scale, d.shape_prior)
     end
 
-    # Two estimated parameters under a DOTTED row name: `distribution_to_turing` must split
+    # Two estimated parameters under a dotted row name: `distribution_to_turing` must split
     # it into DynamicPPL's nested `VarName` segments the same way the readback
     # rebuilds them. Independently typed for the same AD reason as above.
     struct TwoParamLeaf{S <: Real, C <: Real}
@@ -82,7 +82,7 @@ end
     using DistributionsInference, Distributions
 
     # An object-dependent `extra_logprior` term threaded through `distribution_to_turing`:
-    # `mu` is the one ESTIMATED row; `a`/`b` are FIXED, but their
+    # `mu` is the one estimated row; `a`/`b` are fixed, but their
     # `extra_logprior` term depends on the RECONSTRUCTED `mu`.
     struct PooledPairLeaf
         a::Float64

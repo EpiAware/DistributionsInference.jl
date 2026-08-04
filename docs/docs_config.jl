@@ -66,7 +66,10 @@ const README_EXECUTE = true
 # README headings whose whole section is dropped from the home page. The
 # managed badge block is always stripped via its `<!-- badges:start -->` /
 # `<!-- badges:end -->` markers.
-const INDEX_STRIP_SECTIONS = String[]
+#
+# "Getting help" is dropped here so the docs carry it once, on the
+# getting-started overview; the README keeps it for readers on GitHub.
+const INDEX_STRIP_SECTIONS = String["Getting help"]
 
 # Whether the build generates the benchmark page (`src/benchmarks.md`); `false`
 # also drops its `pages.jl` nav entry.
