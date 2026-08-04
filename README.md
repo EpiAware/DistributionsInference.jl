@@ -16,11 +16,11 @@ A distribution names its own parameters and becomes fittable through a PPL-neutr
 ## Why DistributionsInference?
 
 - Fitting a distribution usually means rewriting it inside one probabilistic programming language's macros; here a distribution names its own scalar parameters and is fitted as it stands.
-- `as_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, so anything that works with `LogDensityProblems` works on the distribution.
+- `distribution_to_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, so anything that works with `LogDensityProblems` works on the distribution.
 - A distribution declares its parameters as a table of rows, one row per scalar parameter carrying its name, value, prior and support.
   Attaching a prior to a row is what makes that parameter estimated.
   The rows are plain `NamedTuple`s, so the inventory is a row table any Tables.jl consumer reads, without this package depending on Tables.jl.
-- `readback` post-processes sampler output onto a fitted distribution in one call.
+- `point_estimate` post-processes sampler output onto a fitted distribution in one call.
   It is generic across samplers and extensible to a new chain type by adding a method.
 - Package extensions cover distributions packages in the EpiAware ecosystem, so fitting a model built with them takes no extra glue.
   ComposedDistributions.jl is covered today, and a composed tree is fitted through the same calls as a hand-written distribution.
@@ -54,13 +54,13 @@ function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
 end
 ```
 
-`as_logdensity` packages a template distribution and data into a log-density
+`distribution_to_logdensity` packages a template distribution and data into a log-density
 over just the one estimated parameter (`shape`; `scale` stays fixed).
 
 ```julia
 delay = ToyDelay(2.0, 1.0)
 data = [1.5, 2.0, 3.2, 1.8, 2.6]
-prob = DistributionsInference.as_logdensity(delay, data)
+prob = distribution_to_logdensity(delay, data)
 DistributionsInference.flat_dimension(delay)
 ```
 
@@ -82,7 +82,7 @@ transitions = sample(Xoshiro(1), model, sampler, 2000;
 draws = [t.params for t in transitions][1001:end]
 ```
 
-`readback` reduces the draws to a fitted `ToyDelay`, through the same
+`point_estimate` reduces the draws to a fitted `ToyDelay`, through the same
 dotted-name chain a real PPL's sampler would hand back.
 The chain readback is a package extension, so add and load `FlexiChains` for
 this last step; everything above needs only `DistributionsInference`.
@@ -90,8 +90,8 @@ this last step; everything above needs only `DistributionsInference`.
 ```julia
 using FlexiChains: FlexiChains  # Pkg.add("FlexiChains") if not installed
 
-chain = DistributionsInference.to_flexichain(delay, draws)
-fit = DistributionsInference.readback(delay, chain)
+chain = to_flexichain(delay, draws)
+fit = point_estimate(delay, chain)
 fit.shape
 ```
 

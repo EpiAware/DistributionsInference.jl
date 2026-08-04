@@ -1,14 +1,14 @@
 # DistributionsInference x FlexiChains: the dotted-name chain readback. Build
 # a `FlexiChain` from a sampler's raw draws (`to_flexichain`), read its
 # estimated values by dotted name (`distribution_params`), and read a chain
-# back onto a fitted object (`readback`, `readback_draws`). All four are
+# back onto a fitted object (`point_estimate`, `readback_draws`). All four are
 # declared with their docstrings in `src/readback.jl`.
 module DistributionsInferenceFlexiChainsExt
 
 using DistributionsInference: DistributionsInference, estimated_rows,
                               reconstruct, _draws_matrix
-import DistributionsInference: to_flexichain, distribution_params, readback,
-                               readback_draws
+import DistributionsInference: to_flexichain, distribution_params,
+                               point_estimate, readback_draws
 using FlexiChains: FlexiChains
 using Statistics: mean
 
@@ -81,7 +81,7 @@ function _check_unique_names(names::Tuple)
         "unique dotted name"))
 end
 
-function readback(obj, chain::FlexiChains.FlexiChain; summary = mean,
+function point_estimate(obj, chain::FlexiChains.FlexiChain; summary = mean,
         draw = nothing, draws = nothing)
     nt = distribution_params(obj, chain; summary = summary, draw = draw,
         draws = draws)

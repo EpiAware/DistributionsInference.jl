@@ -1,11 +1,11 @@
-# The PPL-neutral log-density engine: `as_logdensity`/`logdensity` over a
+# The PPL-neutral log-density engine: `distribution_to_logdensity`/`logdensity` over a
 # fit-protocol object, its direct `LogDensityProblems` implementation (a hard
 # dep, no glue extension), and the acceptance criterion for #2.
 
-@testitem "engine: as_logdensity/logdensity evaluate the estimated posterior" setup=[ToyFixture] begin
+@testitem "engine: distribution_to_logdensity/logdensity evaluate the estimated posterior" setup=[ToyFixture] begin
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     data = [1.5, 2.0, 3.2, 2.8, 1.9, 4.1, 2.5, 3.0]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
 
     @test DistributionsInference.flat_dimension(leaf) == 1
     x = [2.5]
@@ -14,7 +14,7 @@
     @test DistributionsInference.logdensity(prob, x) ≈ expected
 
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
-    fixed_prob = DistributionsInference.as_logdensity(fixed_leaf, data)
+    fixed_prob = DistributionsInference.distribution_to_logdensity(fixed_leaf, data)
     @test DistributionsInference.flat_dimension(fixed_leaf) == 0
     @test DistributionsInference.logdensity(fixed_prob, Float64[]) ≈
           sum(y -> logpdf(Gamma(2.0, 1.0), y), data)
@@ -37,7 +37,7 @@ end
         y -> logpdf(Gamma(built[1].value, built[2].value), y), data)
 
     data = [1.5, 2.0, 3.2]
-    prob = DistributionsInference.as_logdensity(rows, data; loglik = loglik)
+    prob = DistributionsInference.distribution_to_logdensity(rows, data; loglik = loglik)
     x = [2.5]
     expected = logpdf(LogNormal(0.0, 0.2), 2.5) +
                sum(y -> logpdf(Gamma(2.5, 1.0), y), data)
@@ -48,7 +48,7 @@ end
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     data = [1.5, 2.0, 3.2]
     double_count = (obj, d) -> 2 * sum(y -> logpdf(obj, y), d)
-    prob = DistributionsInference.as_logdensity(leaf, data; loglik = double_count)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data; loglik = double_count)
 
     x = [2.5]
     expected = logpdf(LogNormal(log(2.0), 0.2), 2.5) +
@@ -61,7 +61,7 @@ end
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     data = [1.5, 2.0, 3.2, 2.8, 1.9, 4.1, 2.5, 3.0]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
 
     @test LogDensityProblems.dimension(prob) ==
           DistributionsInference.flat_dimension(leaf) == 1
@@ -73,7 +73,7 @@ end
           DistributionsInference.logdensity(prob, x)
 
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
-    fixed_prob = DistributionsInference.as_logdensity(fixed_leaf, data)
+    fixed_prob = DistributionsInference.distribution_to_logdensity(fixed_leaf, data)
     @test LogDensityProblems.dimension(fixed_prob) == 0
     @test LogDensityProblems.logdensity(fixed_prob, Float64[]) ≈
           sum(y -> logpdf(Gamma(2.0, 1.0), y), data)
@@ -82,7 +82,7 @@ end
 @testitem "engine: extra_prior_state is computed once at construction, not per logdensity call" begin
     using DistributionsInference, Distributions
 
-    # The counter pins that `extra_prior_state` runs once at `as_logdensity`
+    # The counter pins that `extra_prior_state` runs once at `distribution_to_logdensity`
     # construction, not per `logdensity` evaluation (DI#28).
     calls = Ref(0)
 
@@ -109,7 +109,7 @@ end
 
     leaf = CountedLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
     @test calls[] == 1
 
     for x in ([2.0], [2.5], [3.0], [1.8])
@@ -149,7 +149,7 @@ end
 
     leaf = GuardCountedLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
     @test calls[] == 1
 
     for x in ([2.0], [2.5], [3.0], [1.8])
@@ -169,7 +169,7 @@ end
     data = rand(rng, Gamma(true_shape, scale), 500)
 
     leaf = ToyGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.5))
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
     @test LogDensityProblems.dimension(prob) == 1
 
     # Hand-rolled rather than a sampler package, so

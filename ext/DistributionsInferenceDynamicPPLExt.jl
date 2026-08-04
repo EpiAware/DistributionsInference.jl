@@ -1,9 +1,10 @@
 module DistributionsInferenceDynamicPPLExt
 
-# DistributionsInference x DynamicPPL: `as_turing(obj, data)` builds a
-# DynamicPPL model over a fittable object's estimated rows, wrapping the
-# `as_logdensity` codec (docstring in `src/turing.jl`). Each row's dotted
-# `name` becomes the `VarName` `<prefix>.<name>`, sampled from its own prior.
+# DistributionsInference x DynamicPPL: `distribution_to_turing(obj, data)`
+# builds a DynamicPPL model over a fittable object's estimated rows, wrapping
+# the `distribution_to_logdensity` codec (docstring in `src/turing.jl`). Each
+# row's dotted `name` becomes the `VarName` `<prefix>.<name>`, sampled from
+# its own prior.
 #
 # `_row_varname` is the naming contract shared with the `VarName`-keyed
 # readback in `DistributionsInferenceDynamicPPLFlexiChainsExt` (DI#4, the
@@ -12,9 +13,10 @@ module DistributionsInferenceDynamicPPLExt
 # module.
 
 using DistributionsInference: DistributionsInference, FitLogDensity,
-                              as_logdensity, estimated_rows, reconstruct,
-                              extra_logprior, _check_generic_fields
-import DistributionsInference: as_turing, _row_varname
+                              distribution_to_logdensity, estimated_rows,
+                              reconstruct, extra_logprior,
+                              _check_generic_fields
+import DistributionsInference: distribution_to_turing, _row_varname
 using DynamicPPL: DynamicPPL, @model, NamedDist, VarName
 
 # There is no public constructor for a runtime dotted optic, so the two
@@ -38,11 +40,12 @@ function _validate_turing_rows(obj)
     rows = estimated_rows(obj)
     missing_prior = [row.name for row in rows if row.prior === nothing]
     isempty(missing_prior) || throw(ArgumentError(
-        "as_turing does not support estimated parameter(s) $missing_prior " *
-        "with no fixed `~` prior (scored instead through `extra_logprior`, " *
-        "an object-dependent prior term whose sampling path does not exist " *
-        "yet in DynamicPPL). Sample with `as_logdensity(obj, data)` + " *
-        "LogDensityProblemsAD (the LogDensityProblems extension) instead."))
+        "distribution_to_turing does not support estimated parameter(s) " *
+        "$missing_prior with no fixed `~` prior (scored instead through " *
+        "`extra_logprior`, an object-dependent prior term whose sampling " *
+        "path does not exist yet in DynamicPPL). Sample with " *
+        "`distribution_to_logdensity(obj, data)` + LogDensityProblemsAD " *
+        "(the LogDensityProblems extension) instead."))
     return rows
 end
 
@@ -65,10 +68,10 @@ end
     return obj
 end
 
-function as_turing(obj, data;
+function distribution_to_turing(obj, data;
         prefix::Symbol = :d, loglik = DistributionsInference._default_loglik)
     rows = _validate_turing_rows(obj)
-    prob = as_logdensity(obj, data; loglik = loglik)
+    prob = distribution_to_logdensity(obj, data; loglik = loglik)
     vns = [_row_varname(prefix, row.name) for row in rows]
     return _fit_turing_model(prob, vns)
 end

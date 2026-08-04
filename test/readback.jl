@@ -1,5 +1,5 @@
 # The dotted-name FlexiChains readback: `to_flexichain`,
-# `readback`/`readback_draws` selection semantics (deliberately matching
+# `point_estimate`/`readback_draws` selection semantics (deliberately matching
 # ComposedDistributions' `chain_to_params`/`param_draws`), and the DI#3
 # acceptance criterion (a real AdvancedMH round-trip). Every method here
 # lives in `DistributionsInferenceFlexiChainsExt`, so each test item loads
@@ -24,7 +24,7 @@ end
     rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
         support = (0.0, Inf))]
     for f in (DistributionsInference.distribution_params,
-        DistributionsInference.readback, DistributionsInference.readback_draws)
+        DistributionsInference.point_estimate, DistributionsInference.readback_draws)
         thrown = try
             f(rows, [1.0 2.0])
             nothing
@@ -55,7 +55,7 @@ end
     calls = [
         () -> DistributionsInference.to_flexichain(rows, reshape([1.0], 1, :)),
         () -> DistributionsInference.distribution_params(rows, nothing),
-        () -> DistributionsInference.readback(rows, nothing),
+        () -> DistributionsInference.point_estimate(rows, nothing),
         () -> DistributionsInference.readback_draws(rows, nothing)]
     for call in calls
         thrown = try
@@ -132,7 +132,7 @@ end
     @test isempty(FlexiChains.parameters(chain_mat))
     @test isempty(FlexiChains.parameters(chain_vec))
 
-    fitted = DistributionsInference.readback(fixed_leaf, chain_mat)
+    fitted = DistributionsInference.point_estimate(fixed_leaf, chain_mat)
     @test fitted == fixed_leaf
     all_fitted = DistributionsInference.readback_draws(fixed_leaf, chain_mat)
     @test length(all_fitted) == 5
@@ -164,14 +164,14 @@ end
     @test keys(nt) == (:shape,)   # only the estimated row, not `scale`
     @test nt.shape ≈ 2.5          # default summary is `mean`
 
-    # Same selection semantics as `readback`, the primitive underneath.
+    # Same selection semantics as `point_estimate`, the primitive underneath.
     @test DistributionsInference.distribution_params(
         leaf, chain; draw = 2).shape ≈ 2.0
     @test DistributionsInference.distribution_params(
         leaf, chain; draws = 2:3).shape ≈ 2.5
 
-    # `readback` collapses this to a flat vector in `estimated_rows` order.
-    @test DistributionsInference.readback(leaf, chain).shape == nt.shape
+    # `point_estimate` collapses this to a flat vector in `estimated_rows` order.
+    @test DistributionsInference.point_estimate(leaf, chain).shape == nt.shape
 
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     fixed_chain = DistributionsInference.to_flexichain(fixed_leaf, zeros(0, 3))
@@ -220,7 +220,7 @@ end
     @test occursin("shape", err.msg)
 end
 
-@testitem "readback: summary/draw/draws selection semantics" setup=[ToyFixture] begin
+@testitem "point_estimate: summary/draw/draws selection semantics" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
     using Statistics: median
 
@@ -229,20 +229,20 @@ end
     chain = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
 
     # Default summary is `mean` over every draw.
-    @test DistributionsInference.readback(leaf, chain).shape ≈ 2.5
+    @test DistributionsInference.point_estimate(leaf, chain).shape ≈ 2.5
 
-    @test DistributionsInference.readback(leaf, chain; summary = median).shape ≈ 2.5
-    @test DistributionsInference.readback(leaf, chain; summary = maximum).shape ≈ 4.0
+    @test DistributionsInference.point_estimate(leaf, chain; summary = median).shape ≈ 2.5
+    @test DistributionsInference.point_estimate(leaf, chain; summary = maximum).shape ≈ 4.0
 
     # A single draw overrides `summary`.
-    @test DistributionsInference.readback(leaf, chain; draw = 2).shape ≈ 2.0
+    @test DistributionsInference.point_estimate(leaf, chain; draw = 2).shape ≈ 2.0
 
     # `draws` restricts to a subset of iterations before reducing.
-    @test DistributionsInference.readback(leaf, chain; draws = 2:3).shape ≈ 2.5
-    @test DistributionsInference.readback(leaf, chain; draws = [1, 4]).shape ≈ 2.5
-    @test DistributionsInference.readback(leaf, chain; draws = i -> i > 2).shape ≈ 3.5
+    @test DistributionsInference.point_estimate(leaf, chain; draws = 2:3).shape ≈ 2.5
+    @test DistributionsInference.point_estimate(leaf, chain; draws = [1, 4]).shape ≈ 2.5
+    @test DistributionsInference.point_estimate(leaf, chain; draws = i -> i > 2).shape ≈ 3.5
 
-    @test DistributionsInference.readback(leaf, chain).scale == leaf.scale
+    @test DistributionsInference.point_estimate(leaf, chain).scale == leaf.scale
 end
 
 @testitem "readback_draws: keeps every draw, restricted by `draws`" setup=[ToyFixture] begin
@@ -263,7 +263,7 @@ end
     @test [f.shape for f in predicate] == [3.0, 4.0]
 end
 
-@testitem "readback: a chain missing an estimated parameter errors" setup=[ToyFixture] begin
+@testitem "point_estimate: a chain missing an estimated parameter errors" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
@@ -273,7 +273,7 @@ end
         support = (0.0, Inf))]
     mismatched_chain = DistributionsInference.to_flexichain(rows, reshape([2.0], 1, :))
 
-    @test_throws ArgumentError DistributionsInference.readback(leaf, mismatched_chain)
+    @test_throws ArgumentError DistributionsInference.point_estimate(leaf, mismatched_chain)
 end
 
 @testitem "readback acceptance: an AdvancedMH sampler round-trips" setup=[ToyFixture] begin
@@ -285,14 +285,14 @@ end
 
     # As in the engine's own acceptance test, but with a real
     # `LogDensityProblems` consumer rather than a hand-rolled loop, and draws
-    # read back through `to_flexichain`/`readback`.
+    # read back through `to_flexichain`/`point_estimate`.
     rng = Random.Xoshiro(1)
     true_shape = 3.0
     scale = 1.5
     data = rand(rng, Gamma(true_shape, scale), 500)
 
     leaf = ToyGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.5))
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
     @test LogDensityProblems.dimension(prob) == 1
 
     # The shape prior is defined only for positive values and AdvancedMH's
@@ -309,7 +309,7 @@ end
     chain = DistributionsInference.to_flexichain(leaf, draws)
     @test FlexiChains.niters(chain) == length(draws)
 
-    fitted = DistributionsInference.readback(leaf, chain)
+    fitted = DistributionsInference.point_estimate(leaf, chain)
     prior_mean = mean(LogNormal(log(2.0), 0.5))
     @test abs(fitted.shape - true_shape) < abs(prior_mean - true_shape)
     @test abs(fitted.shape - true_shape) < 0.5

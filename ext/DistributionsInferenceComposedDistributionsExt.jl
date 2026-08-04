@@ -67,7 +67,8 @@ function reconstruct(d::AbstractComposedDistribution, x::AbstractVector)
 end
 
 # The centred-pooled rows depend only on `d`, not on `x`, so this walk runs
-# once at `as_logdensity` construction rather than per evaluation (DI#28).
+# once at `distribution_to_logdensity` construction rather than per
+# evaluation (DI#28).
 function extra_prior_state(d::AbstractComposedDistribution)
     ComposedDistributions.centred_pool_rows(d)
 end

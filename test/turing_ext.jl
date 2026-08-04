@@ -1,6 +1,6 @@
-# DistributionsInference × DynamicPPL: `as_turing(obj, data)` builds a
+# DistributionsInference × DynamicPPL: `distribution_to_turing(obj, data)` builds a
 # DynamicPPL model over a fittable object's estimated parameters, a light
-# wrapper on the `as_logdensity` codec. The `VarName`-keyed readback lives in
+# wrapper on the `distribution_to_logdensity` codec. The `VarName`-keyed readback lives in
 # a separate extension over both DynamicPPL and FlexiChains, so the last items
 # here cover that boundary.
 
@@ -30,7 +30,7 @@
         return TuringGammaLeaf(x[1], d.scale, d.shape_prior)
     end
 
-    # Two estimated parameters under a DOTTED row name: `as_turing` must split
+    # Two estimated parameters under a DOTTED row name: `distribution_to_turing` must split
     # it into DynamicPPL's nested `VarName` segments the same way the readback
     # rebuilds them. Independently typed for the same AD reason as above.
     struct TwoParamLeaf{S <: Real, C <: Real}
@@ -53,7 +53,7 @@
     end
 
     # A leaf whose sole estimated row has no per-row prior, scored instead
-    # through `extra_logprior`: `as_turing` has no `~` site for it.
+    # through `extra_logprior`: `distribution_to_turing` has no `~` site for it.
     struct NoPriorLeaf
         shape::Float64
         scale::Float64
@@ -81,7 +81,7 @@ end
 @testsnippet ExtraLogpriorFixture begin
     using DistributionsInference, Distributions
 
-    # An object-dependent `extra_logprior` term threaded through `as_turing`:
+    # An object-dependent `extra_logprior` term threaded through `distribution_to_turing`:
     # `mu` is the one ESTIMATED row; `a`/`b` are FIXED, but their
     # `extra_logprior` term depends on the RECONSTRUCTED `mu`.
     struct PooledPairLeaf
@@ -109,21 +109,21 @@ end
     end
 end
 
-@testitem "as_turing extension loads under DynamicPPL alone" begin
+@testitem "distribution_to_turing extension loads under DynamicPPL alone" begin
     using DistributionsInference, DynamicPPL
     @test Base.get_extension(DistributionsInference,
         :DistributionsInferenceDynamicPPLExt) !== nothing
 end
 
-@testitem "as_turing: model log-density equals the engine's logdensity" setup=[ToyFixture] begin
+@testitem "distribution_to_turing: model log-density equals the engine's logdensity" setup=[ToyFixture] begin
     using DistributionsInference, Distributions, DynamicPPL
 
     scale = 1.5
     leaf = ToyGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.2))
     data = [1.5, 2.0, 3.2, 2.8, 1.9]
 
-    model = DistributionsInference.as_turing(leaf, data)
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    model = DistributionsInference.distribution_to_turing(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
     x = [2.3]
 
     # Conditioning the `~` site at its readback name scores the same total
@@ -133,14 +133,14 @@ end
           DistributionsInference.logdensity(prob, x)
 end
 
-@testitem "as_turing: model log-density equals logdensity with a nonzero extra_logprior" setup=[ExtraLogpriorFixture] begin
+@testitem "distribution_to_turing: model log-density equals logdensity with a nonzero extra_logprior" setup=[ExtraLogpriorFixture] begin
     using DistributionsInference, Distributions, DynamicPPL
 
     leaf = PooledPairLeaf(0.2, -0.1, 0.0)
     data = [0.5, -0.3, 1.1]
 
-    model = DistributionsInference.as_turing(leaf, data)
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    model = DistributionsInference.distribution_to_turing(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
     x = [0.7]
 
     # A nonzero `extra_logprior` exercises the `@addlogprob!` term the
@@ -154,15 +154,15 @@ end
           DistributionsInference.logdensity(prob, x)
 end
 
-@testitem "as_turing: model log-density equals logdensity with 2 estimated parameters" setup=[TuringFixture] begin
+@testitem "distribution_to_turing: model log-density equals logdensity with 2 estimated parameters" setup=[TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, ForwardDiff
     using LogDensityProblems
 
     leaf = TwoParamLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2, 2.8, 1.9]
 
-    model = DistributionsInference.as_turing(leaf, data)
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    model = DistributionsInference.distribution_to_turing(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
     x = [2.3, 1.1]
 
     # Both `~` sites conditioned at once: exact equality for a multi-site
@@ -186,7 +186,7 @@ end
         θ -> DistributionsInference.logdensity(prob, θ), x)
 end
 
-@testitem "as_turing round-trip: NUTS chain reads back through readback" setup=[TuringFixture] begin
+@testitem "distribution_to_turing round-trip: NUTS chain reads back through point_estimate" setup=[TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, Turing, Random
     using FlexiChains: FlexiChains, VNChain
 
@@ -194,7 +194,7 @@ end
     leaf = TuringGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.2))
     data = [1.5, 2.0, 3.2, 2.8, 1.9]
 
-    model = DistributionsInference.as_turing(leaf, data)
+    model = DistributionsInference.distribution_to_turing(leaf, data)
 
     Random.seed!(1)
     chain = sample(model, NUTS(), 200; chain_type = VNChain, progress = false)
@@ -203,7 +203,7 @@ end
     vns = Set(string.(collect(FlexiChains.parameters(chain))))
     @test "d.shape" in vns
 
-    fitted = DistributionsInference.readback(leaf, chain)
+    fitted = DistributionsInference.point_estimate(leaf, chain)
     @test fitted.scale == scale
     @test fitted.shape > 0
 
@@ -212,13 +212,13 @@ end
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
 
     # `distribution_params` also dispatches on a VarName-keyed chain, through
-    # the same `_to_symbol_chain` conversion `readback` uses.
+    # the same `_to_symbol_chain` conversion `point_estimate` uses.
     nt = DistributionsInference.distribution_params(leaf, chain)
     @test keys(nt) == (:shape,)
     @test nt.shape == fitted.shape
 end
 
-@testitem "as_turing acceptance: NUTS recovers the true parameter" setup=[TuringFixture] begin
+@testitem "distribution_to_turing acceptance: NUTS recovers the true parameter" setup=[TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, Turing, Random
     using FlexiChains: FlexiChains, VNChain
 
@@ -228,11 +228,11 @@ end
     data = rand(rng, Gamma(true_shape, scale), 500)
 
     leaf = TuringGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.5))
-    model = DistributionsInference.as_turing(leaf, data)
+    model = DistributionsInference.distribution_to_turing(leaf, data)
 
     Random.seed!(2)
     chain = sample(model, NUTS(), 1000; chain_type = VNChain, progress = false)
-    fitted = DistributionsInference.readback(leaf, chain)
+    fitted = DistributionsInference.point_estimate(leaf, chain)
 
     prior_mean = mean(LogNormal(log(2.0), 0.5))
     @test abs(fitted.shape - true_shape) < abs(prior_mean - true_shape)
@@ -240,13 +240,13 @@ end
     @test fitted.scale == scale
 end
 
-@testitem "as_turing round-trip: 2 estimated parameters with dotted names" setup=[TuringFixture] begin
+@testitem "distribution_to_turing round-trip: 2 estimated parameters with dotted names" setup=[TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, Turing, Random
     using FlexiChains: FlexiChains, VNChain
 
     leaf = TwoParamLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2, 2.8, 1.9]
-    model = DistributionsInference.as_turing(leaf, data)
+    model = DistributionsInference.distribution_to_turing(leaf, data)
 
     Random.seed!(3)
     chain = sample(model, NUTS(), 200; chain_type = VNChain, progress = false)
@@ -255,7 +255,7 @@ end
     @test "d.leaf.shape" in vns
     @test "d.leaf.scale" in vns
 
-    fitted = DistributionsInference.readback(leaf, chain)
+    fitted = DistributionsInference.point_estimate(leaf, chain)
     @test fitted.shape > 0
     @test fitted.scale > 0
 
@@ -264,24 +264,24 @@ end
 
     # A chain read back at the wrong prefix errors rather than silently
     # matching nothing.
-    @test_throws ArgumentError DistributionsInference.readback(
+    @test_throws ArgumentError DistributionsInference.point_estimate(
         leaf, chain; prefix = :wrong)
 end
 
-@testitem "as_turing: a 0-estimated object samples and reads back unchanged" setup=[ToyFixture] begin
+@testitem "distribution_to_turing: a 0-estimated object samples and reads back unchanged" setup=[ToyFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, Turing, Random
     using FlexiChains: FlexiChains, VNChain
 
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    model = DistributionsInference.as_turing(fixed_leaf, data)
+    model = DistributionsInference.distribution_to_turing(fixed_leaf, data)
     @test DistributionsInference.flat_dimension(fixed_leaf) == 0
 
     Random.seed!(4)
     chain = sample(model, Prior(), 50; chain_type = VNChain, progress = false)
     @test isempty(FlexiChains.parameters(chain))
 
-    fitted = DistributionsInference.readback(fixed_leaf, chain)
+    fitted = DistributionsInference.point_estimate(fixed_leaf, chain)
     @test fitted == fixed_leaf
 
     all_fitted = DistributionsInference.readback_draws(fixed_leaf, chain)
@@ -289,7 +289,7 @@ end
     @test all(==(fixed_leaf), all_fitted)
 end
 
-@testitem "as_turing: the concrete-field guard fires at the turing call site too" begin
+@testitem "distribution_to_turing: the concrete-field guard fires at the turing call site too" begin
     using DistributionsInference, Distributions, DynamicPPL, ForwardDiff
     using LogDensityProblems
 
@@ -324,13 +324,13 @@ end
 
     leaf = TuringConcreteLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    model = DistributionsInference.as_turing(leaf, data)
+    model = DistributionsInference.distribution_to_turing(leaf, data)
     ldf = DynamicPPL.LogDensityFunction(model)
 
     # Ordinary (non-AD) evaluation is unaffected: the model still scores the
     # same total the codec does at the same point.
     x = [2.5]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
     @test LogDensityProblems.logdensity(ldf, x) ≈
           DistributionsInference.logdensity(prob, x)
 
@@ -349,28 +349,28 @@ end
     @test occursin("generically typed", err.msg)
 end
 
-@testitem "as_turing rejects an estimated row with no per-row prior" setup=[TuringFixture] begin
+@testitem "distribution_to_turing rejects an estimated row with no per-row prior" setup=[TuringFixture] begin
     using DistributionsInference
 
     leaf = NoPriorLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    @test_throws ArgumentError DistributionsInference.as_turing(leaf, data)
+    @test_throws ArgumentError DistributionsInference.distribution_to_turing(leaf, data)
 end
 
-@testitem "readback: the VarName empty-chain shortcut guards on the chain, not obj" setup=[
+@testitem "point_estimate: the VarName empty-chain shortcut guards on the chain, not obj" setup=[
     ToyFixture, TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL
     using FlexiChains: FlexiChains, VarName, @varname
 
-    # (a) `obj` estimates NOTHING but the chain carries a parameter: the
-    # `_to_symbol_chain` shortcut must guard on the CHAIN being empty, not on
+    # (a) `obj` estimates nothing but the chain carries a parameter: the
+    # `_to_symbol_chain` shortcut must guard on the chain being empty, not on
     # `obj`'s estimated rows, or the mismatch is silently swallowed.
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     mismatched_chain = FlexiChains.FlexiChain{VarName}(3, 1,
         Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}(
             FlexiChains.Parameter(@varname(d.shape)) => reshape(
             [1.0, 2.0, 3.0], 3, 1)))
-    @test_throws ArgumentError DistributionsInference.readback(
+    @test_throws ArgumentError DistributionsInference.point_estimate(
         fixed_leaf, mismatched_chain)
 
     # (b) `obj` estimates a parameter but the chain is genuinely empty: must
@@ -379,7 +379,7 @@ end
     leaf = TuringGammaLeaf(2.0, 1.5, LogNormal(log(2.0), 0.2))
     empty_chain = FlexiChains.FlexiChain{VarName}(5, 1,
         Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}())
-    @test_throws ArgumentError DistributionsInference.readback(leaf, empty_chain)
+    @test_throws ArgumentError DistributionsInference.point_estimate(leaf, empty_chain)
 end
 
 @testitem "the DynamicPPL x FlexiChains readback extension loads" begin
@@ -391,7 +391,7 @@ end
         :DistributionsInferenceDynamicPPLFlexiChainsExt) !== nothing
 end
 
-@testitem "as_turing needs DynamicPPL alone, not FlexiChains" begin
+@testitem "distribution_to_turing needs DynamicPPL alone, not FlexiChains" begin
     using DistributionsInference
 
     # The `VarName`-keyed readback lives in its own extension, so a project
@@ -426,7 +426,7 @@ end
     end
 
     leaf = AloneLeaf(2.0, 1.5)
-    model = DistributionsInference.as_turing(leaf, [1.5, 2.0, 3.2])
+    model = DistributionsInference.distribution_to_turing(leaf, [1.5, 2.0, 3.2])
     vi = DynamicPPL.VarInfo(model)
     isfinite(DynamicPPL.logjoint(model, vi)) ||
         error("the model's log-joint is not finite")

@@ -3,7 +3,7 @@
 # composed distribution over CD's public codec, checked against CD's own
 # equivalents across plain, pooled, `Resolve`-Dirichlet and shared-tag trees.
 # `logdensity` is checked against reference values baked in from CD 0.1.1's
-# own `as_logdensity`/`logdensity`, since CD 0.2 removes both (CD#324).
+# own `distribution_to_logdensity`/`logdensity`, since CD 0.2 removes both (CD#324).
 
 @testsnippet ComposedFixture begin
     using DistributionsInference, Distributions, ComposedDistributions
@@ -95,9 +95,9 @@ end
 
 @testitem "logdensity matches the CD reference for a plain tree" setup=[ComposedFixture] begin
     data = [[0.5, 2.0], [1.0, 3.0]]
-    prob = DistributionsInference.as_logdensity(plain_tree, data)
+    prob = DistributionsInference.distribution_to_logdensity(plain_tree, data)
 
-    # Computed with ComposedDistributions 0.1.1 as_logdensity, removed in
+    # Computed with ComposedDistributions 0.1.1 distribution_to_logdensity, removed in
     # CD 0.2 (CD#324).
     expected = Dict([1.5] => -5.387924930600233,
         [2.0] => -5.22923288347558,
@@ -111,10 +111,10 @@ end
 @testitem "logdensity matches the CD reference for a non-centred pooled tree" setup=[
     ComposedFixture] begin
     data = [[0.5, 2.0, 1.2], [1.0, 3.0, 0.8], [0.9, 1.8, 1.1]]
-    prob = DistributionsInference.as_logdensity(noncentred_tree, data)
+    prob = DistributionsInference.distribution_to_logdensity(noncentred_tree, data)
 
     x = [0.1, 0.2, -0.3, 0.4, 0.5]
-    # Computed with ComposedDistributions 0.1.1 as_logdensity, removed in
+    # Computed with ComposedDistributions 0.1.1 distribution_to_logdensity, removed in
     # CD 0.2 (CD#324).
     @test DistributionsInference.logdensity(prob, x) ≈
           -15.433629679593508 rtol=1e-10
@@ -140,16 +140,16 @@ end
 @testitem "logdensity matches the CD reference for a centred pooled tree (incl. extra_logprior)" setup=[
     ComposedFixture] begin
     data = [[0.4, 0.7], [0.6, 0.5]]
-    prob = DistributionsInference.as_logdensity(centred_tree, data)
+    prob = DistributionsInference.distribution_to_logdensity(centred_tree, data)
 
     x = [0.3, 0.6]
-    # Computed with ComposedDistributions 0.1.1 as_logdensity, removed in
+    # Computed with ComposedDistributions 0.1.1 distribution_to_logdensity, removed in
     # CD 0.2 (CD#324).
     @test DistributionsInference.logdensity(prob, x) ≈
           -3.0600698871687486 rtol=1e-10
 end
 
-@testitem "readback: the generic FlexiChains machinery round-trips a pooled, shared tree" setup=[ComposedFixture] begin
+@testitem "point_estimate: the generic FlexiChains machinery round-trips a pooled, shared tree" setup=[ComposedFixture] begin
     using FlexiChains
 
     tree = noncentred_tree
@@ -159,7 +159,7 @@ end
     draws = [[0.05 * i + 0.01 * j for j in 1:n] for i in 1:20]
     chain = DistributionsInference.to_flexichain(tree, draws)
 
-    fitted = DistributionsInference.readback(tree, chain)
+    fitted = DistributionsInference.point_estimate(tree, chain)
     expected_x = [mean(d[i] for d in draws) for i in 1:n]
     @test fitted == ComposedDistributions.reconstruct(tree, expected_x)
 
@@ -168,11 +168,11 @@ end
     @test all_fitted[end] == ComposedDistributions.reconstruct(tree, draws[end])
 end
 
-@testitem "as_turing rejects a centred-pooled tree, mirroring CD's own guard" setup=[ComposedFixture] begin
+@testitem "distribution_to_turing rejects a centred-pooled tree, mirroring CD's own guard" setup=[ComposedFixture] begin
     using DynamicPPL
 
     data = [[0.4, 0.7], [0.6, 0.5]]
-    @test_throws ArgumentError DistributionsInference.as_turing(centred_tree, data)
+    @test_throws ArgumentError DistributionsInference.distribution_to_turing(centred_tree, data)
 end
 
 # The three round trips below exercise the trickiest ordering/dedup cases (a
@@ -180,52 +180,52 @@ end
 # stick-breaking simplex; a pooled member's `.z` latent) through a real
 # `sample(..., NUTS(), ...)` chain rather than a hand-built one. Ported from
 # ComposedDistributions' own `test/composers/turing_ext.jl` when CD dropped
-# its `as_turing`/`chain_to_params` surface (CD#221, CD#233).
+# its `distribution_to_turing`/`chain_to_params` surface (CD#221, CD#233).
 
-@testitem "as_turing round-trip: shared-tag readback lands on the right leaf" setup=[
+@testitem "distribution_to_turing round-trip: shared-tag readback lands on the right leaf" setup=[
     ComposedFixture] begin
     using DynamicPPL, Turing, Random
 
     data = [[0.5, 0.6], [1.0, 0.9], [0.8, 0.7]]
-    model = DistributionsInference.as_turing(shared_tree, data)
+    model = DistributionsInference.distribution_to_turing(shared_tree, data)
 
     Random.seed!(23)
     chain = sample(model, NUTS(), 200; progress = false)
 
     # Exactly ONE site for the tie, at the tag's dotted name, not one per
     # occurrence.
-    fitted = DistributionsInference.readback(shared_tree, chain)
+    fitted = DistributionsInference.point_estimate(shared_tree, chain)
     @test ComposedDistributions.event(fitted, :a) ==
           ComposedDistributions.event(fitted, :b)
     @test !ComposedDistributions.has_uncertain(fitted)
 end
 
-@testitem "as_turing round-trip: Dirichlet branch_probs stick coordinate" setup=[
+@testitem "distribution_to_turing round-trip: Dirichlet branch_probs stick coordinate" setup=[
     ComposedFixture] begin
     using DynamicPPL, Turing, Random, Distributions
 
     data = [0.8, 1.5, 2.2, 0.6]
-    model = DistributionsInference.as_turing(resolve_tree, data)
+    model = DistributionsInference.distribution_to_turing(resolve_tree, data)
 
     Random.seed!(7)
     chain = sample(model, NUTS(), 200; progress = false)
 
-    fitted = DistributionsInference.readback(resolve_tree, chain)
+    fitted = DistributionsInference.point_estimate(resolve_tree, chain)
     @test !ComposedDistributions.has_uncertain(fitted)
     p = collect(values(Distributions.probs(fitted)))
     @test sum(p) ≈ 1.0
 end
 
-@testitem "as_turing round-trip: non-centred pooled tree" setup=[ComposedFixture] begin
+@testitem "distribution_to_turing round-trip: non-centred pooled tree" setup=[ComposedFixture] begin
     using DynamicPPL, Turing, Random
 
     data = [[0.5, 2.0, 1.2], [1.0, 3.0, 0.8], [0.9, 1.8, 1.1]]
-    model = DistributionsInference.as_turing(noncentred_tree, data)
+    model = DistributionsInference.distribution_to_turing(noncentred_tree, data)
 
     Random.seed!(13)
     chain = sample(model, NUTS(), 200; progress = false)
 
-    fitted = DistributionsInference.readback(noncentred_tree, chain)
+    fitted = DistributionsInference.point_estimate(noncentred_tree, chain)
     @test !ComposedDistributions.has_uncertain(fitted)
     @test ComposedDistributions.event(fitted, :north) isa Distributions.Gamma
     @test ComposedDistributions.event(fitted, :east) isa Distributions.Gamma

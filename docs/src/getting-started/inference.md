@@ -37,11 +37,11 @@ data = [1.5, 2.0, 3.2, 1.8, 2.6]
 
 ## The log density
 
-[`as_logdensity`](@ref) packages the object and the data into a log-density over just its estimated parameters.
+[`distribution_to_logdensity`](@ref) packages the object and the data into a log-density over just its estimated parameters.
 [`flat_dimension`](@ref) counts them: here that is `shape` alone, since `scale` carries no prior and stays fixed at its template value.
 
 ```@example fitting
-prob = DistributionsInference.as_logdensity(delay, data)
+prob = distribution_to_logdensity(delay, data)
 DistributionsInference.flat_dimension(delay)
 ```
 
@@ -55,18 +55,18 @@ DistributionsInference.logdensity(prob, [2.0])
 
 `loglik` is a pluggable reducer `(obj, data) -> Real`, not fixed to a sum of `logpdf`: any scoring rule reusing the same parameter inventory, [`reconstruct`](@ref), priors and readback works unchanged, so a caller need not build a bespoke fitting path for it.
 
-A SURVIVAL-scoring reducer is one worked case: records known only to exceed a bound (a right-censored observation) score through `logccdf` instead of `logpdf`.
+A survival-scoring reducer is one worked case: records known only to exceed a bound (a right-censored observation) score through `logccdf` instead of `logpdf`.
 
 ```@example fitting
 survival_loglik(obj, records) = sum(y -> logccdf(Gamma(obj.shape, obj.scale), y), records)
 bounds = [1.0, 1.5, 2.0]
-survival_prob = DistributionsInference.as_logdensity(delay, bounds; loglik = survival_loglik)
+survival_prob = distribution_to_logdensity(delay, bounds; loglik = survival_loglik)
 DistributionsInference.logdensity(survival_prob, [2.0])
 ```
 
 Because `survival_loglik` is written generically (`logccdf` differentiates the same way `logpdf` does), point estimation with an external optimiser, penalised point estimation (the same objective, any prior), and gradient-based posterior sampling all work from this one reducer, exactly as they do for the default data likelihood elsewhere on this page.
 
-An ESTIMATED (Monte Carlo) likelihood — one whose reducer draws random replicates internally, e.g. to marginalise a latent variable — is noisier and, unless written through a reparameterisation that keeps it differentiable, not usable by a gradient-based sampler at all: fall back to a gradient-free sampler (`AdvancedMH`, or any other `LogDensityProblems` consumer that does not need a gradient) for a reducer like this. More replicates reduce the noise in each evaluation at the cost of more compute per draw; too few replicates can bias a gradient-free sampler's acceptance rate as easily as they would bias a gradient-based one, so replicate count is a tuning knob to check by inflating it until further increases stop changing the posterior summary.
+An estimated (Monte Carlo) likelihood — one whose reducer draws random replicates internally, e.g. to marginalise a latent variable — is noisier and, unless written through a reparameterisation that keeps it differentiable, not usable by a gradient-based sampler at all: fall back to a gradient-free sampler (`AdvancedMH`, or any other `LogDensityProblems` consumer that does not need a gradient) for a reducer like this. More replicates reduce the noise in each evaluation at the cost of more compute per draw; too few replicates can bias a gradient-free sampler's acceptance rate as easily as they would bias a gradient-based one, so replicate count is a tuning knob to check by inflating it until further increases stop changing the posterior summary.
 
 ## Sampling without a probabilistic programming language
 
@@ -88,36 +88,36 @@ draws = [t.params for t in transitions][1001:end]
 length(draws)
 ```
 
-[`to_flexichain`](@ref) keys the raw draws by the estimated rows' dotted names, so [`readback`](@ref) reduces them straight back onto the object.
+[`to_flexichain`](@ref) keys the raw draws by the estimated rows' dotted names, so [`point_estimate`](@ref) reduces them straight back onto the object.
 
 ```@example fitting
-chain = DistributionsInference.to_flexichain(delay, draws)
-fitted = DistributionsInference.readback(delay, chain)
+chain = to_flexichain(delay, draws)
+fitted = point_estimate(delay, chain)
 fitted.shape
 ```
 
 [`distribution_params`](@ref) is the params-first primitive underneath: the same reduction, keyed by dotted name, before the object is rebuilt.
 
 ```@example fitting
-DistributionsInference.distribution_params(delay, chain)
+distribution_params(delay, chain)
 ```
 
 [`readback_draws`](@ref) keeps every draw instead of reducing them, for a per-draw posterior-predictive summary.
 
 ```@example fitting
-all_fitted = DistributionsInference.readback_draws(delay, chain)
+all_fitted = readback_draws(delay, chain)
 length(all_fitted)
 ```
 
 ## Maximum likelihood and maximum a posteriori
 
 `prob`'s objective is already a plain (unnormalised) log-density, so a standard external optimiser can find a point estimate directly: minimising the negative log-likelihood is maximum likelihood, and minimising the negative log-posterior is maximum a posteriori.
-DistributionsInference ships no estimator method for this; [`as_optimisation_objective`](@ref) is only the thin wiring of the unconstrained transform, the objective and [`reconstruct`](@ref) together, once `Bijectors` is loaded — the optimiser itself (`Optim.jl` here) stays external.
+DistributionsInference ships no estimator method for this; [`logdensity_to_objective`](@ref) is only the thin wiring of the unconstrained transform, the objective and [`reconstruct`](@ref) together, once `Bijectors` is loaded — the optimiser itself (`Optim.jl` here) stays external.
 
 ```@example fitting
 using Bijectors, Optim
 
-f = DistributionsInference.as_optimisation_objective(prob)
+f = logdensity_to_objective(prob)
 res = optimize(f, zeros(DistributionsInference.flat_dimension(delay)), LBFGS())
 z_hat = Optim.minimizer(res)
 ```
@@ -130,7 +130,7 @@ map_fit = DistributionsInference.reconstruct(prob.obj, x_hat)
 map_fit.shape
 ```
 
-`logdensity` always adds an ESTIMATED row's own prior term (that is what makes the row estimated in the first place; see [`parameter_rows`](@ref)), so a maximum-likelihood point needs an object whose prior is negligible next to the data likelihood, rather than just swapping `loglik`.
+`logdensity` always adds an estimated row's own prior term (that is what makes the row estimated in the first place; see [`parameter_rows`](@ref)), so a maximum-likelihood point needs an object whose prior is negligible next to the data likelihood, rather than just swapping `loglik`.
 A separate type carrying a very diffuse prior on `shape` gives exactly that: its curvature near the likelihood's own optimum is small enough that the MAP point below is the maximum-likelihood estimate up to numerical precision, with the wiring otherwise unchanged.
 
 ```@example fitting
@@ -153,8 +153,8 @@ function DistributionsInference.reconstruct(d::ToyDelayML, x::AbstractVector)
 end
 
 ml_delay = ToyDelayML(2.0, 1.0)
-ml_prob = DistributionsInference.as_logdensity(ml_delay, data)
-ml_f = DistributionsInference.as_optimisation_objective(ml_prob)
+ml_prob = distribution_to_logdensity(ml_delay, data)
+ml_f = logdensity_to_objective(ml_prob)
 ml_n = DistributionsInference.flat_dimension(ml_delay)
 ml_res = optimize(ml_f, zeros(ml_n), LBFGS())
 ml_x, _ = DistributionsInference.to_constrained(
@@ -164,22 +164,22 @@ DistributionsInference.reconstruct(ml_delay, ml_x).shape
 
 ## Sampling with Turing
 
-[`as_turing`](@ref) wraps the same log-density as a `DynamicPPL` model, so the object is sampleable with Turing directly.
+[`distribution_to_turing`](@ref) wraps the same log-density as a `DynamicPPL` model, so the object is sampleable with Turing directly.
 Each estimated row becomes a named site drawn from its own prior, and the data likelihood is added from the object rebuilt at the draw.
 
 ```@example fitting
 using DynamicPPL, Turing
 using FlexiChains: VNChain
 
-model = DistributionsInference.as_turing(delay, data)
+model = distribution_to_turing(delay, data)
 Random.seed!(1)
 turing_chain = sample(model, NUTS(), 200; chain_type = VNChain, progress = false)
 ```
 
-[`readback`](@ref) and [`readback_draws`](@ref) read a `VNChain` back onto the distribution exactly as they read the AdvancedMH chain above; the dotted-name convention is the same either way, so a project can switch samplers without touching its readback code.
+[`point_estimate`](@ref) and [`readback_draws`](@ref) read a `VNChain` back onto the distribution exactly as they read the AdvancedMH chain above; the dotted-name convention is the same either way, so a project can switch samplers without touching its readback code.
 
 ```@example fitting
-DistributionsInference.readback(delay, turing_chain).shape
+point_estimate(delay, turing_chain).shape
 ```
 
 ## Fitting a composed distribution
@@ -195,12 +195,12 @@ tree = compose((
     admit_death = LogNormal(0.5, 0.4)))
 tree_data = [[0.5, 2.0], [1.0, 3.0], [0.8, 2.5]]
 
-tree_prob = DistributionsInference.as_logdensity(tree, tree_data)
+tree_prob = distribution_to_logdensity(tree, tree_data)
 DistributionsInference.flat_dimension(tree)
 ```
 
 The one estimated parameter is `onset_admit`'s shape (the [`uncertain`](@ref) leaf); `admit_death` stays fixed, exactly like `ToyDelay`'s `scale` above.
-Sampling and reading the fit back are the same calls against `tree` instead of `delay`, `to_flexichain`/`readback` or `as_turing` alike; the AdvancedMH sampler from earlier on this page needs no change beyond pointing it at `tree_prob`.
+Sampling and reading the fit back are the same calls against `tree` instead of `delay`, `to_flexichain`/`point_estimate` or `distribution_to_turing` alike; the AdvancedMH sampler from earlier on this page needs no change beyond pointing it at `tree_prob`.
 
 ```@example fitting
 tree_mh_model = AdvancedMH.DensityModel() do x
@@ -209,25 +209,25 @@ end
 tree_transitions = sample(Xoshiro(1), tree_mh_model, sampler, 2000;
     param_names = ["onset_admit.shape"], progress = false)
 tree_draws = [t.params for t in tree_transitions][1001:end]
-tree_chain = DistributionsInference.to_flexichain(tree, tree_draws)
-fitted_tree = DistributionsInference.readback(tree, tree_chain)
+tree_chain = to_flexichain(tree, tree_draws)
+fitted_tree = point_estimate(tree, tree_chain)
 event(fitted_tree, :onset_admit)
 ```
 
-`as_turing` works on a tree exactly as it does on `delay`, one named site per estimated row.
+`distribution_to_turing` works on a tree exactly as it does on `delay`, one named site per estimated row.
 
 ```@example fitting
-tree_model = DistributionsInference.as_turing(tree, tree_data)
+tree_model = distribution_to_turing(tree, tree_data)
 Random.seed!(1)
 tree_turing_chain = sample(tree_model, NUTS(), 200; chain_type = VNChain, progress = false)
-event(DistributionsInference.readback(tree, tree_turing_chain), :onset_admit)
+event(point_estimate(tree, tree_turing_chain), :onset_admit)
 ```
 
-A tree with a *centred* `pool` (ComposedDistributions' partial-pooling spec) is the one case `as_turing` refuses: a centred pool's member row has no fixed `~` prior of its own (it is scored against the reconstructed population instead, through [`extra_logprior`](@ref)), and DynamicPPL has no sampling path for that yet, so `as_turing` raises a clear error naming the affected rows rather than silently mis-scoring them; fit that tree through `as_logdensity` and a `LogDensityProblems`-compatible sampler instead, exactly as in the section above.
+A tree with a *centred* `pool` (ComposedDistributions' partial-pooling spec) is the one case `distribution_to_turing` refuses: a centred pool's member row has no fixed `~` prior of its own (it is scored against the reconstructed population instead, through [`extra_logprior`](@ref)), and DynamicPPL has no sampling path for that yet, so `distribution_to_turing` raises a clear error naming the affected rows rather than silently mis-scoring them; fit that tree through `distribution_to_logdensity` and a `LogDensityProblems`-compatible sampler instead, exactly as in the section above.
 
-A `ComposedDistributions` tree pairs `readback`'s output directly with its own `update(tree, params)` (documented on ComposedDistributions' verb map, linked below) — chain readback itself is this package's job, not ComposedDistributions'; this page shows `readback` because it is the one spelling that works identically whether the object came from this package, from ComposedDistributions, or from a hand-written type like `ToyDelay`.
+A `ComposedDistributions` tree pairs `point_estimate`'s output directly with its own `update(tree, params)` (documented on ComposedDistributions' verb map, linked below) — chain readback itself is this package's job, not ComposedDistributions'; this page shows `point_estimate` because it is the one spelling that works identically whether the object came from this package, from ComposedDistributions, or from a hand-written type like `ToyDelay`.
 
 ## See also
 
-- [Public API](@ref public-api) for the full protocol surface (`parameter_rows`, `reconstruct`, `distribution_priors`, `distribution_params`, and the rest).
+- [Public API](@ref public-api) for the full protocol surface (`parameter_rows`, `reconstruct`, `with_priors`, `distribution_params`, and the rest).
 - ComposedDistributions' [verb map](https://composeddistributions.epiaware.org/dev/getting-started/concepts) for the tree-shaped verbs (`compose`, `uncertain`, `pool`, `update`) this page's composed-distribution example builds on.

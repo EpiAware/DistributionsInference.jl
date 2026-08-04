@@ -1,6 +1,6 @@
 # The fit protocol: the public surface a fittable object implements so the
 # log-density engine (`engine.jl`) can assemble and evaluate a posterior over
-# its estimated parameters. A row whose `prior` is not `nothing` is ESTIMATED;
+# its estimated parameters. A row whose `prior` is not `nothing` is estimated;
 # the engine's flat vector spans exactly those rows, in `parameter_rows` order.
 #
 # A downstream package opts in by extending `parameter_rows`/`reconstruct` on
@@ -17,10 +17,10 @@ The scalar parameter rows of a fittable object.
   parameter, e.g. `Symbol(\"onset.shape\")`).
 - `value`: the parameter's current value.
 - `prior`: the attached prior (a `UnivariateDistribution`) if the parameter is
-  ESTIMATED, or `nothing` if it is fixed at `value`.
+  estimated, or `nothing` if it is fixed at `value`.
 - `support`: the `(lower, upper)` bounds of the parameter's admissible domain.
 
-A parameter estimated under an OBJECT-DEPENDENT prior (e.g. a hierarchical
+A parameter estimated under an object-dependent prior (e.g. a hierarchical
 population term whose log-density depends on other reconstructed parameters,
 not on `value` alone) also carries `prior = nothing` at the row level — the
 same as a fixed parameter — and is scored instead through
@@ -32,7 +32,7 @@ from the flat vector).
 
 Every fittable object implements this with its own method;
 [`estimated_rows`](@ref), [`flat_dimension`](@ref) and the engine's
-[`as_logdensity`](@ref) are built on it. A bare `AbstractVector` of
+[`distribution_to_logdensity`](@ref) are built on it. A bare `AbstractVector` of
 already-built rows is its own `parameter_rows`, so a literal row list can
 stand in for a fittable object without a wrapping type.
 
@@ -46,7 +46,7 @@ using DistributionsInference, Distributions
 rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
         support = (0.0, Inf)),
     (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
-DistributionsInference.parameter_rows(rows) === rows
+parameter_rows(rows) === rows
 ```
 
 # See also
@@ -63,7 +63,7 @@ parameter_rows(rows::AbstractVector{<:NamedTuple}) = rows
 
 @doc "
 
-The ESTIMATED rows of a fittable object: those with a non-`nothing` `prior`.
+The estimated rows of a fittable object: those with a non-`nothing` `prior`.
 
 `estimated_rows(obj)` filters [`parameter_rows`](@ref)`(obj)` to the rows whose
 `prior` field is set, in the same order. These are the free parameters the
@@ -95,7 +95,7 @@ end
 
 The estimated parameter dimension of a fittable object.
 
-`flat_dimension(obj)` is the number of scalar ESTIMATED parameters: the count
+`flat_dimension(obj)` is the number of scalar estimated parameters: the count
 of [`parameter_rows`](@ref)`(obj)` rows whose `prior` is not `nothing`. An
 object with no estimated rows has flat dimension 0. It is the length of the
 flat vector [`reconstruct`](@ref) consumes and the engine's
@@ -127,7 +127,7 @@ Reconstruct a concrete fittable object from an estimated flat parameter
 vector.
 
 `reconstruct(obj, x)` returns a new object of the same kind as `obj` with each
-ESTIMATED parameter (an [`estimated_rows`](@ref)`(obj)` row, in
+estimated parameter (an [`estimated_rows`](@ref)`(obj)` row, in
 [`parameter_rows`](@ref) order) taken from `x`, and every fixed parameter held
 at its value in `obj`. `x` is [`flat_dimension`](@ref)`(obj)` long — empty when
 `obj` estimates nothing, in which case `reconstruct(obj, x) == obj`.
@@ -137,7 +137,7 @@ method, alongside [`parameter_rows`](@ref). The engine's
 [`logdensity`](@ref) calls it once per evaluation to score `prob.data`
 against the object collapsed at `x`.
 
-An ESTIMATED field's type must stay GENERIC (e.g. `shape::S`, not
+An estimated field's type must stay generic (e.g. `shape::S`, not
 `shape::Float64`): a gradient-based sampler threads a tracer number (a
 `ForwardDiff.Dual`, a `ReverseDiff.TrackedReal`, ...) through `x`, and a
 concrete field rejects it with an opaque `MethodError` from inside `obj`'s own
@@ -176,7 +176,8 @@ DistributionsInference.reconstruct(DemoLeaf(2.0, 1.0), [3.5])
 
 # See also
 - [`parameter_rows`](@ref): the row inventory whose order fixes `x`'s layout.
-- [`as_logdensity`](@ref): the engine assembler built on `reconstruct`.
+- [`distribution_to_logdensity`](@ref): the engine assembler built on
+  `reconstruct`.
 "
 function reconstruct(obj, x::AbstractVector)
     throw(ArgumentError(
@@ -226,17 +227,17 @@ end
 
 @doc "
 
-The estimated rows whose OWN struct field is concretely typed, precomputed
+The estimated rows whose own struct field is concretely typed, precomputed
 once.
 
-`_concrete_field_candidates(objtype, rows)` walks the ESTIMATED `rows`
-[`as_logdensity`](@ref) already derived at construction and keeps the
-`(index, name, declared_type)` triples the concrete-field-under-AD guard
+`_concrete_field_candidates(objtype, rows)` walks the estimated `rows`
+[`distribution_to_logdensity`](@ref) already derived at construction and keeps
+the `(index, name, declared_type)` triples the concrete-field-under-AD guard
 (#48) must check: `index` into the estimated flat vector, `name` the row's
 own struct field, `declared_type` that field's concrete type. A row with a
 dotted `name` (a nested structure this generic check does not introspect) or
 a non-concrete declared type is dropped, so a properly generic object gets an
-EMPTY list and [`logdensity`](@ref)'s per-evaluation guard is a single
+empty list and [`logdensity`](@ref)'s per-evaluation guard is a single
 `isempty` check.
 "
 function _concrete_field_candidates(objtype, rows)
@@ -252,7 +253,7 @@ function _concrete_field_candidates(objtype, rows)
     return out
 end
 
-# Checked per ELEMENT of `x`, not `x`'s container `eltype`: the `DynamicPPL`
+# Checked per element of `x`, not `x`'s container `eltype`: the `DynamicPPL`
 # turing model threads values through an abstractly-typed `Vector{Real}`, so
 # only each element's own runtime type distinguishes a `Float64` draw from a
 # `Dual` one.
@@ -271,8 +272,8 @@ end
 
 Structure-dependent state [`extra_logprior`](@ref) needs, computed once.
 
-`extra_prior_state(obj)` runs once, when [`as_logdensity`](@ref) assembles a
-[`FitLogDensity`](@ref), and the result is threaded into every
+`extra_prior_state(obj)` runs once, when [`distribution_to_logdensity`](@ref)
+assembles a [`FitLogDensity`](@ref), and the result is threaded into every
 [`extra_logprior`](@ref) call for that `obj`. The default returns `nothing`,
 which suits most fittable objects since [`extra_logprior`](@ref)'s default is
 a constant `0.0`.
@@ -299,13 +300,13 @@ DistributionsInference.extra_prior_state(::ToyLeaf) === nothing
 
 # See also
 - [`extra_logprior`](@ref): consumes this state.
-- [`as_logdensity`](@ref): computes it once, at construction.
+- [`distribution_to_logdensity`](@ref): computes it once, at construction.
 "
 extra_prior_state(obj) = nothing
 
 @doc "
 
-Additional log-prior mass that depends on the RECONSTRUCTED object.
+Additional log-prior mass that depends on the reconstructed object.
 
 `extra_logprior(obj, reconstructed, x, state)` is the neutral extension point
 for a prior term that cannot be scored per-row against `x` alone — a

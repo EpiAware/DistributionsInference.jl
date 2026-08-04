@@ -168,7 +168,7 @@ end
 
     template = PenalisedLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    prob = DistributionsInference.as_logdensity(template, data)
+    prob = DistributionsInference.distribution_to_logdensity(template, data)
     x = [2.5]
     expected = -0.5 * 2.5^2 + sum(y -> logpdf(Gamma(2.5, 1.0), y), data)
     @test DistributionsInference.logdensity(prob, x) ≈ expected
@@ -201,7 +201,7 @@ end
 
     leaf = ConcreteFitLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
 
     @test DistributionsInference.logdensity(prob, [2.5]) ≈
           logpdf(LogNormal(log(2.0), 0.2), 2.5) +
@@ -243,7 +243,7 @@ end
     end
 
     generic_leaf = GenericFitLeaf(2.0, 1.0)
-    generic_prob = DistributionsInference.as_logdensity(generic_leaf, data)
+    generic_prob = DistributionsInference.distribution_to_logdensity(generic_leaf, data)
     @test DistributionsInference.logdensity(generic_prob, dual_x) isa
           ForwardDiff.Dual
 end

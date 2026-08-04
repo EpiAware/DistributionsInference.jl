@@ -42,16 +42,16 @@ prior, so it is estimated; `scale` carries none, so it stays fixed.
 
 ```@example quickstart
 delay = ToyDelay(2.0, 1.0)
-DistributionsInference.parameter_rows(delay)
+parameter_rows(delay)
 ```
 
-[`as_logdensity`](@ref) packages the template distribution and observed data
+[`distribution_to_logdensity`](@ref) packages the template distribution and observed data
 into a log-density over just the estimated rows, and [`flat_dimension`](@ref)
 counts them.
 
 ```@example quickstart
 data = [1.5, 2.0, 3.2, 1.8, 2.6]
-prob = DistributionsInference.as_logdensity(delay, data)
+prob = distribution_to_logdensity(delay, data)
 DistributionsInference.flat_dimension(delay)
 ```
 
@@ -87,25 +87,25 @@ length(draws)
 names, the same naming contract a real PPL's sampler output would carry.
 
 ```@example quickstart
-chain = DistributionsInference.to_flexichain(delay, draws)
+chain = to_flexichain(delay, draws)
 ```
 
-[`readback`](@ref) reduces the chain to a fitted `ToyDelay` (the posterior
+[`point_estimate`](@ref) reduces the chain to a fitted `ToyDelay` (the posterior
 mean of `shape` by default); [`readback_draws`](@ref) keeps every draw
 instead, for a per-draw posterior-predictive summary.
 
 ```@example quickstart
-fit = DistributionsInference.readback(delay, chain)
+fit = point_estimate(delay, chain)
 fit.shape
 ```
 
 ```@example quickstart
-length(DistributionsInference.readback_draws(delay, chain))
+length(readback_draws(delay, chain))
 ```
 
-Loading `DynamicPPL` activates [`as_turing`](@ref), a light wrapper over the
+Loading `DynamicPPL` activates [`distribution_to_turing`](@ref), a light wrapper over the
 same `prob` that samples with Turing instead of AdvancedMH; the same
-[`readback`](@ref) call reads its chain back too.
+[`point_estimate`](@ref) call reads its chain back too.
 [Fitting an object](@ref fitting) carries `delay` through both routes in
 full, then runs the identical calls against a `ComposedDistributions` tree
 in place of a hand-written distribution.
