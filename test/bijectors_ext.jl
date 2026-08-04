@@ -58,6 +58,79 @@ end
         prob, z[1:(end - 1)])
 end
 
+@testitem "to_constrained: mixed prior families give mixed links" begin
+    using DistributionsInference, Distributions
+    using Bijectors: Bijectors, bijector, inverse, with_logabsdet_jacobian
+
+    # A row set mixing prior families makes `FitLogDensity.flat_priors`
+    # abstractly typed, so each row's bijector is a different concrete type:
+    # an identity link for the unconstrained `Normal` on `mu`, a log link for
+    # the positive-truncated `Normal` on `sigma`, and a logit link for the
+    # `[0, 1]`-supported `Beta` on `p`. The uniform-family object above
+    # cannot catch a regression that only shows up once the transforms differ
+    # per row (DI#33).
+    struct MixedLinkLeaf{M <: Real, S <: Real, P <: Real}
+        mu::M
+        sigma::S
+        p::P
+    end
+
+    function DistributionsInference.parameter_rows(d::MixedLinkLeaf)
+        return [
+            (name = :mu, value = d.mu, prior = Normal(0.0, 2.0),
+                support = (-Inf, Inf)),
+            (name = :sigma, value = d.sigma,
+                prior = truncated(Normal(1.0, 1.0); lower = 0.0),
+                support = (0.0, Inf)),
+            (name = :p, value = d.p, prior = Beta(2.0, 2.0),
+                support = (0.0, 1.0))]
+    end
+
+    function DistributionsInference.reconstruct(
+            d::MixedLinkLeaf, x::AbstractVector)
+        return MixedLinkLeaf(x[1], x[2], x[3])
+    end
+
+    leaf = MixedLinkLeaf(0.0, 1.0, 0.4)
+    zero_lik(d, ds) = 0.0
+    prob = DistributionsInference.as_logdensity(
+        leaf, Float64[]; loglik = zero_lik)
+    @test DistributionsInference.flat_dimension(leaf) == 3
+
+    # Chosen so the three constrained values land in DISJOINT places: `mu` is
+    # negative, `sigma` is above 1, and `p` is inside `(0, 1)`. A permuted
+    # `to_constrained` result then violates a support check, which a `z`
+    # whose constrained image happens to be positive and below 1 in every row
+    # could not detect.
+    z = [-1.5, 2.0, 0.6]
+    x, logjac = DistributionsInference.to_constrained(prob, z)
+
+    # Each link checked against its own closed form, not against Bijectors'
+    # generic machinery: identity, exp, logistic.
+    @test x[1] ≈ z[1]
+    @test x[2] ≈ exp(z[2])
+    @test x[3] ≈ 1 / (1 + exp(-z[3]))
+    @test logjac ≈ 0.0 + z[2] + (-z[3] - 2 * log1p(exp(-z[3])))
+
+    # And the change-of-variables identity a sampler relies on still holds
+    # row by row across the three different links.
+    target = sum(eachindex(z)) do i
+        logpdf(Bijectors.transformed(prob.flat_priors[i]), z[i])
+    end
+    @test DistributionsInference.logdensity(prob, x) + logjac ≈ target
+
+    # Each field takes its OWN row of the constrained vector, checked against
+    # the already-verified `x` rather than against a support every row could
+    # satisfy, so a row-order slip in `to_constrained` fails here.
+    rebuilt = DistributionsInference.reconstruct(leaf, x)
+    @test rebuilt.mu ≈ x[1]
+    @test rebuilt.sigma ≈ x[2]
+    @test rebuilt.p ≈ x[3]
+    @test rebuilt.mu < 0
+    @test rebuilt.sigma > 1
+    @test 0 < rebuilt.p < 1
+end
+
 @testitem "to_constrained: a 0-estimated object round-trips at the empty vector" setup=[ToyFixture] begin
     using Bijectors
 
@@ -124,6 +197,11 @@ end
     using Bijectors
     using ForwardDiff
 
+    # The finite-difference oracle here is ForwardDiff-only by design; the
+    # same composition is run through all six backends against a ForwardDiff
+    # reference by the AD matrix (`test/ADFixtures`, DI#33), which is what
+    # would catch a backend-specific regression such as Mooncake's `xlogy`.
+
     leaf = TwoParamLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2, 2.8]
     prob = DistributionsInference.as_logdensity(leaf, data)
@@ -159,7 +237,13 @@ end
     z = fill(0.2, n)
     x, logjac = DistributionsInference.to_constrained(prob, z)
     @test f(z) ≈ -(DistributionsInference.logdensity(prob, x) + logjac)
-    @test isfinite(f(zeros(n)))
+
+    # At the origin both log-linked rows map to 1.0 with a zero log-Jacobian,
+    # so the objective has a closed form independent of the transform
+    # machinery: the two priors scored at 1.0 plus a Gamma(1, 1) likelihood.
+    @test f(zeros(n)) ≈ -(logpdf(LogNormal(log(2.0), 0.2), 1.0) +
+            logpdf(LogNormal(log(1.0), 0.2), 1.0) +
+            sum(y -> logpdf(Gamma(1.0, 1.0), y), data))
 
     @test_throws DimensionMismatch f(z[1:(end - 1)])
 end

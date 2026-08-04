@@ -25,8 +25,14 @@ const TUTORIAL_STUBS = Pair{String, String}[
 # Heavy tutorials that always render from their `TUTORIAL_STUBS` heading and
 # never execute. `ad-backends.jl` is stubbed while its plotting stack cannot
 # resolve: `AlgebraOfGraphics` caps `DimensionalData` below the floor the
-# `FlexiChains` these docs load needs (kit#283), so those deps are out of
-# docs/Project.toml (#19). Un-stub and restore them when that ceiling lifts.
+# `FlexiChains` these docs load needs (kit#283, and CD#147 for the same
+# conflict), so those deps are out of docs/Project.toml (#19).
+# Un-stub and restore them when that ceiling lifts.
+#
+# The page also loads no AD backend of its own, and the `ADFixtures` registry
+# no longer imports Mooncake (DI#73), so its two `AutoMooncake` rows will fail
+# until the managed page gains a `using Mooncake` or the registry imports it
+# again; the `Mooncake` docs dep installs it but does not load it.
 const FORCE_STUB_TUTORIALS = String["ad-backends.jl"]
 
 # Whether the README block and docs footer carry EpiAware ecosystem branding.

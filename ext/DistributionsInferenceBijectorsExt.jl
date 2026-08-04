@@ -16,21 +16,24 @@ function _row_bijector(prior, i)
     return bijector(prior)
 end
 
-# The per-row inverse bijectors (unconstrained -> constrained), in row order.
-function _inverse_bijectors(prob::FitLogDensity)
-    return [inverse(_row_bijector(prior, i))
-            for (i, prior) in enumerate(prob.flat_priors)]
+# One row's unconstrained -> constrained step, returning `(x_i, logjac_i)`.
+# The bijector is built and consumed here rather than materialised into a
+# per-row array: `flat_priors` is abstractly typed whenever a tree mixes
+# prior families, and Enzyme's reverse mode cannot build a shadow for such an
+# array (DI#33).
+function _row_transform(prior, i, zi)
+    return with_logabsdet_jacobian(inverse(_row_bijector(prior, i)), zi)
 end
 
 # Every transform is univariate (one scalar prior per row), so the map is
 # element-wise and the log-Jacobian is the sum of the per-row terms.
 function DistributionsInference.to_constrained(
         prob::FitLogDensity, z::AbstractVector)
-    binvs = _inverse_bijectors(prob)
-    length(z) == length(binvs) || throw(DimensionMismatch(
+    priors = prob.flat_priors
+    length(z) == length(priors) || throw(DimensionMismatch(
         "unconstrained vector has length $(length(z)) but $(prob.obj) has " *
-        "$(length(binvs)) estimated parameter(s)"))
-    xs_and_logj = map((b, zi) -> with_logabsdet_jacobian(b, zi), binvs, z)
+        "$(length(priors)) estimated parameter(s)"))
+    xs_and_logj = map(i -> _row_transform(priors[i], i, z[i]), eachindex(z))
     x = [xi for (xi, _) in xs_and_logj]
     logjac = isempty(xs_and_logj) ? zero(eltype(z)) : sum(last, xs_and_logj)
     return x, logjac

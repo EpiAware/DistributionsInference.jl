@@ -82,3 +82,49 @@ end
     priored = DistributionsInference.distribution_priors(rows; default = always_flat)
     @test priored[1].prior == Uniform(0, 10)
 end
+
+@testitem "distribution_priors: default = nothing refuses to invent a prior" begin
+    using DistributionsInference, Distributions
+
+    # `default = nothing` turns off the brms-style heuristic entirely: a row
+    # with neither an override nor an attached prior then has no prior to
+    # take, and is refused by name rather than filled in silently.
+    bare = [(name = :shape, value = 2.0, prior = nothing,
+        support = (0.0, Inf))]
+    err = try
+        DistributionsInference.distribution_priors(bare; default = nothing)
+        nothing
+    catch caught
+        caught
+    end
+    @test err isa ArgumentError
+    @test occursin("no prior for shape and no default supplied", err.msg)
+
+    # The same row set passes once the missing prior arrives from either
+    # source, so the refusal is about the missing prior and not about
+    # `default = nothing` on its own.
+    override = LogNormal(log(2.0), 0.1)
+    from_override = DistributionsInference.distribution_priors(
+        bare; priors = Dict(:shape => override), default = nothing)
+    @test only(from_override).prior == override
+
+    attached = [(name = :shape, value = 2.0, prior = override,
+        support = (0.0, Inf))]
+    from_attached = DistributionsInference.distribution_priors(
+        attached; default = nothing)
+    @test only(from_attached).prior == override
+
+    # A row set where only SOME rows lack a prior still fails, naming the one
+    # that does — the mixed case a whole-object check would miss.
+    mixed = [
+        (name = :shape, value = 2.0, prior = override, support = (0.0, Inf)),
+        (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
+    mixed_err = try
+        DistributionsInference.distribution_priors(mixed; default = nothing)
+        nothing
+    catch caught
+        caught
+    end
+    @test mixed_err isa ArgumentError
+    @test occursin("no prior for scale", mixed_err.msg)
+end

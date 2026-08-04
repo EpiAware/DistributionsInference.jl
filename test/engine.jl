@@ -12,7 +12,6 @@
     expected = logpdf(LogNormal(log(2.0), 0.2), 2.5) +
                sum(y -> logpdf(Gamma(2.5, leaf.scale), y), data)
     @test DistributionsInference.logdensity(prob, x) ≈ expected
-    @test isfinite(DistributionsInference.logdensity(prob, x))
 
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     fixed_prob = DistributionsInference.as_logdensity(fixed_leaf, data)
@@ -76,7 +75,8 @@ end
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     fixed_prob = DistributionsInference.as_logdensity(fixed_leaf, data)
     @test LogDensityProblems.dimension(fixed_prob) == 0
-    @test isfinite(LogDensityProblems.logdensity(fixed_prob, Float64[]))
+    @test LogDensityProblems.logdensity(fixed_prob, Float64[]) ≈
+          sum(y -> logpdf(Gamma(2.0, 1.0), y), data)
 end
 
 @testitem "engine: extra_prior_state is computed once at construction, not per logdensity call" begin
