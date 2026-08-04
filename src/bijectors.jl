@@ -67,7 +67,10 @@ x
 - [`logdensity`](@ref): the constrained-scale density this transform feeds.
 - [`parameter_rows`](@ref), [`reconstruct`](@ref): the fit protocol this reads.
 "
-function to_constrained end
+function to_constrained(prob, z)
+    return _extension_required(:to_constrained, "Bijectors",
+        "DistributionsInferenceBijectorsExt")
+end
 
 @doc "
 
@@ -135,4 +138,7 @@ f([0.0])
 - [`reconstruct`](@ref): rebuild the fitted object from the optimiser's
   minimiser, via [`to_constrained`](@ref) back to the constrained scale.
 "
-function logdensity_to_objective end
+function logdensity_to_objective(prob)
+    return _extension_required(:logdensity_to_objective, "Bijectors",
+        "DistributionsInferenceBijectorsExt")
+end

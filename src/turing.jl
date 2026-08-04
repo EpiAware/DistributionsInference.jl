@@ -96,6 +96,15 @@ fitted.scale  # the fixed parameter, untouched
 "
 function distribution_to_turing end
 
+# The guard for a session without `DynamicPPL`. The docstring stays on the
+# function binding above, so it is declared separately; the extension's method
+# takes exactly `(obj, data)`, so this trails a `Vararg` to stay strictly less
+# specific than it.
+function distribution_to_turing(obj, data, rest...; kwargs...)
+    return _extension_required(:distribution_to_turing, "DynamicPPL",
+        "DistributionsInferenceDynamicPPLExt")
+end
+
 # The `VarName` an estimated row's `~` site carries, given the model `prefix`
 # and the row's dotted `name` (e.g. prefix `:d`, name `Symbol("onset.shape")`
 # -> `d.onset.shape`). Its method lives in

@@ -37,6 +37,7 @@ using LogDensityProblems: LogDensityProblems
 # written after it.
 include("docstrings.jl")
 
+include("extensions.jl")
 include("protocol.jl")
 include("engine.jl")
 include("priors.jl")
