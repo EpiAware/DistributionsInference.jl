@@ -5,7 +5,16 @@
 # Literate tutorial sources under `TUTORIALS_SUBDIR`. Light tutorials emit
 # `@example` blocks Documenter runs in-process; heavy ones (live MCMC fits,
 # multi-backend AD, plotting) each run in a fresh subprocess.
-const LIGHT_TUTORIALS = String[]
+#
+# The three fitting tutorials are light despite sampling: each fits at most
+# five parameters from a handful of records, so they run in seconds and a fast
+# build (`--skip-notebooks`) still executes them, which is where their code is
+# checked. They need no `TUTORIAL_STUBS` entry for the same reason.
+const LIGHT_TUTORIALS = String[
+    "custom-distribution.jl",
+    "turing.jl",
+    "composed-distributions.jl"
+]
 
 # The `ad-backends.jl` page itself is kit-managed and re-applied on every
 # sync; only this registration is package-owned.

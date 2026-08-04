@@ -1,123 +1,52 @@
 # [Getting started](@id getting-started)
 
-Welcome to the `DistributionsInference` documentation.
-This page is the quickstart.
-The home page is generated from the README and already carries the install
-instructions, so start here with what a new user does once the package is
-loaded, and grow it into tutorials as the package develops.
+This page is the map of the documentation.
+The [home page](../index.md) says what the package is for and shows the
+shortest fit that runs; the tutorials below do the work.
 
-```@example quickstart
-using DistributionsInference, Distributions, Random
-using FlexiChains: FlexiChains
+## Installation
+
+```julia
+using Pkg
+Pkg.add("DistributionsInference")
 ```
 
-## A first example: fit a toy distribution with no PPL
+Fitting needs a sampler and a chain type as well, and both are chosen by the
+caller rather than by this package.
+The tutorials use `AdvancedMH` or `Turing` to sample and `FlexiChains` to hold
+the draws:
 
-A distribution becomes fittable by naming its scalar parameters and how to
-rebuild itself from a flat vector, with no other change needed and no
-probabilistic programming language required.
-
-```@example quickstart
-struct ToyDelay
-    shape::Float64
-    scale::Float64
-end
-
-Distributions.logpdf(d::ToyDelay, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
-
-function DistributionsInference.parameter_rows(d::ToyDelay)
-    return [(name = :shape, value = d.shape,
-            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
-        (name = :scale, value = d.scale, prior = nothing,
-            support = (0.0, Inf))]
-end
-
-function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
-    return ToyDelay(x[1], d.scale)
-end
+```julia
+Pkg.add(["AdvancedMH", "Turing", "FlexiChains"])
 ```
 
-[`parameter_rows`](@ref) is the whole estimation boundary: `shape` carries a
-prior, so it is estimated; `scale` carries none, so it stays fixed.
+## The route through a fit
 
-```@example quickstart
-delay = ToyDelay(2.0, 1.0)
-parameter_rows(delay)
-```
+Every fit here is the same three steps, whatever the distribution and whatever
+the sampler.
 
-[`distribution_to_logdensity`](@ref) packages the template distribution and observed data
-into a log-density over just the estimated rows, and [`flat_dimension`](@ref)
-counts them.
+| Step | What you write | What it gives |
+|---|---|---|
+| Declare | [`parameter_rows`](@ref) and `reconstruct` on your type | one row per scalar parameter, and a way back from a flat vector |
+| Score | [`distribution_to_logdensity`](@ref) or [`distribution_to_turing`](@ref) | a `LogDensityProblems` problem, or a `DynamicPPL` model |
+| Read back | [`point_estimate`](@ref) or [`readback_draws`](@ref) | the fitted distribution, not a table of numbers |
 
-```@example quickstart
-data = [1.5, 2.0, 3.2, 1.8, 2.6]
-prob = distribution_to_logdensity(delay, data)
-DistributionsInference.flat_dimension(delay)
-```
+Only the first step is written per type, and a distribution from a package that
+already implements the protocol skips it.
 
-[`logdensity`](@ref) scores a candidate flat vector: the prior's log-density
-at that value, plus the data log-likelihood of the object reconstructed
-there.
+## Tutorials
 
-```@example quickstart
-DistributionsInference.logdensity(prob, [2.5])
-```
-
-`prob` implements the `LogDensityProblems` interface, so any compatible
-sampler can drive it. `AdvancedMH`'s random-walk Metropolis is one, and needs
-only a `DensityModel` wrapping the log-density. The wrapper returns `-Inf`
-off `shape`'s positive support, because a random-walk proposal does not
-respect that support on its own.
-
-```@example quickstart
-using AdvancedMH
-using LinearAlgebra: I
-
-model = AdvancedMH.DensityModel() do x
-    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(prob, x)
-end
-sampler = RWMH(MvNormal(zeros(1), 0.05^2 * I))
-transitions = sample(Xoshiro(1), model, sampler, 2000;
-    param_names = ["shape"], progress = false)
-draws = [t.params for t in transitions][1001:end]
-length(draws)
-```
-
-[`to_flexichain`](@ref) keys the raw draws by the estimated rows' dotted
-names, the same naming contract a real PPL's sampler output would carry.
-
-```@example quickstart
-chain = to_flexichain(delay, draws)
-```
-
-[`point_estimate`](@ref) reduces the chain to a fitted `ToyDelay` (the posterior
-mean of `shape` by default); [`readback_draws`](@ref) keeps every draw
-instead, for a per-draw posterior-predictive summary.
-
-```@example quickstart
-fit = point_estimate(delay, chain)
-fit.shape
-```
-
-```@example quickstart
-length(readback_draws(delay, chain))
-```
-
-Loading `DynamicPPL` activates [`distribution_to_turing`](@ref), a light wrapper over the
-same `prob` that samples with Turing instead of AdvancedMH; the same
-[`point_estimate`](@ref) call reads its chain back too.
-[Fitting an object](@ref fitting) carries `delay` through both routes in
-full, then runs the identical calls against a `ComposedDistributions` tree
-in place of a hand-written distribution.
-
-## Learning more
-
-- Carry this example further in [Fitting an object](@ref fitting): sampling
-  with Turing as well as AdvancedMH, and fitting a
-  `ComposedDistributions` tree with the same calls.
-- Want the full interface? See the [Public API](@ref public-api).
-- Want the packages DistributionsInference works alongside? See
-  [Related packages](../index.md) on the home page.
+- [Fitting a custom distribution](@ref custom-distribution) writes the protocol
+  for a hand-rolled type, samples it with no probabilistic programming language
+  in the loop, and finds a maximum-a-posteriori point with an external
+  optimiser.
+- [Sampling with Turing](@ref turing-sampling) fits the same distribution as a
+  `DynamicPPL` model and reads the chain back with the same two calls.
+- [Fitting a composed distribution](@ref composed-distributions) runs both
+  routes against a `ComposedDistributions` tree, including partial pooling,
+  without writing any protocol methods.
+- [Automatic differentiation backends](@ref ad-backends) reports which backends
+  differentiate the log-density and what each costs.
 
 ## Getting help
 
