@@ -1,16 +1,7 @@
 # DistributionsInference × ComposedDistributions (DI#5): `parameter_rows`,
 # `estimated_rows`, `flat_dimension`, `reconstruct` and `extra_logprior` for a
-# composed distribution over CD's public codec. The load-bearing checks: the
-# dotted-name row mapping (including the `CentredPoolPrior` -> `nothing`
-# translation), that `estimated_rows`/`flat_dimension` agree with CD's own
-# generated `flat_dimension` across plain/pooled (centred and non-centred)/
-# `Resolve`-Dirichlet/shared-tag trees, that `reconstruct` matches CD's own
-# `reconstruct` exactly, that `logdensity` through this extension agrees with
-# CD's own (pre-extension) `as_logdensity`/`logdensity` for the same tree and
-# data, that `extra_logprior` scores a centred-pool term against an
-# independent hand computation, and that the generic `to_flexichain`/`readback`
-# machinery — no ComposedDistributions-specific code needed — round-trips a
-# pooled, shared-tag tree.
+# composed distribution over CD's public codec, checked against CD's own
+# equivalents across plain, pooled, `Resolve`-Dirichlet and shared-tag trees.
 
 @testsnippet ComposedFixture begin
     using DistributionsInference, Distributions, ComposedDistributions
@@ -23,15 +14,14 @@
         admit_death = LogNormal(0.5, 0.4)))
 
     # Non-centred pooling: three districts sharing a default LogNormal
-    # population (2 hyperparameters + 3 latents = 5 estimated, per Pool.jl's
-    # own docstring example).
+    # population, so 2 hyperparameters + 3 latents = 5 estimated.
     noncentred_tree = compose((
         north = uncertain(Gamma(2.0, 1.0); shape = pool(:district)),
         east = uncertain(Gamma(2.0, 1.0); shape = pool(:district)),
         south = uncertain(Gamma(2.0, 1.0); shape = pool(:district))))
 
-    # Centred pooling: a fixed (non-uncertain) Beta population, so there are
-    # no hyperparameter rows, only the two members' own centred latents.
+    # Centred pooling: a fixed Beta population, so no hyperparameter rows,
+    # only the two members' own centred latents.
     centred_pop = Beta(2.0, 3.0)
     centred_tree = compose((
         north = uncertain(Gamma(2.0, 1.0); shape = pool(:region, centred_pop)),
@@ -66,8 +56,6 @@ end
         @test rows[i].support == tbl.support[i]
         @test rows[i].prior === tbl.prior[i]
     end
-    # The one uncertain row (onset_admit.shape) is estimated; the fixed leaf's
-    # rows are not.
     est = DistributionsInference.estimated_rows(plain_tree)
     @test length(est) == 1
     @test only(est).name == Symbol("onset_admit.shape")
@@ -79,9 +67,6 @@ end
         @test DistributionsInference.flat_dimension(tree) == n
         @test length(DistributionsInference.estimated_rows(tree)) == n
     end
-    # Concrete counts from Pool.jl's own docstring example (non-centred: 2
-    # hyperparameters + 3 latents) and the centred case (2 members, no
-    # hyperparameters since the population is fixed).
     @test DistributionsInference.flat_dimension(noncentred_tree) == 5
     @test DistributionsInference.flat_dimension(centred_tree) == 2
     # A K=2 Dirichlet Resolve estimates one stick coordinate.
@@ -135,9 +120,8 @@ end
     @test DistributionsInference.extra_logprior(
         centred_tree, reconstructed, x, state) ≈ expected
 
-    # A tree with no centred pooling contributes nothing extra, and its
-    # cached state (found once, not recomputed per evaluation -- DI#28) is
-    # correspondingly empty rather than merely unused.
+    # A tree with no centred pooling contributes nothing extra, and its cached
+    # state (DI#28) is empty rather than merely unused.
     plain_state = DistributionsInference.extra_prior_state(plain_tree)
     @test isempty(plain_state)
     @test DistributionsInference.extra_logprior(plain_tree,
@@ -160,9 +144,8 @@ end
 
     tree = noncentred_tree
     n = DistributionsInference.flat_dimension(tree)
-    # Distinct per-dimension offsets, so a column-ordering bug (a row read
-    # back under the wrong dotted name) would be caught rather than masked by
-    # every dimension sharing one value.
+    # Distinct per-dimension offsets, so a row read back under the wrong
+    # dotted name is caught rather than masked by a shared value.
     draws = [[0.05 * i + 0.01 * j for j in 1:n] for i in 1:20]
     chain = DistributionsInference.to_flexichain(tree, draws)
 
@@ -182,17 +165,12 @@ end
     @test_throws ArgumentError DistributionsInference.as_turing(centred_tree, data)
 end
 
-# The three real-chain round trips below (shared tag, Dirichlet stick
-# coordinate, non-centred pool) were ComposedDistributions' own
-# `test/composers/turing_ext.jl` before that package dropped its `as_turing`/
-# `chain_to_params` surface in favour of this package's generic one (CD#221,
-# CD#233): they exercise the trickiest ordering/dedup cases (a tied leaf
-# sampled once but read back onto every occurrence; a K-1 stick-breaking
-# simplex; a pooled member's `.z` latent) through an ACTUAL `sample(...,
-# NUTS(), ...)` chain, not a hand-built one, so a table/codec ordering
-# regression that only shows up under real sampling is still caught. Ported
-# here rather than dropped, so the coverage does not thin when CD removes its
-# copy.
+# The three round trips below exercise the trickiest ordering/dedup cases (a
+# tied leaf sampled once but read back onto every occurrence; a K-1
+# stick-breaking simplex; a pooled member's `.z` latent) through a real
+# `sample(..., NUTS(), ...)` chain rather than a hand-built one. Ported from
+# ComposedDistributions' own `test/composers/turing_ext.jl` when CD dropped
+# its `as_turing`/`chain_to_params` surface (CD#221, CD#233).
 
 @testitem "as_turing round-trip: shared-tag readback lands on the right leaf" setup=[
     ComposedFixture] begin
@@ -204,8 +182,8 @@ end
     Random.seed!(23)
     chain = sample(model, NUTS(), 200; progress = false)
 
-    # Exactly ONE site for the tie, at the tag's dotted name — not one per
-    # occurrence (`d.a.shape`/`d.b.shape` never appear).
+    # Exactly ONE site for the tie, at the tag's dotted name, not one per
+    # occurrence.
     fitted = DistributionsInference.readback(shared_tree, chain)
     @test ComposedDistributions.event(fitted, :a) ==
           ComposedDistributions.event(fitted, :b)

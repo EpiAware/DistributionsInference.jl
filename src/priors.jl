@@ -1,20 +1,11 @@
-# Default-prior assembly over the fit protocol: the generic, params-first
-# analogue of ComposedDistributions' `build_priors`/`default_prior`
-# (CD#195/DI#20), but over any object implementing `parameter_rows` rather
-# than a `ComposedDistributions` tree specifically.
-#
-# This is a separate implementation, not a thin wrapper over CD's: DI depends
-# on ComposedDistributions (weakly, via an eventual extension), not the
-# reverse, so CD's own `default_prior`/`build_priors` cannot delegate here
-# without inverting that dependency edge. The two packages carry independent
-# copies of the same brms-style, parameter-name-driven heuristic, ported by
-# hand — see ComposedDistributions' `default_prior`/`_is_positive_param`/
-# `_is_location_param` (`src/composers/introspection.jl`) for the sibling
-# copy this mirrors.
+# Default-prior assembly over the fit protocol: a brms-style,
+# parameter-name-driven heuristic over any object implementing
+# `parameter_rows`. ComposedDistributions carries its own copy of the same
+# heuristic; it cannot delegate here without inverting the dependency edge.
 
-# A `parameter_rows` row's own parameter name, stripping any dotted path
-# prefix (`Symbol("onset.shape")` -> `:shape`): the classification below
-# looks at the parameter's own natural domain, not the path it sits at.
+# A row's own parameter name, stripping any dotted path prefix
+# (`Symbol("onset.shape")` -> `:shape`): the classification below looks at the
+# parameter's own natural domain, not the path it sits at.
 function _own_param_name(name::Symbol)
     s = string(name)
     i = findlast('.', s)
@@ -55,9 +46,6 @@ parameter's own name (the last dotted segment of `name`, e.g. `:shape` from
 
 The spread `scale` is `max(abs(value), 1)`, a weakly-informative width that
 scales with the parameter's magnitude.
-
-Mirrors ComposedDistributions' `default_prior` (same heuristic, ported by
-hand — DI cannot depend on CD's copy; see this file's header note).
 
 # Arguments
 - `row`: a [`parameter_rows`](@ref) row `(; name, value, prior, support)`.
@@ -102,10 +90,9 @@ attached `prior` if it is already set, else `default(row)` (support-derived,
 [`default_prior`](@ref) unless a different `default` is given). The result is
 directly usable as `obj`'s replacement row set — e.g. feeding
 [`reconstruct`](@ref)/[`estimated_rows`](@ref)/[`as_logdensity`](@ref) through
-the bare-row-vector fittable-object identity ([`parameter_rows`](@ref)`(rows)
-=== rows`) — so `distribution_priors(obj)` alone is the estimate-everything
-path for any fit-protocol object, generalising ComposedDistributions'
-`param_priors`/`uncertain(tree)` (CD#195) beyond composed-distribution trees.
+the bare-row-vector identity ([`parameter_rows`](@ref)`(rows) === rows`) — so
+`distribution_priors(obj)` alone is the estimate-everything path for any
+fit-protocol object.
 
 # Arguments
 - `obj`: the fittable object (or a bare row vector).

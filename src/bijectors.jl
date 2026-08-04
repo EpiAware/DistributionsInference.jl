@@ -1,9 +1,6 @@
 # The unconstrained <-> constrained transform for the PPL-neutral engine: a
-# Turing-free stub declared here (with its docstring), whose method lives in
-# the weakdep `DistributionsInferenceBijectorsExt` extension (`ext/`), loaded
-# only when `Bijectors` is present. Ported from ComposedDistributions'
-# `to_constrained` (ComposedDistributions#185), generalised from a composed
-# tree's `flat_priors` to the row-based fit protocol's `FitLogDensity`.
+# stub declared here with its docstring, whose method lives in
+# `DistributionsInferenceBijectorsExt`.
 
 @doc "
 
@@ -24,13 +21,10 @@ hierarchical population term; see [`parameter_rows`](@ref)) has no
 distribution to build a bijector from, so it is rejected with a clear
 `ArgumentError`, mirroring [`as_turing`](@ref)'s rejection of the same row
 kind. A type needing an unconstrained transform for such a row supplies its
-own [`to_constrained`](@ref) method (mirrors ComposedDistributions' centred-pool
-handling, which reads the transform off the pooled population's family
-instead of the row's own — absent — prior).
+own [`to_constrained`](@ref) method.
 
 This has no method until `Bijectors` is loaded; the prior-driven transform
-lives in the `DistributionsInferenceBijectorsExt` extension, so the core
-package stays free of a `Bijectors` dependency.
+lives in the `DistributionsInferenceBijectorsExt` extension.
 
 # Arguments
 - `prob`: the assembled [`FitLogDensity`](@ref).
@@ -88,25 +82,18 @@ log-density, minimising `f` with any standard optimisation package finds a
 maximum-A-POSTERIORI point directly. `logdensity` always scores an ESTIMATED
 row's own prior (that is what makes a row estimated; see
 [`parameter_rows`](@ref)), so a genuine maximum-LIKELIHOOD point needs a
-prior whose curvature is negligible next to the data likelihood (a very
-diffuse prior on an otherwise ordinary row) rather than a `loglik` swap
-alone. DistributionsInference ships no estimator method itself: this is only
-the thin wiring of the transform, the objective and [`reconstruct`](@ref)
-together that the org's fitting layer needs to earn its place alongside a
-bespoke `distribution_mle`/`distribution_map` pair — the optimiser stays
-external (`Optim.jl`, `Optimization.jl`, or any package that accepts a plain
-callable and an initial vector).
+prior whose curvature is negligible next to the data likelihood rather than a
+`loglik` swap alone. The optimiser stays external (`Optim.jl`,
+`Optimization.jl`, or any package that accepts a plain callable and an initial
+vector); DistributionsInference ships no estimator method itself.
 
-The result reconstructs through the EXISTING readback path: run the
+The result reconstructs through the existing readback path: run the
 optimiser's minimiser `z_hat` back through `to_constrained(prob, z_hat)` to
 recover the constrained point, then [`reconstruct`](@ref)`(prob.obj, x_hat)`
-for the fitted object, exactly as after any other unconstrained draw.
+for the fitted object.
 
-This has no method until `Bijectors` is loaded (built directly on
-[`to_constrained`](@ref)); the implementation lives in the
-`DistributionsInferenceBijectorsExt` extension, so the core package stays
-free of a `Bijectors` dependency, and no optimisation package is a dependency
-at all.
+This has no method until `Bijectors` is loaded; the implementation lives in
+the `DistributionsInferenceBijectorsExt` extension.
 
 # Arguments
 - `prob`: the assembled [`FitLogDensity`](@ref).
@@ -137,8 +124,7 @@ leaf = OptimLeaf(2.0, 1.0)
 data = [1.5, 2.0, 3.2, 2.8, 1.9]
 prob = DistributionsInference.as_logdensity(leaf, data)
 f = DistributionsInference.as_optimisation_objective(prob)
-# NOTHING below is a DistributionsInference method: `f` is just a plain
-# callable, ready for any external optimiser.
+# `f` is a plain callable, ready for any external optimiser.
 f([0.0])
 ```
 

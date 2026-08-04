@@ -1,11 +1,6 @@
-# A DynamicPPL model over a fittable object's ESTIMATED parameters, built as
-# a light wrapper on the `as_logdensity` codec. Declared here with no method
-# (a Turing-free stub); the model lives in
-# `ext/DistributionsInferenceDynamicPPLExt.jl`, triggered by `DynamicPPL`
-# alone, so this package stays Turing-free until that extension loads. Ported
-# from ComposedDistributions' `as_turing` (ComposedDistributions#185),
-# generalised from a composed tree's nested edge path to the row-based fit
-# protocol.
+# A DynamicPPL model over a fittable object's ESTIMATED parameters, declared
+# here as a stub with its docstring; the model lives in
+# `ext/DistributionsInferenceDynamicPPLExt.jl`.
 
 @doc "
 
@@ -40,14 +35,11 @@ with [`as_logdensity`](@ref) + `LogDensityProblemsAD` (the `LogDensityProblems`
 extension) instead.
 
 A gradient-based sampler (e.g. `NUTS`) evaluates [`reconstruct`](@ref) at a
-`ForwardDiff.Dual`-valued flat vector, so `obj`'s type must accept a non-`Real`
-concrete element for each ESTIMATED field: a `Distributions.jl` leaf already
-does (its type parameter is generic), and a hand-written `struct` needs the
-same — a field concretely typed `Float64` errors under `NUTS` (a
-gradient-free sampler, e.g. `AdvancedMH`, has no such constraint).
+`ForwardDiff.Dual`-valued flat vector, so each ESTIMATED field of `obj`'s type
+must be generically typed. A field concretely typed `Float64` errors under
+`NUTS`; a gradient-free sampler such as `AdvancedMH` has no such constraint.
 
-This method is available only when `DynamicPPL` is loaded (the model lives in a
-package extension).
+This method is available only when `DynamicPPL` is loaded.
 
 # Arguments
 - `obj`: the template fittable object, carrying its [`parameter_rows`](@ref).
@@ -102,12 +94,8 @@ function as_turing end
 
 # The `VarName` an estimated row's `~` site carries, given the model `prefix`
 # and the row's dotted `name` (e.g. prefix `:d`, name `Symbol("onset.shape")`
-# -> `d.onset.shape`). Internal, and a stub for the same reason `as_turing` is:
-# building a `VarName` needs `AbstractPPL`'s optic primitives, so the method
-# lives in `DistributionsInferenceDynamicPPLExt`. It is declared in the core
-# module rather than inside that extension so the `VarName`-keyed readback
-# (`DistributionsInferenceDynamicPPLFlexiChainsExt`, which must match a chain's
-# keys against exactly these names) reaches it by ordinary dispatch, rather
-# than reaching into a sibling extension's module or keeping a second copy of
-# the naming contract.
+# -> `d.onset.shape`). Its method lives in
+# `DistributionsInferenceDynamicPPLExt`, but it is declared in the core module
+# so the `VarName`-keyed readback in a sibling extension reaches it by
+# ordinary dispatch rather than keeping a second copy of the naming contract.
 function _row_varname end

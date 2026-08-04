@@ -1,8 +1,6 @@
 # PACKAGE-OWNED — scaffold writes this once and never overwrites it.
 #
-# QA configuration values the managed `quality.jl` testset reads. Fill in the
-# package-specific inputs the shared helpers need; the standard testset logic
-# stays in `quality.jl` (managed). Edit freely.
+# QA configuration values the managed `quality.jl` testset reads.
 
 using DistributionsInference
 
@@ -13,19 +11,17 @@ const QA_CONFIG = (
     # Path to the isolated JET environment (see test/jet/Project.toml).
     jet_env = joinpath(@__DIR__, "..", "jet"),
 
-    # Path to the isolated formatter environment (see
-    # test/formatter/Project.toml). Runs the formatting check in a subprocess
-    # pinned to the exact JuliaFormatter version, rather than whatever version
-    # the shared test environment resolves on the CI Julia in use (kit #321).
+    # Path to the isolated formatter environment. Runs the check in a
+    # subprocess pinned to an exact JuliaFormatter version, rather than
+    # whatever the shared test environment resolves (kit #321).
     formatter_env = joinpath(@__DIR__, "..", "formatter"),
 
     # Per-check Aqua relaxations, e.g. (; ambiguities = false). Empty = all on.
     aqua = (;),
 
     # ExplicitImports `ignore`: symbols the main module legitimately imports
-    # non-publicly. Tuple of Symbols, e.g. (:_internal_helper,). Package
-    # extensions are handled automatically (#189), so their import lists do not
-    # need listing here.
+    # non-publicly, e.g. (:_internal_helper,). Package extensions are handled
+    # automatically (#189).
     ei_ignore = (),
 
     # Docstring `crossref_ignore`: upstream names docstrings link to via
@@ -36,11 +32,9 @@ const QA_CONFIG = (
     # (; exported_only_examples = true, require_field_docs = true).
     docstring = (;),
 
-    # README section-structure check. `path` is the package root (its
-    # README.md). Override `required`/`order` to extend or relax the standard
-    # section set, e.g.
+    # README section-structure check. `path` is the package root. Override
+    # `required`/`order` to extend or relax the standard section set, e.g.
     #   (; required = vcat(STANDARD_README_SECTIONS, [("Benchmarks",)]))
-    # Empty `(;)` uses the standard structure in standard order.
     readme = (; path = joinpath(@__DIR__, "..", "..")),
 
     # Package extensions to ambiguity-check. Each entry:
@@ -50,13 +44,9 @@ const QA_CONFIG = (
     #      expect_phantoms = false,    # true if a third party adds phantoms
     #      broken = false)             # true to quarantine a known ambiguity
     #
-    # Every extension whose trigger packages are test deps is listed. The two
-    # chain extensions matter most: `to_flexichain`, `distribution_params`,
-    # `readback` and `readback_draws` each carry methods in the core module
-    # (the stubs), in the FlexiChains extension and in the DynamicPPL x
-    # FlexiChains extension, so three modules add methods to the same four
-    # generics and Aqua only sees the core one. Mooncake is not a test dep, so
-    # its extension cannot be loaded here and is left off.
+    # Every extension whose triggers are test deps is listed; Aqua only sees
+    # the core module's own methods. Mooncake is not a test dep, so its
+    # extension cannot be loaded here.
     extensions = (
         (; name = :DistributionsInferenceFlexiChainsExt,
             triggers = ("FlexiChains",),

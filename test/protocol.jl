@@ -1,15 +1,12 @@
-# The fit protocol: `parameter_rows`/`estimated_rows`/`flat_dimension` over a
-# bare row vector (the identity fallback) and over a toy protocol
-# implementation, plus `reconstruct`'s round-trip contract (#2).
+# The fit protocol over a bare row vector (the identity fallback) and over a
+# toy protocol implementation, plus `reconstruct`'s round-trip contract (#2).
 
 @testsnippet ToyFixture begin
     using DistributionsInference, Distributions
 
     # A minimal fit-protocol object: a Gamma leaf with its shape ESTIMATED (an
-    # attached prior) and its scale fixed. Implementing the protocol needs
-    # only two methods on the object's own type, no DistributionsInference
-    # dependency at the point of definition beyond the method extension
-    # itself (ComposedDistributions#185's "implementable without loading us").
+    # attached prior) and its scale fixed. Implementable without loading us
+    # (CD#185).
     struct ToyGammaLeaf
         shape::Float64
         scale::Float64
@@ -33,8 +30,6 @@
         n = DistributionsInference.flat_dimension(d)
         length(x) == n || throw(DimensionMismatch(
             "ToyGammaLeaf has $n estimated parameter(s), got $(length(x))"))
-        # `shape` is the only parameter that can carry a prior; a fixed
-        # leaf (n == 0) has nothing to read from `x` and round-trips as-is.
         n == 0 && return d
         return ToyGammaLeaf(x[1], d.scale, d.shape_prior)
     end
@@ -57,7 +52,6 @@ end
     @test length(est) == 1
     @test only(est).name == :shape
 
-    # A fully fixed row set estimates nothing.
     fixed_rows = [(name = :scale, value = 1.0, prior = nothing,
         support = (0.0, Inf))]
     @test isempty(DistributionsInference.estimated_rows(fixed_rows))
@@ -78,7 +72,6 @@ end
     @test rebuilt.scale == leaf.scale
     @test rebuilt.shape_prior === leaf.shape_prior
 
-    # A tree with no estimated rows round-trips at the empty vector.
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     @test DistributionsInference.reconstruct(fixed_leaf, Float64[]) == fixed_leaf
 
@@ -101,14 +94,12 @@ end
     @test_throws DimensionMismatch DistributionsInference.reconstruct(rows, Float64[])
     @test_throws DimensionMismatch DistributionsInference.reconstruct(rows, [1.0, 2.0])
 
-    # A fully fixed row set round-trips at the empty vector, unchanged.
     fixed_rows = [(name = :scale, value = 1.0, prior = nothing,
         support = (0.0, Inf))]
     @test DistributionsInference.reconstruct(fixed_rows, Float64[]) == fixed_rows
 end
 
 @testitem "extra_logprior: neutral by default, wired for an overriding type" setup=[ToyFixture] begin
-    # The default is a no-op for any fittable object, including the toy leaf.
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     rebuilt = DistributionsInference.reconstruct(leaf, [3.5])
     @test DistributionsInference.extra_prior_state(leaf) === nothing
@@ -116,9 +107,7 @@ end
           0.0
 
     # A type overriding it: an object-dependent penalty scored against the
-    # reconstructed object rather than a per-row prior. `shape_prior = nothing`
-    # here mirrors the documented convention (the row carries no prior; the
-    # term is scored through `extra_logprior` instead).
+    # reconstructed object rather than a per-row prior.
     struct PenalisedLeaf
         shape::Float64
         scale::Float64
@@ -131,9 +120,7 @@ end
                 support = (0.0, Inf))]
     end
 
-    # Estimate `shape` only, overriding the generic prior-based default: this
-    # type's flat vector is its `shape`, scored entirely through
-    # `extra_logprior` rather than any row-level prior.
+    # Estimate `shape` only, overriding the generic prior-based default.
     DistributionsInference.estimated_rows(d::PenalisedLeaf) = [
         DistributionsInference.parameter_rows(d)[1]]
     DistributionsInference.flat_dimension(::PenalisedLeaf) = 1
@@ -158,9 +145,8 @@ end
     using DistributionsInference, Distributions, ForwardDiff
 
     # The bug this guards: an ESTIMATED field typed to a CONCRETE Float64
-    # rejects a `ForwardDiff.Dual` in its own inner constructor with an
-    # opaque `MethodError`, deep inside `reconstruct`, before `logdensity`
-    # ever gets to add the data likelihood.
+    # rejects a `ForwardDiff.Dual` with an opaque `MethodError` inside
+    # `reconstruct`.
     struct ConcreteFitLeaf
         shape::Float64
         scale::Float64
@@ -184,13 +170,10 @@ end
     data = [1.5, 2.0, 3.2]
     prob = DistributionsInference.as_logdensity(leaf, data)
 
-    # Ordinary (non-AD) use: a plain Float64 vector is unaffected.
     @test isfinite(DistributionsInference.logdensity(prob, [2.5]))
 
-    # A `Dual`-valued flat vector: the guard raises a clear, named
-    # `ArgumentError` instead of the opaque `MethodError` `reconstruct` would
-    # otherwise surface (confirmed directly: `ConcreteFitLeaf(dual, 1.0)`
-    # throws `MethodError: no method matching Float64(::Dual{...})`).
+    # A `Dual`-valued flat vector: the guard raises a named `ArgumentError`
+    # instead of the opaque `MethodError`.
     dual_x = [ForwardDiff.Dual(2.5, 1.0)]
     err = try
         DistributionsInference.logdensity(prob, dual_x)
@@ -203,8 +186,8 @@ end
     @test occursin("ConcreteFitLeaf", err.msg)
     @test occursin("generically typed", err.msg)
 
-    # A GENERICALLY typed field (a type parameter, not a concrete Float64):
-    # the same `Dual`-valued vector flows through untouched, no guard fires.
+    # A GENERICALLY typed field: the same `Dual`-valued vector flows through
+    # untouched, no guard fires.
     struct GenericFitLeaf{S <: Real}
         shape::S
         scale::Float64
