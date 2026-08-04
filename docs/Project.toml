@@ -1,24 +1,12 @@
 # PACKAGE-OWNED — scaffold writes this once and never overwrites it.
-# The documentation environment: Documenter + DocumenterVitepress (the org docs
-# standard). Add doc-only deps (e.g. plotting, DocumenterCitations) here as the
-# docs grow. The package itself is pinned by path via `[sources]`.
-# The managed `docs/make.jl` calls `using EpiAwarePackageTools` (the shared docs
-# build machinery), so the kit is a docs dep too, resolved from the registry
-# under the bound below.
-# With `ad = true` the env also carries what the kit-managed AD-backends
-# tutorial page executes against: the package's `ADFixtures` registry (pinned
-# by path, same UUID as the AD test env) plus the benchmark and plotting stack.
-# With `benchmarks = true` it also carries `Plots` for the benchmark page's
-# combined trend plot (lazily loaded kit-side; absent here, the plot degrades
-# to an `@info` note rather than failing the build).
 #
-# NOTE: the ad-backends tutorial's plotting stack (AlgebraOfGraphics/
-# CairoMakie/DataFramesMeta) is removed so this env instantiates:
-# `AlgebraOfGraphics` caps `DimensionalData` at 0.28.3 (transitively) while
-# the `FlexiChains` these docs load needs >=0.29.24 (kit#283;
-# ComposedDistributions#147 is the same conflict). The tutorial renders from
-# its `TUTORIAL_STUBS` heading meanwhile. Restore the deps and re-add `docs`
-# as a workspace member once the upstream ceiling lifts.
+# The documentation environment; the package is pinned by path via `[sources]`.
+#
+# The ad-backends tutorial's plotting stack (AlgebraOfGraphics/CairoMakie/
+# DataFramesMeta) is absent so this env instantiates: `AlgebraOfGraphics` caps
+# `DimensionalData` at 0.28.3 while the `FlexiChains` these docs load needs
+# >=0.29.24 (kit#283). Restore those deps, and `docs` as a workspace member,
+# once that ceiling lifts.
 [deps]
 ADFixtures = "51837e51-2e8d-4c65-a757-038da73554aa"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
@@ -49,7 +37,7 @@ Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1, 0.2"
 DifferentiationInterfaceTest = "0.9, 0.10"
 Distributions = "0.25"
-# to precompile on Julia 1.12 (its EnzymeCore extension errors).
+# 0.39 fails to precompile on Julia 1.12 (its EnzymeCore extension errors).
 DynamicPPL = "0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
 Markdown = "1"

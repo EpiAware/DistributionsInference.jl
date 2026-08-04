@@ -1,14 +1,6 @@
 # DistributionsInference × Bijectors extension: `to_constrained` maps an
 # unconstrained flat vector to the constrained ESTIMATED parameters plus a
-# log-Jacobian, built per row from `FitLogDensity`'s `flat_priors`. The
-# load-bearing checks are the per-row transform against Bijectors itself
-# across a single-row and a multi-row object, the 0-estimated and
-# dimension-mismatch edge cases, the rejection of a row with no per-row prior
-# (an `extra_logprior`-scored, object-dependent row — the one case this
-# generic extension cannot build a bijector for), the change-of-variables
-# identity a sampler relies on (`logdensity(prob, x) + logjac` is the
-# unconstrained-space log-target at `z`), that the constrained output feeds
-# `reconstruct` correctly, and a gradient flowing through the composition.
+# log-Jacobian, built per row from `FitLogDensity`'s `flat_priors`.
 
 @testitem "Bijectors extension loads" begin
     using Bijectors
@@ -20,12 +12,9 @@ end
 @testitem "to_constrained: closed-form identity for a LogNormal-Gamma row" setup=[ToyFixture] begin
     using Bijectors
 
-    # A single uncertain Gamma shape with a LogNormal(mu, sigma) prior: the
-    # bijector maps the positive shape through log, so `x = exp(z)` and the
-    # log-Jacobian is `z`. Because a LogNormal is exp of a Normal by
-    # definition, `logpdf(LogNormal(mu, sigma), exp(z)) + z` collapses to
-    # `logpdf(Normal(mu, sigma), z)` exactly — a closed-form oracle
-    # independent of the transform machinery itself.
+    # A LogNormal is exp of a Normal, so `logpdf(LogNormal(mu, sigma), exp(z))
+    # + z` collapses to `logpdf(Normal(mu, sigma), z)`: a closed-form oracle
+    # independent of the transform machinery.
     mu, sigma = 0.4, 0.3
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(mu, sigma))
     data = Float64[]
@@ -61,13 +50,10 @@ end
     @test x ≈ [xi for (xi, _) in per_row]
     @test logjac ≈ sum(last, per_row)
 
-    # Every constrained value lands in its prior's support (both rows here
-    # are positive-support LogNormal priors).
     for i in eachindex(x)
         @test insupport(prob.flat_priors[i], x[i])
     end
 
-    # A length mismatch is rejected eagerly, like the rest of the codec.
     @test_throws DimensionMismatch DistributionsInference.to_constrained(
         prob, z[1:(end - 1)])
 end
@@ -170,11 +156,9 @@ end
     z = [-0.3, 0.5]
     x, logjac = DistributionsInference.to_constrained(prob, z)
 
-    # The unconstrained-space log-target, rebuilt independently row by row
-    # through Bijectors' own `transformed` distribution (a different code
-    # path from `to_constrained`'s `with_logabsdet_jacobian` call). A
-    # zero likelihood isolates the prior-transform identity this test
-    # targets from the (already separately tested) data term.
+    # Rebuilt through Bijectors' own `transformed`, a different code path from
+    # `to_constrained`'s `with_logabsdet_jacobian` call. The zero likelihood
+    # isolates the prior-transform identity from the data term.
     target = sum(eachindex(z)) do i
         logpdf(transformed(prob.flat_priors[i]), z[i])
     end
@@ -193,8 +177,8 @@ end
     x, _ = DistributionsInference.to_constrained(prob, [z0])
     rebuilt = DistributionsInference.reconstruct(leaf, x)
     @test rebuilt.shape ≈ exp(z0)
-    @test rebuilt.shape > 0  # lands in the Gamma shape's positive support
-    @test rebuilt.scale == leaf.scale  # the fixed parameter, untouched
+    @test rebuilt.shape > 0
+    @test rebuilt.scale == leaf.scale
 end
 
 @testitem "to_constrained rejects an estimated row with no per-row prior" setup=[TuringFixture] begin
@@ -261,8 +245,6 @@ end
             logpdf(LogNormal(log(1.0), 0.2), 1.0) +
             sum(y -> logpdf(Gamma(1.0, 1.0), y), data))
 
-    # A length mismatch is rejected eagerly, like the rest of the codec (via
-    # `to_constrained`).
     @test_throws DimensionMismatch f(z[1:(end - 1)])
 end
 
@@ -280,9 +262,8 @@ end
     x_hat, _ = DistributionsInference.to_constrained(prob, z_hat)
     fitted = DistributionsInference.reconstruct(prob.obj, x_hat)
 
-    # The MAP optimum is a stationary point of the unconstrained target: a
-    # symmetric finite-difference gradient check, independent of Optim's own
-    # convergence bookkeeping.
+    # The MAP optimum is a stationary point of the unconstrained target,
+    # checked independently of Optim's own convergence bookkeeping.
     h = 1e-6
     fd = (f(z_hat .+ h) - f(z_hat .- h)) / (2h)
     @test fd ≈ 0.0 atol = 1e-3
@@ -293,10 +274,8 @@ end
 @testitem "as_optimisation_objective: a diffuse prior tracks the MLE" setup=[ToyFixture] begin
     using Bijectors, Optim, Distributions
 
-    # `logdensity` always scores an ESTIMATED row's own prior, so a genuine
-    # maximum-likelihood point needs the prior's curvature to be negligible
-    # next to the likelihood: a very diffuse prior on `shape` gives that,
-    # and the optimum tracks the closed-form Gamma-shape MLE.
+    # `logdensity` always scores an ESTIMATED row's own prior, so an MLE point
+    # needs the prior's curvature to be negligible next to the likelihood.
     diffuse = LogNormal(0.0, 100.0)
     leaf = ToyGammaLeaf(2.0, 1.0, diffuse)
     data = [1.5, 2.0, 3.2, 2.8, 1.9, 4.1, 2.5, 3.0]
@@ -307,9 +286,8 @@ end
     z_hat = Optim.minimizer(res)
     x_hat, _ = DistributionsInference.to_constrained(prob, z_hat)
 
-    # A closed-form check independent of the optimiser: at the MLE, the
-    # data log-likelihood's own derivative in `shape` is zero (the diffuse
-    # prior contributes negligibly here).
+    # Independent of the optimiser: at the MLE the data log-likelihood's own
+    # derivative in `shape` is zero.
     loglik(shape) = sum(y -> logpdf(Gamma(shape, leaf.scale), y), data)
     h = 1e-6
     fd = (loglik(x_hat[1] + h) - loglik(x_hat[1] - h)) / (2h)

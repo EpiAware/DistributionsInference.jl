@@ -1,53 +1,32 @@
 # PACKAGE-OWNED — scaffold writes this once and never overwrites it.
 #
-# The AD-fixture registry implementing the EpiAwarePackageTools `ADRegistry`
+# AD-fixture registry implementing the EpiAwarePackageTools `ADRegistry`
 # contract: scenarios (each with a ForwardDiff reference), a backend list, and
-# broken/skip bookkeeping. The shared harness (driven from `test/ad/setup.jl`)
+# broken/skip bookkeeping. The shared harness, driven from `test/ad/setup.jl`,
 # consumes these, and the AD-backends docs page renders its support table and
 # benchmark from the same set.
 #
-# The scenarios cover the four public differentiable paths through this
-# package, so a backend-specific regression in any of them reds the matrix
-# rather than only the engine's own hot path (DI#33):
+# The scenarios cover the four public differentiable paths, so a
+# backend-specific regression in any of them reds the matrix rather than only
+# the engine's own hot path (DI#33): the engine's `logdensity` over several
+# fit-protocol objects; `to_constrained` composed with it, the
+# unconstrained-scale target a sampler differentiates (identical to
+# `-as_optimisation_objective(prob)`), covering the `Bijectors` extension's
+# log, identity and logit links; both paths over a `ComposedDistributions`
+# tree; and `as_turing`'s model through `LogDensityProblems`, the
+# `DynamicPPL` extension's `Vector{Real}` path into `reconstruct`. `readback`
+# and friends are absent: they map an already-sampled chain onto a
+# reconstructed object, so there is no parameter vector to differentiate
+# (their coverage is in `test/readback.jl`).
 #
-# 1. `logdensity(as_logdensity(obj, data), x)` — the engine, over several
-#    fit-protocol objects: one and two estimated parameters, and Gamma /
-#    Normal / unit-interval families with positive, unbounded and `[0, 1]`
-#    support constraints.
-# 2. `to_constrained` composed with `logdensity` — the unconstrained-scale
-#    target a sampler or optimiser actually differentiates (identical to
-#    `-as_optimisation_objective(prob)`), exercising the `Bijectors`
-#    extension's log, identity and logit links.
-# 3. The same two paths over an actual `ComposedDistributions` tree, so
-#    `DistributionsInferenceComposedDistributionsExt` — the package's main
-#    consumer — is differentiated through, not only value-tested.
-# 4. `as_turing`'s model through `LogDensityProblems`, the way a
-#    gradient-based sampler reaches it, so the `DynamicPPL` extension's
-#    `Vector{Real}` path into `reconstruct` is covered too.
-#
-# `readback`/`readback_draws`/`distribution_params`/`to_flexichain` are
-# deliberately absent: they map an already-sampled chain of numbers onto a
-# reconstructed object, so there is no parameter vector to take a gradient
-# with respect to. Their value-level coverage lives in `test/readback.jl`.
-#
-# `Mooncake` is deliberately NOT a dependency of this registry, even though
-# `backends()` lists both Mooncake configurations. `ADFixtures` loads
-# `ComposedDistributions`, and `DistributionsInferenceMooncakeExt` and
-# `ComposedDistributionsMooncakeExt` define the SAME Mooncake rules for
-# `LogExpFunctions.xlogy`/`xlog1py` (DI ported CD#99's fix rather than
-# depending on it). Loading both while precompiling a module is a method
-# overwrite, which Julia refuses during precompilation, so a registry
-# depending on Mooncake AND ComposedDistributions cannot precompile at all.
-# The `AutoMooncake`/`AutoMooncakeForward` backend entries come from
-# `ADTypes` and need no Mooncake import here; `test/ad/setup.jl` does the
-# `using Mooncake` at test time, where the duplicate rules are only a load
-# warning. Drop this workaround once the duplication is resolved upstream
-# (DistributionsInference#73).
-#
-# If the package's log densities use EpiAwareADTools' AD-safe hooks
-# (`cdf_ad_safe`, `primal`, ...) to stay differentiable, add scenarios here that
-# exercise those paths, so the per-backend matrix covers them. See
-# https://github.com/EpiAware/EpiAwareADTools.jl.
+# `Mooncake` is deliberately not a dependency here even though `backends()`
+# lists both its configurations: this registry loads `ComposedDistributions`,
+# and `DistributionsInferenceMooncakeExt` and `ComposedDistributionsMooncakeExt`
+# define the same `LogExpFunctions.xlogy`/`xlog1py` rules (DI ported CD#99's
+# fix), which Julia refuses as a method overwrite during precompilation. The
+# `ADTypes` backend entries need no import here, and `test/ad/setup.jl` does
+# the `using Mooncake` at test time, where the duplicate rules are only a load
+# warning. Drop this once the duplication is resolved upstream (DI#73).
 module ADFixtures
 
 using ADTypes: AutoForwardDiff, AutoReverseDiff, AutoMooncake,
@@ -74,12 +53,12 @@ export scenarios, backends, broken_scenario_names,
 
 # --- Fit-protocol fixtures -------------------------------------------------
 #
-# Every estimated field is GENERICALLY typed (`shape::S`, not
+# Every estimated field is generically typed (`shape::S`, not
 # `shape::Float64`): a concrete field cannot hold a tracer number and is
-# rejected up front by the engine's own guard (see `reconstruct`'s docstring).
+# rejected up front by the engine's own guard.
 
-# One estimated parameter: a Gamma leaf with the shape estimated (LogNormal
-# prior) and the scale fixed, mirroring the test suite's toy.
+# One estimated parameter: a Gamma leaf with the shape estimated and the
+# scale fixed.
 struct GammaFit{T <: Real}
     shape::T
     scale::T
@@ -183,16 +162,11 @@ end
 
 # ForwardDiff reference gradient for a scenario function.
 #
-# Every scenario's reference comes from this one backend, so the matrix tests
-# CROSS-BACKEND AGREEMENT on the scenario's own function and nothing more. It
-# cannot catch a target that is wrong but differentiable (a dropped `logjac`,
-# say, or a dropped prior term), because all six backends would then
-# differentiate the same wrong function and agree. What pins the targets'
-# VALUES is the ordinary test suite: the closed-form link and log-Jacobian
-# checks and the `transformed(prior)` identity in `test/bijectors_ext.jl`, the
-# prior-plus-likelihood totals in `test/engine.jl`, and the model-equals-codec
-# checks in `test/turing_ext.jl`. A green matrix is evidence about backends,
-# not a correctness proof for the target.
+# Every scenario's reference comes from this one backend, so a green matrix is
+# evidence about BACKENDS, not a correctness proof for the target: a wrong but
+# differentiable target (a dropped `logjac` or prior term) would have all six
+# agree on the same wrong function. The values are pinned by the ordinary
+# suite — `test/bijectors_ext.jl`, `test/engine.jl`, `test/turing_ext.jl`.
 function _reference(f, θ, contexts)
     return DifferentiationInterface.gradient(
         f, AutoForwardDiff(), θ, contexts...)
@@ -261,9 +235,9 @@ end
     scenarios(; with_reference = false, category = :marginal)
 
 The AD gradient scenarios. Each is a `DIT.Scenario{:gradient, :out}` whose
-`res1` carries a ForwardDiff reference when `with_reference = true`. Every
-scenario sits in the single `:marginal` category, so the docs page's default
-`scenarios()` call renders the whole set rather than a subset.
+`res1` carries a ForwardDiff reference when `with_reference = true`. Use
+`category` to select a scenario group (e.g. `:marginal` vs `:latent`); every
+scenario here sits in the single `:marginal` group.
 """
 function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
     out = DIT.Scenario{:gradient, :out}[]
@@ -276,16 +250,13 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
     scen(_engine_target, [2.0], (Constant(one_param),),
         "fit-protocol engine logdensity")
 
-    # The `xlogy` edge case (DI#7, ComposedDistributions#99): a Gamma-family
-    # estimated parameter landing exactly on `shape == 1.0` routes a nonzero
+    # The `xlogy` edge case (DI#7, CD#99): `shape == 1.0` routes a nonzero
     # cotangent into `LogExpFunctions.xlogy`'s `iszero(x)` branch inside
-    # `Distributions.gammalogpdf`. Mooncake had no rule for the two-argument
-    # `xlogy`/`xlog1py` and derives one from the primal branch, giving `0`
-    # instead of the correct `log(y)` (chalk-lab/Mooncake.jl#1241).
-    # `DistributionsInferenceMooncakeExt` now imports the `ChainRulesCore`
-    # rules for `xlogy`/`xlog1py` as Mooncake primitives, so this scenario is
-    # not broken on Mooncake (see `broken_scenario_names`/
-    # `backend_broken_scenarios` below if that ever regresses).
+    # `Distributions.gammalogpdf`, where Mooncake derives `0` instead of
+    # `log(y)` (chalk-lab/Mooncake.jl#1241). `DistributionsInferenceMooncakeExt`
+    # imports the `ChainRulesCore` rules as Mooncake primitives to fix this; if
+    # those ever stop working, quarantine this scenario via
+    # `broken_scenario_names`/`backend_broken_scenarios` below.
     scen(_engine_target, [1.0], (Constant(one_param),),
         "fit-protocol engine logdensity (shape at 1.0, xlogy edge case)")
 
@@ -345,10 +316,8 @@ end
 """
     backends()
 
-The AD backends to test, as `(; name, backend)` named tuples. Seeded to match
-every backend `test/ad/scenarios.jl` emits a testitem for, so a fresh package
-passes its AD suite out of the box; trim to the subset the package actually
-supports.
+The AD backends to test, as `(; name, backend)` named tuples. One entry per
+testitem in `test/ad/scenarios.jl`.
 """
 function backends()
     return [

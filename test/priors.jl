@@ -1,14 +1,12 @@
 # Default-prior assembly over the fit protocol: `default_prior`'s per-row
-# heuristic (mirroring ComposedDistributions', by name-classification not
-# support) and `distribution_priors`'s override/attached-prior/default
-# precedence (CD#195/DI#20).
+# heuristic (by name classification, not support) and `distribution_priors`'s
+# override/attached-prior/default precedence (CD#195/DI#20).
 
 @testitem "default_prior: classifies by the row's own name, not just support" begin
     using DistributionsInference, Distributions
 
     # A positive-by-name parameter gets a positive-truncated default even
-    # though its `support` here is reported unbounded (mirrors CD: a
-    # location-family delay's `sigma` still lives on the positive line).
+    # under an unbounded reported `support`.
     shape_row = (name = :shape, value = 2.0, prior = nothing,
         support = (-Inf, Inf))
     p = DistributionsInference.default_prior(shape_row)
@@ -71,8 +69,7 @@ end
     @test priored[1].value == rows[1].value
     @test priored[1].support == rows[1].support
 
-    # The result is directly usable as a fittable object (the bare-row-vector
-    # identity): reconstruct at the new priors' estimated dimension.
+    # The result is directly usable as a fittable object.
     @test DistributionsInference.flat_dimension(priored) == 3   # all now priored
 end
 

@@ -3,16 +3,10 @@
 # Per-backend AD gradient test items. Each backend is its own `@testitem`,
 # tagged so the per-backend CI can select it with a tag filter (e.g.
 # `julia test/ad/runtests.jl enzyme_reverse`). The harness wiring lives in the
-# managed `setup.jl`; the SCENARIOS come from the package's own `ADFixtures`
-# registry. This starter seed is generated from `_AD_BACKENDS` (the kit's
-# single source of truth for the AD infra) at scaffold time, so it covers
-# every backend the kit knows about; add/trim backends and categories to
-# match the package afterwards (this file is write-once).
-#
-# Each item calls the kit's `test_working_backend` directly rather than the
-# thin local in the managed `setup.jl`, because the local forwards only
-# `category` and these scenarios need a tighter tolerance than the harness
-# default (see `tolerances.jl`).
+# managed `setup.jl`; the scenarios come from `ADFixtures`. Each item calls
+# the kit's `test_working_backend` directly rather than the thin local in
+# `setup.jl`, which forwards only `category`: these scenarios need a tighter
+# tolerance than the harness default (see `tolerances.jl`).
 
 @testitem "ForwardDiff gradients (marginal)" tags=[:ad, :forwarddiff] setup=[
     ADHelpers, ADTolerances] begin

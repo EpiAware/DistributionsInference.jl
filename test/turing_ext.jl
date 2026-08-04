@@ -1,32 +1,15 @@
 # DistributionsInference × DynamicPPL: `as_turing(obj, data)` builds a
 # DynamicPPL model over a fittable object's estimated parameters, a light
-# wrapper on the `as_logdensity` codec. The extension loads when DynamicPPL
-# alone is present. These tests prove (a) the model's `~` site names match the
-# `VarName`-keyed readback exactly, so a fitted chain reads back through
-# `readback`/`readback_draws` unchanged; (b) the model's total log-density
-# equals the codec's `logdensity` by construction, for a single site, several
-# sites, AND a nonzero `extra_logprior` term; (c) a 0-estimated and a
-# 2-parameter (dotted-name) object both round-trip; (d) an estimated row with
-# no per-row prior (scored instead through `extra_logprior`) is rejected with
-# a clear pointer to the codec path; and (e) the `VarName`-chain empty-chain
-# shortcut (`_to_symbol_chain`) guards on the CHAIN's own parameter count, not
-# `obj`'s, so both mismatch directions (an empty-estimate `obj` against a
-# nonempty chain, and an estimating `obj` against a genuinely empty chain)
-# still raise the mismatch rather than one of them silently passing or
-# stack-overflowing. The `VarName`-keyed readback itself lives in a separate
-# extension over both DynamicPPL and FlexiChains, so the last two items here
-# cover that boundary: the readback extension loads, and `as_turing` works in
-# a session carrying DynamicPPL alone.
+# wrapper on the `as_logdensity` codec. The `VarName`-keyed readback lives in
+# a separate extension over both DynamicPPL and FlexiChains, so the last items
+# here cover that boundary.
 
 @testsnippet TuringFixture begin
     using DistributionsInference, Distributions
 
-    # A gradient-based sampler (`NUTS`) evaluates `reconstruct` at a
-    # `ForwardDiff.Dual`-valued flat vector, so the ESTIMATED field's type
-    # must be generic (a concretely `Float64` field, like `ToyFixture`'s
-    # `ToyGammaLeaf`, errors under `NUTS`; see `as_turing`'s docstring). A
-    # `Distributions.jl` leaf gets this for free from its own parametric
-    # type; these toy leaves need the same.
+    # `NUTS` evaluates `reconstruct` at a `ForwardDiff.Dual`-valued flat
+    # vector, so the ESTIMATED field's type must be generic; a concretely
+    # `Float64` field (like `ToyFixture`'s `ToyGammaLeaf`) errors under `NUTS`.
     struct TuringGammaLeaf{S <: Real}
         shape::S
         scale::Float64
@@ -47,12 +30,9 @@
         return TuringGammaLeaf(x[1], d.scale, d.shape_prior)
     end
 
-    # Two estimated parameters under a DOTTED row name (mirrors a nested
-    # parameter path, e.g. a leaf nested under an edge): proves `as_turing`
-    # splits the dotted name into DynamicPPL's nested `VarName` segments the
-    # same way the readback rebuilds them. Independently-typed fields for the
-    # same AD reason as `TuringGammaLeaf` (both are estimated here, and each
-    # may carry a different `Dual` tag/perturbation).
+    # Two estimated parameters under a DOTTED row name: `as_turing` must split
+    # it into DynamicPPL's nested `VarName` segments the same way the readback
+    # rebuilds them. Independently typed for the same AD reason as above.
     struct TwoParamLeaf{S <: Real, C <: Real}
         shape::S
         scale::C
@@ -72,9 +52,8 @@
         return TwoParamLeaf(x[1], x[2])
     end
 
-    # A leaf whose sole estimated row has no per-row prior (scored instead
-    # through `extra_logprior`, e.g. an object-dependent/hierarchical term):
-    # `as_turing` has no `~` site to sample it from and must reject it.
+    # A leaf whose sole estimated row has no per-row prior, scored instead
+    # through `extra_logprior`: `as_turing` has no `~` site for it.
     struct NoPriorLeaf
         shape::Float64
         scale::Float64
@@ -103,12 +82,8 @@ end
     using DistributionsInference, Distributions
 
     # An object-dependent `extra_logprior` term threaded through `as_turing`:
-    # `mu` is the one ESTIMATED row (an ordinary `~` prior); `a`/`b` are FIXED
-    # (`prior = nothing`, so `estimated_rows` excludes them from the flat
-    # vector and they need no `~` site), but their `extra_logprior` term
-    # still depends on the RECONSTRUCTED `mu`, so it is nonzero and
-    # non-trivial — mirrors `parameter_rows`'s own `PooledPair` docstring
-    # example (a location hyperparameter pooling two fixed members).
+    # `mu` is the one ESTIMATED row; `a`/`b` are FIXED, but their
+    # `extra_logprior` term depends on the RECONSTRUCTED `mu`.
     struct PooledPairLeaf
         a::Float64
         b::Float64
@@ -151,8 +126,8 @@ end
     prob = DistributionsInference.as_logdensity(leaf, data)
     x = [2.3]
 
-    # Conditioning the single `~` site at its readback name scores the same
-    # total (prior + `@addlogprob!` likelihood) that `logdensity` sums.
+    # Conditioning the `~` site at its readback name scores the same total
+    # that `logdensity` sums.
     cm = DynamicPPL.condition(model, @varname(d.shape) => x[1])
     @test DynamicPPL.logjoint(cm, DynamicPPL.VarInfo(cm)) ≈
           DistributionsInference.logdensity(prob, x)
@@ -168,11 +143,9 @@ end
     prob = DistributionsInference.as_logdensity(leaf, data)
     x = [0.7]
 
-    # `extra_logprior` here is nonzero (it scores the reconstructed object's
-    # FIXED `a`/`b` fields against a Normal centred on the ESTIMATED `mu`),
-    # so this exercises the `@addlogprob! extra_logprior(...)` term the
+    # A nonzero `extra_logprior` exercises the `@addlogprob!` term the
     # equality guarantee depends on, not just the per-row-prior + likelihood
-    # terms the single-site test above already covers.
+    # terms the single-site test above covers.
     rebuilt = DistributionsInference.reconstruct(leaf, x)
     @test DistributionsInference.extra_logprior(leaf, rebuilt, x, nothing) != 0.0
 
@@ -192,9 +165,8 @@ end
     prob = DistributionsInference.as_logdensity(leaf, data)
     x = [2.3, 1.1]
 
-    # Both `~` sites conditioned at once: the exact-equality guarantee for a
-    # multi-site model, not just the single-parameter case above (the
-    # NUTS-based round-trip test below only checks recovery, not exactness).
+    # Both `~` sites conditioned at once: exact equality for a multi-site
+    # model, which the NUTS round-trip below does not check.
     cm = DynamicPPL.condition(
         model, @varname(d.leaf.shape) => x[1], @varname(d.leaf.scale) => x[2])
     @test DynamicPPL.logjoint(cm, DynamicPPL.VarInfo(cm)) ≈
@@ -232,15 +204,15 @@ end
     @test "d.shape" in vns
 
     fitted = DistributionsInference.readback(leaf, chain)
-    @test fitted.scale == scale  # the fixed parameter, untouched
+    @test fitted.scale == scale
     @test fitted.shape > 0
 
     all_fitted = DistributionsInference.readback_draws(leaf, chain)
     @test length(all_fitted) == 200
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
 
-    # `distribution_params` also dispatches on a VarName-keyed chain (same
-    # `_to_symbol_chain` conversion `readback` uses), and agrees with it.
+    # `distribution_params` also dispatches on a VarName-keyed chain, through
+    # the same `_to_symbol_chain` conversion `readback` uses.
     nt = DistributionsInference.distribution_params(leaf, chain)
     @test keys(nt) == (:shape,)
     @test nt.shape == fitted.shape
@@ -391,10 +363,8 @@ end
     using FlexiChains: FlexiChains, VarName, @varname
 
     # (a) `obj` estimates NOTHING but the chain carries a parameter: the
-    # empty-chain shortcut in `_to_symbol_chain` must guard on the CHAIN
-    # being empty, not on `obj`'s estimated rows — otherwise this mismatch
-    # would be silently swallowed (reading the template back unchanged
-    # instead of raising it).
+    # `_to_symbol_chain` shortcut must guard on the CHAIN being empty, not on
+    # `obj`'s estimated rows, or the mismatch is silently swallowed.
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     mismatched_chain = FlexiChains.FlexiChain{VarName}(3, 1,
         Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}(
@@ -404,10 +374,8 @@ end
         fixed_leaf, mismatched_chain)
 
     # (b) `obj` estimates a parameter but the chain is genuinely empty: must
-    # raise the ordinary "not found in chain" mismatch (from the core
-    # readback) rather than stack-overflowing inside
-    # `FlexiChains.map_parameters` — the bug the empty-chain shortcut exists
-    # to avoid in the first place.
+    # raise the ordinary "not found in chain" mismatch rather than
+    # stack-overflowing inside `FlexiChains.map_parameters`.
     leaf = TuringGammaLeaf(2.0, 1.5, LogNormal(log(2.0), 0.2))
     empty_chain = FlexiChains.FlexiChain{VarName}(5, 1,
         Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}())
@@ -426,11 +394,9 @@ end
 @testitem "as_turing needs DynamicPPL alone, not FlexiChains" begin
     using DistributionsInference
 
-    # The `VarName`-keyed readback needs both packages and lives in its own
-    # extension, so that a project sampling with Turing and reading the draws
-    # back some other way never has to install `FlexiChains`. This process has
-    # `FlexiChains` loaded (the items around this one `using` it), so the
-    # DynamicPPL-alone session is only reachable in a fresh process.
+    # The `VarName`-keyed readback lives in its own extension, so a project
+    # sampling with Turing need not install `FlexiChains`. Sibling items load
+    # it here, so a DynamicPPL-alone session needs a fresh process.
     script = """
     using DistributionsInference, Distributions, DynamicPPL
 

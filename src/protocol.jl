@@ -1,15 +1,10 @@
-# The fit protocol: the small public surface a fittable object implements so
-# the log-density engine (`engine.jl`) can assemble and evaluate a posterior
-# over its estimated parameters. A package implements it by adding methods to
-# `parameter_rows` and `reconstruct` on its own type — DistributionsInference
-# need not be loaded at that end (plain method extension on our public
-# functions, ComposedDistributions#185).
+# The fit protocol: the public surface a fittable object implements so the
+# log-density engine (`engine.jl`) can assemble and evaluate a posterior over
+# its estimated parameters. A row whose `prior` is not `nothing` is ESTIMATED;
+# the engine's flat vector spans exactly those rows, in `parameter_rows` order.
 #
-# The shape generalises ComposedDistributions' `params_table`: a flat
-# inventory of an object's scalar parameters, each row carrying a name, its
-# current value, an optional attached prior, and its support. A row whose
-# `prior` is not `nothing` is ESTIMATED; the flat vector the engine works over
-# spans exactly the estimated rows, in `parameter_rows` order.
+# A downstream package opts in by extending `parameter_rows`/`reconstruct` on
+# its own type; DistributionsInference need not be loaded at that end (CD#185).
 
 @doc "
 
@@ -35,12 +30,11 @@ fields for every parameter kind. A type with such rows must give its own
 defaults below treat `prior === nothing` as fixed and would otherwise drop it
 from the flat vector).
 
-This is the one function every fittable object implements with its own
-method; the fallback below only raises a clear error naming the missing
-method. [`estimated_rows`](@ref), [`flat_dimension`](@ref) and the engine's
-[`as_logdensity`](@ref) are all built on it. A bare `AbstractVector` of
-already-built rows is its own `parameter_rows` (the identity), so a literal
-row list can stand in for a fittable object without a wrapping type.
+Every fittable object implements this with its own method;
+[`estimated_rows`](@ref), [`flat_dimension`](@ref) and the engine's
+[`as_logdensity`](@ref) are built on it. A bare `AbstractVector` of
+already-built rows is its own `parameter_rows`, so a literal row list can
+stand in for a fittable object without a wrapping type.
 
 # Arguments
 - `obj`: the fittable object.
@@ -139,22 +133,19 @@ at its value in `obj`. `x` is [`flat_dimension`](@ref)`(obj)` long — empty whe
 `obj` estimates nothing, in which case `reconstruct(obj, x) == obj`.
 
 This is the companion hook every fittable object implements with its own
-method, alongside [`parameter_rows`](@ref); rebuilding a concrete object is
-necessarily type-specific, so the fallback below only raises a clear error
-naming the missing method. The engine's [`logdensity`](@ref) calls it once
-per evaluation to score `prob.data` against the object collapsed at `x`.
+method, alongside [`parameter_rows`](@ref). The engine's
+[`logdensity`](@ref) calls it once per evaluation to score `prob.data`
+against the object collapsed at `x`.
 
 An ESTIMATED field's type must stay GENERIC (e.g. `shape::S`, not
 `shape::Float64`): a gradient-based sampler threads a tracer number (a
 `ForwardDiff.Dual`, a `ReverseDiff.TrackedReal`, ...) through `x`, and a
 concrete field rejects it with an opaque `MethodError` from inside `obj`'s own
 constructor. Both call sites (`logdensity` and the `DynamicPPL` extension's
-turing model) guard this ahead of time with a clear, named `ArgumentError`
-instead. That guard is not exhaustive: a field typed `Union{Float64,
-Missing}` (or any other `Union`) cannot hold a tracer either, but
-`isconcretetype` reads `false` for a `Union`, so the guard treats it as
-already generic and stays silent — a documented false negative for an
-unusual parameterisation, not a false positive.
+turing model) guard this ahead of time with a named `ArgumentError` instead.
+A `Union`-typed field (e.g. `Union{Float64, Missing}`) is a false negative of
+that guard: `isconcretetype` is `false` for a `Union`, so it reads as already
+generic even though it cannot hold a tracer either.
 
 # Arguments
 - `obj`: the fittable object whose structure is rebuilt.
@@ -193,12 +184,9 @@ function reconstruct(obj, x::AbstractVector)
         "protocol's `reconstruct(obj, x::AbstractVector)` for this type"))
 end
 
-# A bare row vector is its own minimal fittable object (the `parameter_rows`
-# identity above), so it needs its own `reconstruct`: substitute the
-# estimated rows' values from `x`, in row order, and hold every fixed row
-# unchanged. Built with an explicit indexed loop (mirrors
-# ComposedDistributions' `unflatten`), since the rows are typically
-# heterogeneously typed (a `prior` of `Nothing` here, a distribution there).
+# A bare row vector is its own minimal fittable object, so it needs its own
+# `reconstruct`: substitute the estimated rows' values from `x`, in row order,
+# and hold every fixed row unchanged.
 function reconstruct(rows::AbstractVector{<:NamedTuple}, x::AbstractVector)
     n = count(row -> row.prior !== nothing, rows)
     length(x) == n || throw(DimensionMismatch(
@@ -218,32 +206,14 @@ function reconstruct(rows::AbstractVector{<:NamedTuple}, x::AbstractVector)
     return out
 end
 
-# The concrete-field-under-AD guard (DI#48). A hand-rolled `reconstruct`
-# method whose target struct declares an ESTIMATED field with a concrete
-# (rather than generic) type crashes deep inside the AD backend the moment a
-# gradient-based sampler threads a tracer number through it: the struct's own
-# constructor rejects the foreign scalar with an opaque `MethodError` before
-# `reconstruct` even returns (confirmed directly: `ConcreteLeaf(dual, 1.0)`
-# throws `MethodError: no method matching Float64(::ForwardDiff.Dual{...})`
-# from inside the default inner constructor, not from anywhere `reconstruct`
-# controls). This check runs immediately BEFORE `reconstruct` at both call
-# sites (`logdensity` in `engine.jl` and the `DynamicPPL` extension's turing
-# model), comparing each estimated row's OWN struct field (skipping a dotted
-# `name`, which belongs to a nested/composed structure this generic check
-# does not attempt to introspect) against the flat vector's per-element type,
-# so the failure is legible instead of surfacing from inside the AD backend.
+# The concrete-field-under-AD guard (#48), run just before `reconstruct` at
+# both call sites so a concretely-typed estimated field fails legibly rather
+# than as an opaque `MethodError` from inside the AD backend.
 
-# A "plain scalar" element type (`Float64`, `Float32`, `Int`, ...) always
-# converts into any other concrete `Real` field without incident; only a
-# STRUCTURED tracer type (a `ForwardDiff.Dual`, a `ReverseDiff.TrackedReal`,
-# ...) triggers the guard below — recognised generically here by having
-# fields of its own, with no hardcoded dependency on any AD package.
-#
-# A `Union{Float64, Missing}`-typed field is a documented false NEGATIVE:
-# `isconcretetype` is `false` for a `Union`, so it reads as "already generic"
-# and the guard stays silent, even though such a field cannot hold a `Dual`
-# either. This is an unusual parameterisation the guard does not attempt to
-# cover; see `reconstruct`'s docstring.
+# A structured tracer type (a `ForwardDiff.Dual`, a `ReverseDiff.TrackedReal`,
+# ...) is recognised by having fields of its own, so no AD package is
+# hardcoded here. A plain scalar converts into any concrete `Real` field
+# regardless, so it never trips the guard.
 _is_plain_scalar(::Type{T}) where {T} = isconcretetype(T) && fieldcount(T) == 0
 
 @noinline function _throw_concrete_field_error(objtype, name, declared, xi_type)
@@ -260,21 +230,14 @@ The estimated rows whose OWN struct field is concretely typed, precomputed
 once.
 
 `_concrete_field_candidates(objtype, rows)` walks the ESTIMATED `rows`
-[`as_logdensity`](@ref) already derived once at construction (the same
-`estimated_rows(obj)` result `flat_priors` is built from — passed in here
-rather than re-derived, so construction calls [`parameter_rows`](@ref) once,
-not twice), and keeps only the `(index, name, declared_type)` triples the
-concrete-field-under-AD guard (DI#48) needs to check — `index` into the
-ESTIMATED flat vector, `name` the row's own struct field, `declared_type`
-that field's concrete type. A row whose `name` is dotted (a nested/composed
-structure this generic check does not introspect) or whose declared field
-type is not concrete (already generic, or abstract) is dropped entirely, so
-a properly generic object gets an EMPTY list and [`logdensity`](@ref)'s
-per-evaluation guard is a single `isempty` check.
-
-This mirrors [`extra_prior_state`](@ref): structural state that depends only
-on `obj` (fixed for the life of a `FitLogDensity`), never on the flat vector,
-computed once rather than recomputed on every evaluation.
+[`as_logdensity`](@ref) already derived at construction and keeps the
+`(index, name, declared_type)` triples the concrete-field-under-AD guard
+(#48) must check: `index` into the estimated flat vector, `name` the row's
+own struct field, `declared_type` that field's concrete type. A row with a
+dotted `name` (a nested structure this generic check does not introspect) or
+a non-concrete declared type is dropped, so a properly generic object gets an
+EMPTY list and [`logdensity`](@ref)'s per-evaluation guard is a single
+`isempty` check.
 "
 function _concrete_field_candidates(objtype, rows)
     wrapper = objtype.name.wrapper
@@ -289,14 +252,10 @@ function _concrete_field_candidates(objtype, rows)
     return out
 end
 
-# Checked per ELEMENT of `x` (not `x`'s container `eltype`): the `DynamicPPL`
-# turing model threads values through an abstractly-typed `Vector{Real}`
-# regardless of what is actually stored in it, so the container's own eltype
-# cannot tell a plain `Float64` draw from a `Dual` one — only each element's
-# own runtime type can. `candidates` is
-# [`_concrete_field_candidates`](@ref)`(prob.obj)`, computed once at
-# construction; an empty list (the common, properly generic case) makes this
-# a single allocation-free `isempty` check.
+# Checked per ELEMENT of `x`, not `x`'s container `eltype`: the `DynamicPPL`
+# turing model threads values through an abstractly-typed `Vector{Real}`, so
+# only each element's own runtime type distinguishes a `Float64` draw from a
+# `Dual` one.
 function _check_generic_fields(objtype, candidates, x::AbstractVector)
     isempty(candidates) && return nothing
     for (i, name, declared) in candidates
@@ -312,20 +271,16 @@ end
 
 Structure-dependent state [`extra_logprior`](@ref) needs, computed once.
 
-`extra_prior_state(obj)` runs a single time, when [`as_logdensity`](@ref)
-assembles a [`FitLogDensity`](@ref), and the result is threaded into every
-[`extra_logprior`](@ref) call for that `obj` — mirroring how
-[`as_logdensity`](@ref) already collects `flat_priors` once rather than
-re-deriving them on every [`logdensity`](@ref) evaluation. The default
-returns `nothing`: most fittable objects need no such state, since
-[`extra_logprior`](@ref)'s default is a constant `0.0`.
+`extra_prior_state(obj)` runs once, when [`as_logdensity`](@ref) assembles a
+[`FitLogDensity`](@ref), and the result is threaded into every
+[`extra_logprior`](@ref) call for that `obj`. The default returns `nothing`,
+which suits most fittable objects since [`extra_logprior`](@ref)'s default is
+a constant `0.0`.
 
-Override this alongside [`extra_logprior`](@ref) when computing the extra
-term requires walking `obj`'s own structure (e.g. finding which rows carry an
-object-dependent prior) — that walk depends only on `obj` (fixed for the
-life of a [`FitLogDensity`](@ref)), never on the flat vector `x`, so paying
-it once here rather than inside [`extra_logprior`](@ref) turns a per-evaluation
-cost into a one-off.
+Override this alongside [`extra_logprior`](@ref) when computing the extra term
+needs a walk of `obj`'s own structure (e.g. finding which rows carry an
+object-dependent prior). That walk depends only on `obj`, never on the flat
+vector, so paying it here turns a per-evaluation cost into a one-off.
 
 # Arguments
 - `obj`: the template fittable object.
@@ -368,9 +323,7 @@ with its own method and gives the corresponding row(s) `prior = nothing` (see
 - `reconstructed`: `obj` rebuilt at `x` (i.e. [`reconstruct`](@ref)`(obj,
   x)`), the object the extra term is scored against.
 - `x`: the estimated flat parameter vector `reconstructed` was built from.
-- `state`: [`extra_prior_state`](@ref)`(obj)`, computed once at construction —
-  a type overriding both methods reads whatever it stashed there instead of
-  recomputing it from `obj` on every call.
+- `state`: [`extra_prior_state`](@ref)`(obj)`, computed once at construction.
 
 # Examples
 ```@example
@@ -394,9 +347,7 @@ function DistributionsInference.reconstruct(p::PooledPair, x::AbstractVector)
 end
 
 # a and b share the population Normal(mu, 1): an object-dependent prior,
-# scored here rather than per row. `PooledPair` needs no precomputed state
-# (the population members are fixed by the type, not found by a structural
-# walk), so `extra_prior_state` is left at its default `nothing`.
+# scored here rather than per row.
 function DistributionsInference.extra_logprior(p::PooledPair, r, x, ::Any)
     return logpdf(Normal(r.mu, 1.0), r.a) + logpdf(Normal(r.mu, 1.0), r.b)
 end
