@@ -1,7 +1,8 @@
 # [Fitting an object](@id fitting)
 
-Any type becomes fittable by naming its own scalar parameters and how to rebuild itself from a flat vector.
-No probabilistic programming language is required to reach that point: the log-density this produces is PPL-neutral, and Turing (or any other PPL) is an optional layer on top, not a requirement.
+A distribution becomes fittable by naming its own scalar parameters and how to rebuild itself from a flat vector.
+No probabilistic programming language is required to reach that point.
+The log-density this produces is PPL-neutral, and Turing (or any other PPL) is an optional layer on top, not a requirement.
 
 This page carries the `ToyDelay` object from the README's own quickstart further: sampling with a hand-rolled `LogDensityProblems`-compatible sampler and with Turing, then reading a fitted chain back onto the object either way, before showing the same calls working unchanged against a `ComposedDistributions` tree.
 
@@ -27,7 +28,7 @@ function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
     return ToyDelay(x[1], oftype(x[1], d.scale))
 end
 
-leaf = ToyDelay(2.0, 1.0)
+delay = ToyDelay(2.0, 1.0)
 data = [1.5, 2.0, 3.2, 1.8, 2.6]
 ```
 
@@ -40,8 +41,8 @@ data = [1.5, 2.0, 3.2, 1.8, 2.6]
 [`flat_dimension`](@ref) counts them: here that is `shape` alone, since `scale` carries no prior and stays fixed at its template value.
 
 ```@example fitting
-prob = DistributionsInference.as_logdensity(leaf, data)
-DistributionsInference.flat_dimension(leaf)
+prob = DistributionsInference.as_logdensity(delay, data)
+DistributionsInference.flat_dimension(delay)
 ```
 
 [`logdensity`](@ref) scores a flat parameter vector, adding the prior's log-density to the data likelihood of the object rebuilt at that value.
@@ -59,7 +60,7 @@ A SURVIVAL-scoring reducer is one worked case: records known only to exceed a bo
 ```@example fitting
 survival_loglik(obj, records) = sum(y -> logccdf(Gamma(obj.shape, obj.scale), y), records)
 bounds = [1.0, 1.5, 2.0]
-survival_prob = DistributionsInference.as_logdensity(leaf, bounds; loglik = survival_loglik)
+survival_prob = DistributionsInference.as_logdensity(delay, bounds; loglik = survival_loglik)
 DistributionsInference.logdensity(survival_prob, [2.0])
 ```
 
@@ -94,21 +95,21 @@ length(draws)
 [`to_flexichain`](@ref) keys the raw draws by the estimated rows' dotted names, so [`readback`](@ref) reduces them straight back onto the object.
 
 ```@example fitting
-chain = DistributionsInference.to_flexichain(leaf, draws)
-fitted = DistributionsInference.readback(leaf, chain)
+chain = DistributionsInference.to_flexichain(delay, draws)
+fitted = DistributionsInference.readback(delay, chain)
 fitted.shape
 ```
 
 [`distribution_params`](@ref) is the params-first primitive underneath: the same reduction, keyed by dotted name, before the object is rebuilt.
 
 ```@example fitting
-DistributionsInference.distribution_params(leaf, chain)
+DistributionsInference.distribution_params(delay, chain)
 ```
 
 [`readback_draws`](@ref) keeps every draw instead of reducing them, for a per-draw posterior-predictive summary.
 
 ```@example fitting
-all_fitted = DistributionsInference.readback_draws(leaf, chain)
+all_fitted = DistributionsInference.readback_draws(delay, chain)
 length(all_fitted)
 ```
 
@@ -121,7 +122,7 @@ DistributionsInference ships no estimator method for this; [`as_optimisation_obj
 using Bijectors, Optim
 
 f = DistributionsInference.as_optimisation_objective(prob)
-res = optimize(f, zeros(DistributionsInference.flat_dimension(leaf)), LBFGS())
+res = optimize(f, zeros(DistributionsInference.flat_dimension(delay)), LBFGS())
 z_hat = Optim.minimizer(res)
 ```
 
@@ -155,14 +156,14 @@ function DistributionsInference.reconstruct(d::ToyDelayML, x::AbstractVector)
     return ToyDelayML(x[1], oftype(x[1], d.scale))
 end
 
-ml_leaf = ToyDelayML(2.0, 1.0)
-ml_prob = DistributionsInference.as_logdensity(ml_leaf, data)
+ml_delay = ToyDelayML(2.0, 1.0)
+ml_prob = DistributionsInference.as_logdensity(ml_delay, data)
 ml_f = DistributionsInference.as_optimisation_objective(ml_prob)
-ml_n = DistributionsInference.flat_dimension(ml_leaf)
+ml_n = DistributionsInference.flat_dimension(ml_delay)
 ml_res = optimize(ml_f, zeros(ml_n), LBFGS())
 ml_x, _ = DistributionsInference.to_constrained(
     ml_prob, Optim.minimizer(ml_res))
-DistributionsInference.reconstruct(ml_leaf, ml_x).shape
+DistributionsInference.reconstruct(ml_delay, ml_x).shape
 ```
 
 ## Sampling with Turing
@@ -174,7 +175,7 @@ Each estimated row becomes a named site drawn from its own prior, and the data l
 using DynamicPPL, Turing
 using FlexiChains: VNChain
 
-model = DistributionsInference.as_turing(leaf, data)
+model = DistributionsInference.as_turing(delay, data)
 Random.seed!(1)
 turing_chain = sample(model, NUTS(), 200; chain_type = VNChain, progress = false)
 ```
@@ -182,7 +183,7 @@ turing_chain = sample(model, NUTS(), 200; chain_type = VNChain, progress = false
 [`readback`](@ref) and [`readback_draws`](@ref) read a `VNChain` back onto the object exactly as they read the hand-rolled sampler's chain above; the dotted-name convention is the same either way, so a project can switch samplers without touching its readback code.
 
 ```@example fitting
-DistributionsInference.readback(leaf, turing_chain).shape
+DistributionsInference.readback(delay, turing_chain).shape
 ```
 
 ## Fitting a composed distribution
@@ -212,7 +213,7 @@ fitted_tree = DistributionsInference.readback(tree, tree_chain)
 event(fitted_tree, :onset_admit)
 ```
 
-`as_turing` works on a tree exactly as it does on `leaf`, one named site per estimated row.
+`as_turing` works on a tree exactly as it does on `delay`, one named site per estimated row.
 
 ```@example fitting
 tree_model = DistributionsInference.as_turing(tree, tree_data)

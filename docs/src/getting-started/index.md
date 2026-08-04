@@ -11,11 +11,11 @@ using DistributionsInference, Distributions, Random
 using FlexiChains: FlexiChains
 ```
 
-## A first example: fit a toy object with no PPL
+## A first example: fit a toy distribution with no PPL
 
-A type becomes fittable by naming its scalar parameters and how to rebuild
-itself from a flat vector — no other change needed, and no probabilistic
-programming language required.
+A distribution becomes fittable by naming its scalar parameters and how to
+rebuild itself from a flat vector, with no other change needed and no
+probabilistic programming language required.
 
 ```@example quickstart
 struct ToyDelay
@@ -41,18 +41,18 @@ end
 prior, so it is estimated; `scale` carries none, so it stays fixed.
 
 ```@example quickstart
-leaf = ToyDelay(2.0, 1.0)
-DistributionsInference.parameter_rows(leaf)
+delay = ToyDelay(2.0, 1.0)
+DistributionsInference.parameter_rows(delay)
 ```
 
-[`as_logdensity`](@ref) packages the template object and observed data into a
-log-density over just the estimated rows, and [`flat_dimension`](@ref) counts
-them.
+[`as_logdensity`](@ref) packages the template distribution and observed data
+into a log-density over just the estimated rows, and [`flat_dimension`](@ref)
+counts them.
 
 ```@example quickstart
 data = [1.5, 2.0, 3.2, 1.8, 2.6]
-prob = DistributionsInference.as_logdensity(leaf, data)
-DistributionsInference.flat_dimension(leaf)
+prob = DistributionsInference.as_logdensity(delay, data)
+DistributionsInference.flat_dimension(delay)
 ```
 
 [`logdensity`](@ref) scores a candidate flat vector: the prior's log-density
@@ -90,7 +90,7 @@ length(draws)
 names, the same naming contract a real PPL's sampler output would carry.
 
 ```@example quickstart
-chain = DistributionsInference.to_flexichain(leaf, draws)
+chain = DistributionsInference.to_flexichain(delay, draws)
 ```
 
 [`readback`](@ref) reduces the chain to a fitted `ToyDelay` (the posterior
@@ -98,12 +98,12 @@ mean of `shape` by default); [`readback_draws`](@ref) keeps every draw
 instead, for a per-draw posterior-predictive summary.
 
 ```@example quickstart
-fit = DistributionsInference.readback(leaf, chain)
+fit = DistributionsInference.readback(delay, chain)
 fit.shape
 ```
 
 ```@example quickstart
-length(DistributionsInference.readback_draws(leaf, chain))
+length(DistributionsInference.readback_draws(delay, chain))
 ```
 
 Loading `DynamicPPL` activates [`as_turing`](@ref), a light wrapper over the
@@ -111,7 +111,7 @@ same `prob` that samples with Turing instead of the toy sampler above; the
 same [`readback`](@ref) call reads its chain back too.
 [Fitting an object](@ref fitting) carries `leaf` through both routes in
 full, then runs the identical calls against a `ComposedDistributions` tree
-in place of a hand-written type.
+in place of a hand-written distribution.
 
 ## Learning more
 

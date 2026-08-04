@@ -54,14 +54,14 @@ function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
 end
 ```
 
-`as_logdensity` packages a template object and data into a log-density over
-just the one estimated parameter (`shape`; `scale` stays fixed).
+`as_logdensity` packages a template distribution and data into a log-density
+over just the one estimated parameter (`shape`; `scale` stays fixed).
 
 ```julia
-leaf = ToyDelay(2.0, 1.0)
+delay = ToyDelay(2.0, 1.0)
 data = [1.5, 2.0, 3.2, 1.8, 2.6]
-prob = DistributionsInference.as_logdensity(leaf, data)
-DistributionsInference.flat_dimension(leaf)
+prob = DistributionsInference.as_logdensity(delay, data)
+DistributionsInference.flat_dimension(delay)
 ```
 
 Any `LogDensityProblems`-compatible sampler can drive `prob`; here is the
@@ -93,8 +93,8 @@ this last step; everything above needs only `DistributionsInference`.
 ```julia
 using FlexiChains: FlexiChains  # Pkg.add("FlexiChains") if not installed
 
-chain = DistributionsInference.to_flexichain(leaf, draws)
-fit = DistributionsInference.readback(leaf, chain)
+chain = DistributionsInference.to_flexichain(delay, draws)
+fit = DistributionsInference.readback(delay, chain)
 fit.shape
 ```
 
