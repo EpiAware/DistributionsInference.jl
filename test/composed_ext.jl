@@ -2,6 +2,8 @@
 # `estimated_rows`, `flat_dimension`, `reconstruct` and `extra_logprior` for a
 # composed distribution over CD's public codec, checked against CD's own
 # equivalents across plain, pooled, `Resolve`-Dirichlet and shared-tag trees.
+# `logdensity` is checked against reference values baked in from CD 0.1.1's
+# own `as_logdensity`/`logdensity`, since CD 0.2 removes both (CD#324).
 
 @testsnippet ComposedFixture begin
     using DistributionsInference, Distributions, ComposedDistributions
@@ -91,25 +93,31 @@ end
     end
 end
 
-@testitem "logdensity agrees with CD's own as_logdensity/logdensity" setup=[ComposedFixture] begin
+@testitem "logdensity matches the CD reference for a plain tree" setup=[ComposedFixture] begin
     data = [[0.5, 2.0], [1.0, 3.0]]
     prob = DistributionsInference.as_logdensity(plain_tree, data)
-    cd_prob = ComposedDistributions.as_logdensity(plain_tree, data)
+
+    # Computed with ComposedDistributions 0.1.1 as_logdensity, removed in
+    # CD 0.2 (CD#324).
+    expected = Dict([1.5] => -5.387924930600233,
+        [2.0] => -5.22923288347558,
+        [3.2] => -11.063115427505103)
 
     for x in ([1.5], [2.0], [3.2])
-        @test DistributionsInference.logdensity(prob, x) ≈
-              ComposedDistributions.logdensity(cd_prob, x)
+        @test DistributionsInference.logdensity(prob, x) ≈ expected[x] rtol=1e-10
     end
 end
 
-@testitem "logdensity agrees with CD for a non-centred pooled tree" setup=[ComposedFixture] begin
+@testitem "logdensity matches the CD reference for a non-centred pooled tree" setup=[
+    ComposedFixture] begin
     data = [[0.5, 2.0, 1.2], [1.0, 3.0, 0.8], [0.9, 1.8, 1.1]]
     prob = DistributionsInference.as_logdensity(noncentred_tree, data)
-    cd_prob = ComposedDistributions.as_logdensity(noncentred_tree, data)
 
     x = [0.1, 0.2, -0.3, 0.4, 0.5]
+    # Computed with ComposedDistributions 0.1.1 as_logdensity, removed in
+    # CD 0.2 (CD#324).
     @test DistributionsInference.logdensity(prob, x) ≈
-          ComposedDistributions.logdensity(cd_prob, x)
+          -15.433629679593508 rtol=1e-10
 end
 
 @testitem "extra_logprior: centred-pool term matches a hand computation" setup=[ComposedFixture] begin
@@ -129,14 +137,16 @@ end
         plain_state) == 0.0
 end
 
-@testitem "logdensity agrees with CD for a centred pooled tree (incl. extra_logprior)" setup=[ComposedFixture] begin
+@testitem "logdensity matches the CD reference for a centred pooled tree (incl. extra_logprior)" setup=[
+    ComposedFixture] begin
     data = [[0.4, 0.7], [0.6, 0.5]]
     prob = DistributionsInference.as_logdensity(centred_tree, data)
-    cd_prob = ComposedDistributions.as_logdensity(centred_tree, data)
 
     x = [0.3, 0.6]
+    # Computed with ComposedDistributions 0.1.1 as_logdensity, removed in
+    # CD 0.2 (CD#324).
     @test DistributionsInference.logdensity(prob, x) ≈
-          ComposedDistributions.logdensity(cd_prob, x)
+          -3.0600698871687486 rtol=1e-10
 end
 
 @testitem "readback: the generic FlexiChains machinery round-trips a pooled, shared tree" setup=[ComposedFixture] begin

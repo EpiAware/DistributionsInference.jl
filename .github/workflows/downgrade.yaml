@@ -107,6 +107,14 @@ jobs:
       - uses: julia-actions/julia-runtest@v1
         with:
           test_args: ${{ inputs.test_args }}
+          # This job's whole point is to pin deps at their lower bound.
+          # julia-runtest's default `force_latest_compatible_version:
+          # 'auto'` detects a Dependabot/CompatHelper actor and flips this
+          # to true, which forces the opposite of a downgrade. Pin it to
+          # false so the actor-detection heuristic can never override a
+          # deliberately-downgraded environment, regardless of who opened
+          # the PR (EpiAware/.github#42).
+          force_latest_compatible_version: false
       # Runs after the tests so the floors land at the end of a red log rather
       # than thousands of lines up. Reporting only, never changes the result.
       - name: Report the resolved floors
