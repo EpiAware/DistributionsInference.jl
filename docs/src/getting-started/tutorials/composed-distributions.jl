@@ -116,39 +116,6 @@ event(point_estimate(pooled, pooled_chain), :north)
 # for a hierarchical shape can start the chain at `exp(16)` and underflow the
 # likelihood.
 
-# ## The one tree Turing refuses
-#
-# A centred pool scores its members against the reconstructed population rather
-# than against a fixed prior of their own, and `DynamicPPL` has no sampling
-# path for that yet.
-# `distribution_to_turing` says so instead of mis-scoring the model.
-
-centred_pool() = pool(:region, LogNormal(log(2.0), 0.3); noncentred = false)
-centred = compose((
-    north = uncertain(Gamma(2.0, 1.0); shape = centred_pool()),
-    south = uncertain(Gamma(2.0, 1.0); shape = centred_pool())))
-
-centred_data = [rand(rng, centred) for _ in 1:200]
-
-try
-    distribution_to_turing(centred, centred_data)
-catch err
-    println(sprint(showerror, err))
-end
-
-# The log-density route has no such gap, so a centred tree fits through
-# [`distribution_to_logdensity`](@ref) and a gradient-free sampler.
-
-centred_prob = distribution_to_logdensity(centred, centred_data)
-centred_model = AdvancedMH.DensityModel() do x
-    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(centred_prob, x)
-end
-centred_sampler = RWMH(MvNormal(zeros(2), 0.05^2 * I))
-centred_transitions = sample(Xoshiro(1), centred_model, centred_sampler, 2000;
-    param_names = ["north.shape", "south.shape"], progress = false)
-centred_draws = [t.params for t in centred_transitions][1001:end]
-event(point_estimate(centred, to_flexichain(centred, centred_draws)), :north)
-
 # ## Next
 #
 # - ComposedDistributions' [verb map](https://composeddistributions.epiaware.org/dev/getting-started/concepts)

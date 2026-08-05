@@ -100,7 +100,6 @@ point_estimate(delay, weighted_chain).shape
 # ## Next
 #
 # - [Fitting a composed distribution](@ref composed-distributions) runs this
-#   same model builder over a `ComposedDistributions` tree, and shows the one
-#   tree shape it refuses.
+#   same model builder over a `ComposedDistributions` tree.
 # - [Automatic differentiation backends](@ref ad-backends) reports which
 #   backends differentiate the log-density `NUTS` used here.
