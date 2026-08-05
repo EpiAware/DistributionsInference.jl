@@ -35,6 +35,7 @@ Every fit here is the same three steps, whatever the distribution and sampler.
 | Read back | [`point_estimate`](@ref) or [`distribution_draws`](@ref) | the fitted distribution |
 
 Only the first step is written per type, and a distribution from a package that already implements the protocol skips it.
+A point estimate replaces the last two: [`optimise_distribution`](@ref) takes the distribution, the data and an optimiser, and returns the fitted distribution.
 
 ## Tutorials
 

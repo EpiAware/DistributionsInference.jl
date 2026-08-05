@@ -42,10 +42,18 @@ export distribution_params, point_estimate, distribution_draws
 # `DistributionsInferenceDynamicPPLExt`.
 export distribution_to_turing
 
-# The unconstrained <-> constrained transform and the negative unconstrained
-# log-posterior built on it. Stubs here (docstrings in `bijectors.jl`); both
-# methods live in `DistributionsInferenceBijectorsExt`. `to_constrained` is a
-# transform an engine author calls, not a fitting entry point, so it stays
-# unexported.
-export logdensity_to_objective
-public to_constrained
+# The unconstrained <-> constrained transform and the objective round trip
+# built on it. Stubs here (docstrings in `bijectors.jl`); every method lives in
+# `DistributionsInferenceBijectorsExt`. Both transforms are what an engine
+# author calls rather than fitting entry points, so they stay unexported, while
+# the two ends of the objective round trip a caller writes are exported.
+export logdensity_to_objective, objective_to_distribution
+public to_constrained, to_unconstrained
+
+# The one-call optimiser fit, and the single optimiser-package-specific step it
+# calls (docstrings in `optimise.jl`). `optimise_distribution` is written in
+# core over the transforms above; `minimise` is a hook an optimiser package's
+# extension fills in, so it is documented and public without being exported.
+# The `Optim` method lives in `DistributionsInferenceOptimExt`.
+export optimise_distribution
+public minimise

@@ -55,7 +55,9 @@ Markdown = "1"
 # run its Mooncake rows. See the `HEAVY_TUTORIALS` note in docs/docs_config.jl
 # for why that page is unregistered.
 Mooncake = "0.5"
-Optim = "1"
+# Kept in step with the root [compat] floor, so the docs environment can
+# load the Optim extension.
+Optim = "2.2"
 Random = "1"
 Statistics = "1"
 Turing = "0.42, 0.43, 0.44, 0.45"

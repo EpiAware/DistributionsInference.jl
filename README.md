@@ -20,7 +20,8 @@ A distribution names its own parameters and becomes fittable through a plain log
 - `distribution_to_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, which any consumer of that interface can drive.
 - A distribution declares its parameters as a table of rows, one row per scalar parameter carrying its name, value, prior and support.
   Attaching a prior to a row is what makes that parameter estimated.
-  The rows are plain `NamedTuple`s, which any Tables.jl consumer reads.
+  The rows are plain `NamedTuple`s, so the inventory is a row table any Tables.jl consumer reads, without this package depending on Tables.jl.
+- `optimise_distribution` fits a distribution to data with an optimiser of your choosing in one call, for a point estimate rather than a posterior, and the pieces it composes stay available for a fit you drive yourself.
 - `point_estimate` post-processes sampler output onto a fitted distribution in one call.
 - Supporting a new chain type takes one added method.
 - The distribution that comes back is the same kind of object that went in, so a fitted `Gamma` is a `Gamma`.

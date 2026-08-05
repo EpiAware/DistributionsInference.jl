@@ -25,6 +25,8 @@ end
         :distribution_to_logdensity,
         :distribution_to_turing,
         :logdensity_to_objective,
+        :objective_to_distribution,
+        :optimise_distribution,
         :parameter_rows,
         :point_estimate,
         :with_priors]
@@ -36,8 +38,10 @@ end
         :extra_prior_state,
         :flat_dimension,
         :logdensity,
+        :minimise,
         :reconstruct,
-        :to_constrained]
+        :to_constrained,
+        :to_unconstrained]
 end
 
 @testitem "an extension-backed stub names the package to load" begin
@@ -60,6 +64,12 @@ end
             "Bijectors", "DistributionsInferenceBijectorsExt"),
         (() -> DistributionsInference.to_constrained(prob, [0.0]),
             "Bijectors", "DistributionsInferenceBijectorsExt"),
+        (() -> DistributionsInference.to_unconstrained(prob, [2.0]),
+            "Bijectors", "DistributionsInferenceBijectorsExt"),
+        (() -> DistributionsInference.objective_to_distribution(prob, [0.0]),
+            "Bijectors", "DistributionsInferenceBijectorsExt"),
+        (() -> DistributionsInference.minimise(sum, [0.0], nothing),
+            "Optim", "DistributionsInferenceOptimExt"),
         (() -> DistributionsInference.distribution_to_turing(rows, [1.5]),
             "DynamicPPL", "DistributionsInferenceDynamicPPLExt")]
     for (call, pkg, ext) in cases

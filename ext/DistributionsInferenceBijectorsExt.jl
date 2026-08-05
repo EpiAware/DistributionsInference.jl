@@ -9,10 +9,11 @@ using Bijectors: Bijectors, bijector, inverse, with_logabsdet_jacobian
 
 function _row_bijector(prior, i)
     prior === nothing && throw(ArgumentError(
-        "to_constrained has no bijector for estimated row $i: its prior is " *
+        "no bijector for estimated row $i: its prior is " *
         "`nothing` (an object-dependent prior scored through " *
         "`extra_logprior`, e.g. a hierarchical population term); a type " *
-        "with such a row needs its own `to_constrained` method"))
+        "with such a row needs its own `to_constrained`/`to_unconstrained` " *
+        "methods"))
     return bijector(prior)
 end
 
@@ -39,12 +40,30 @@ function DistributionsInference.to_constrained(
     return x, logjac
 end
 
+# The forward direction: no log-Jacobian, since a caller mapping known
+# parameter values onto the sampling scale wants the point, not its density.
+function DistributionsInference.to_unconstrained(
+        prob::FitLogDensity, x::AbstractVector)
+    priors = prob.flat_priors
+    length(x) == length(priors) || throw(DimensionMismatch(
+        "constrained vector has length $(length(x)) but $(prob.obj) has " *
+        "$(length(priors)) estimated parameter(s)"))
+    return [_row_bijector(priors[i], i)(x[i]) for i in eachindex(x)]
+end
+
 # Composes `to_constrained` with the core `logdensity` (DI#46).
 function DistributionsInference.logdensity_to_objective(prob::FitLogDensity)
     return function (z::AbstractVector)
         x, logjac = DistributionsInference.to_constrained(prob, z)
         return -(logdensity(prob, x) + logjac)
     end
+end
+
+# The last step of a point fit: an optimiser's minimiser back to an object.
+function DistributionsInference.objective_to_distribution(
+        prob::FitLogDensity, z::AbstractVector)
+    x, _ = DistributionsInference.to_constrained(prob, z)
+    return DistributionsInference.reconstruct(prob.obj, x)
 end
 
 end # module
