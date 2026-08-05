@@ -16,33 +16,29 @@ const LIGHT_TUTORIALS = String[
     "composed-distributions.jl"
 ]
 
-# The `ad-backends.jl` page itself is kit-managed and re-applied on every
-# sync; only this registration is package-owned.
-const HEAVY_TUTORIALS = String[
-    "ad-backends.jl"
-]
+# `ad-backends.jl` is kit-managed and re-applied on every sync, but it is not
+# registered here, so the build neither runs it nor writes a page for it. It
+# cannot run: `AlgebraOfGraphics` caps `DimensionalData` below the floor the
+# `FlexiChains` these docs load needs (kit#283, and CD#147 for the same
+# conflict), so its plotting stack is out of docs/Project.toml (#19); and the
+# `ADFixtures` registry no longer imports Mooncake (DI#73), so its two
+# `AutoMooncake` rows would fail even with the plotting stack back.
+#
+# Registering it and force-stubbing it instead would publish a page whose only
+# body is a fast-build notice aimed at maintainers (kit#382). Register it here
+# and in `pages.jl` once it can run.
+const HEAVY_TUTORIALS = String[]
 
 # Relative to `docs/src`.
 const TUTORIALS_SUBDIR = joinpath("getting-started", "tutorials")
 
 # Fast-build stubs (`--skip-notebooks`). Keep each tutorial's `@id` in the
 # heading so cross-references from other pages still resolve.
-const TUTORIAL_STUBS = Pair{String, String}[
-    "ad-backends.md" => "# [Automatic differentiation backends](@id ad-backends)"
-]
+const TUTORIAL_STUBS = Pair{String, String}[]
 
 # Heavy tutorials that always render from their `TUTORIAL_STUBS` heading and
-# never execute. `ad-backends.jl` is stubbed while its plotting stack cannot
-# resolve: `AlgebraOfGraphics` caps `DimensionalData` below the floor the
-# `FlexiChains` these docs load needs (kit#283, and CD#147 for the same
-# conflict), so those deps are out of docs/Project.toml (#19).
-# Un-stub and restore them when that ceiling lifts.
-#
-# The page also loads no AD backend of its own, and the `ADFixtures` registry
-# no longer imports Mooncake (DI#73), so its two `AutoMooncake` rows will fail
-# until the managed page gains a `using Mooncake` or the registry imports it
-# again; the `Mooncake` docs dep installs it but does not load it.
-const FORCE_STUB_TUTORIALS = String["ad-backends.jl"]
+# never execute.
+const FORCE_STUB_TUTORIALS = String[]
 
 # Whether the README block and docs footer carry EpiAware ecosystem branding.
 # The content this turns on is kit-managed; only this line is package-owned.

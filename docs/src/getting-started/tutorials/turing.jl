@@ -99,5 +99,4 @@ point_estimate(delay, survival_chain).shape
 #
 # - [Fitting a composed distribution](@ref composed-distributions) runs this
 #   same model builder over a `ComposedDistributions` tree.
-# - [Automatic differentiation backends](@ref ad-backends) reports which
-#   backends differentiate the log-density `NUTS` used here.
+# - [Public API](@ref public-api) lists the rest of the protocol.
