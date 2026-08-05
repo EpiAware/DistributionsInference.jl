@@ -44,9 +44,13 @@ loaded as well.
 - `loglik`: a reducer `(obj, data) -> Real` scoring `data` against the
   reconstructed object (default: sum of `logpdf(obj, record)`).
 - `init`: the starting point on the unconstrained scale (default: `obj`'s own
-  estimated values through [`to_unconstrained`](@ref)).
+  estimated values through [`to_unconstrained`](@ref)). A template value on the
+  boundary of its prior's support has no unconstrained image, and is rejected
+  with the offending row named rather than passed to the optimiser.
 - other keywords are forwarded to [`minimise`](@ref), and from there to the
-  optimiser package.
+  optimiser package. With `Optim`, `options` takes an `Optim.Options` and
+  `autodiff` an `ADTypes` backend; see [`minimise`](@ref) for why a
+  gradient-based fit wants the latter set.
 
 # Examples
 ```@example
@@ -95,8 +99,29 @@ function optimise_distribution(
     flat_dimension(prob.obj) == 0 && return reconstruct(prob.obj, Float64[])
     z0 = init === nothing ?
          to_unconstrained(prob, _template_values(prob.obj)) : init
+    all(isfinite, z0) || _reject_nonfinite_start(prob, z0, init === nothing)
     z_hat = minimise(logdensity_to_objective(prob), z0, optimiser; kwargs...)
     return objective_to_distribution(prob, z_hat)
+end
+
+# A template value sitting on the boundary of its prior's support (a zero
+# rate, a zero or one probability) has no unconstrained image, so the default
+# start is `+/-Inf` and the optimiser fails on a non-finite objective. Name
+# the row instead, since the fault is in the template rather than the search.
+function _reject_nonfinite_start(prob, z0, defaulted)
+    rows = estimated_rows(prob.obj)
+    bad = findall(!isfinite, z0)
+    named = length(rows) == length(z0) ?
+            join(("$(rows[i].name) = $(rows[i].value)" for i in bad), ", ") :
+            "flat coordinates $(bad)"
+    source = defaulted ?
+             "the template's own values map to a non-finite point at" :
+             "the `init` given is non-finite at"
+    throw(ArgumentError(
+        "`optimise_distribution` cannot start the optimiser: $source " *
+        "$named. A value on the boundary of its prior's support has no " *
+        "unconstrained image; move it inside the support, or pass a finite " *
+        "`init`."))
 end
 
 @doc "
@@ -111,7 +136,21 @@ package's own entry point.
 
 The `Optim.jl` method (any `Optim.AbstractOptimizer`, e.g. `LBFGS()`) lives in
 the `DistributionsInferenceOptimExt` extension and has no method until `Optim`
-is loaded. Its `options` keyword takes an `Optim.Options`.
+is loaded. Its `options` keyword takes an `Optim.Options`, and its `autodiff`
+keyword an `ADTypes` backend.
+
+Set `autodiff` for any gradient-based optimiser. `Optim` differentiates by
+central finite differences unless told otherwise, which spends `2n` objective
+evaluations on every gradient and loses accuracy;
+[`logdensity_to_objective`](@ref)'s objective differentiates directly, so an AD
+backend gets the same point for a fraction of the work. The backend's package
+has to be loaded for `ADTypes` to dispatch on it.
+
+```julia
+using DistributionsInference, Bijectors, Optim, ADTypes, ForwardDiff
+
+optimise_distribution(leaf, data, LBFGS(); autodiff = AutoForwardDiff())
+```
 
 # Arguments
 - `objective`: a callable `z -> Real` to minimise, e.g. the result of
@@ -131,12 +170,25 @@ DistributionsInference.minimise(z -> sum(abs2, z .- 2.0), [0.0, 0.0], LBFGS())
 - [`logdensity_to_objective`](@ref): the objective it usually minimises.
 "
 function minimise(objective, init, optimiser; kwargs...)
+    plugs_in = "Another optimisation package plugs in by adding a " *
+               "`minimise` method for its own optimiser type."
+    # With the extension already loaded, the fault is the argument rather
+    # than a missing package, so telling the caller to install `Optim` would
+    # send them after something they have.
+    _optim_loaded() && throw(ArgumentError(
+        "`minimise` has no method for an optimiser of type " *
+        "$(typeof(optimiser)): it is not a supported optimiser. `Optim` is " *
+        "loaded, so every `Optim.AbstractOptimizer` (e.g. `LBFGS()`) " *
+        "already has one. $plugs_in"))
     throw(ArgumentError(
         "`minimise` has no method for an optimiser of type " *
         "$(typeof(optimiser)): the `Optim.jl` methods live in the " *
         "`DistributionsInferenceOptimExt` package extension, which loads " *
         "only once `Optim` is in the session (run `using Optim`, and " *
-        "`Pkg.add(\"Optim\")` if it is not installed yet). Another " *
-        "optimisation package plugs in by adding a `minimise` method for " *
-        "its own optimiser type."))
+        "`Pkg.add(\"Optim\")` if it is not installed yet). $plugs_in"))
+end
+
+function _optim_loaded()
+    Base.get_extension(
+        DistributionsInference, :DistributionsInferenceOptimExt) !== nothing
 end

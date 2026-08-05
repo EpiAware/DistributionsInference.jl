@@ -158,8 +158,6 @@ centred_transitions = sample(Xoshiro(1), centred_model, centred_sampler, 2000;
     param_names = ["north.shape", "south.shape"], progress = false)
 centred_draws = [t.params for t in centred_transitions][1001:end]
 event(point_estimate(centred, as_chain(centred, centred_draws)), :north)
-
->>>>>>> 95fa41b (refactor!: take the FlexiChains conversion off the public surface)
 # ## Next
 #
 # - ComposedDistributions' [verb map](https://composeddistributions.epiaware.org/dev/getting-started/concepts)

@@ -95,7 +95,10 @@ nothing (`dim == 0`) still needs `draws` to carry the draw count — pass a
 
 Not part of the public surface: standardising a sampler's raw draws into a
 chain type belongs to `FlexiChains` or to the inference package that produced
-them, not here (#91 takes the conversion off the readback path entirely).
+them, not here (#91 takes the conversion off the readback path entirely). It
+stays as the internal entry point from a bare `LogDensityProblems` sampler's
+draws, which is the one route into the readback with no chain of its own,
+until #91 settles where that conversion lives.
 
 This has no method until `FlexiChains` is loaded; the chain construction lives
 in the `DistributionsInferenceFlexiChainsExt` extension.

@@ -86,12 +86,13 @@ end
     @test z_hat≈[2.0, -1.0] atol=1e-6
 end
 
-@testitem "minimise: names Optim for an optimiser it has no method for" begin
+@testitem "minimise: says the argument is wrong when Optim is loaded" begin
     using DistributionsInference
     using Optim
 
     # `Optim` is loaded here, so this is the caller passing something that is
-    # not an optimiser rather than a missing extension.
+    # not an optimiser rather than a missing extension, and the message must
+    # not send them off to install a package they already have.
     thrown = try
         DistributionsInference.minimise(sum, [0.0], "LBFGS")
         nothing
@@ -100,7 +101,81 @@ end
     end
     @test thrown isa ArgumentError
     @test occursin("no method for an optimiser of type String", thrown.msg)
-    @test occursin("Optim", thrown.msg)
+    @test occursin("it is not a supported optimiser", thrown.msg)
+    @test occursin("`Optim` is loaded", thrown.msg)
+    @test !occursin("Pkg.add", thrown.msg)
+end
+
+@testitem "minimise: forwards options to Optim" begin
+    using DistributionsInference
+    using Optim
+
+    # Pins both the four-positional-argument `Optim.optimize` signature and
+    # the pass-through. Rosenbrock rather than a quadratic, which LBFGS
+    # solves in the one iteration the truncated run is allowed.
+    rosenbrock(z) = (1 - z[1])^2 + 100 * (z[2] - z[1]^2)^2
+    start = [-1.2, 1.0]
+
+    full_run = DistributionsInference.minimise(rosenbrock, start, LBFGS())
+    truncated_run = DistributionsInference.minimise(
+        rosenbrock, start, LBFGS(); options = Optim.Options(iterations = 1))
+
+    @test full_run≈[1.0, 1.0] atol=1e-6
+    @test !isapprox(truncated_run, [1.0, 1.0]; atol = 1e-6)
+    @test rosenbrock(truncated_run) > rosenbrock(full_run)
+end
+
+@testitem "optimise_distribution: an AD backend finds the same optimum" setup=[OptimiseFixture] begin
+    using ADTypes, Bijectors, ForwardDiff, Optim
+
+    # `Optim` differentiates by central finite differences unless told
+    # otherwise, so check the documented `autodiff` route reaches the same
+    # closed-form point through a genuinely differentiated objective.
+    leaf = RateLeaf(1.0, Gamma(2.0, 0.5))
+    data = [0.4, 1.2, 0.7, 2.1, 0.9, 1.5, 0.3]
+
+    fitted = optimise_distribution(
+        leaf, data, LBFGS(); autodiff = AutoForwardDiff())
+    @test fitted.rate≈rate_map(leaf, data) atol=1e-6
+
+    # And AD costs strictly fewer objective evaluations than the default.
+    objective = logdensity_to_objective(distribution_to_logdensity(leaf, data))
+    calls = Ref(0)
+    counted(z) = (calls[] += 1; objective(z))
+
+    calls[] = 0
+    DistributionsInference.minimise(counted, [0.0], LBFGS())
+    finite_difference_calls = calls[]
+
+    calls[] = 0
+    DistributionsInference.minimise(
+        counted, [0.0], LBFGS(); autodiff = AutoForwardDiff())
+    @test calls[] < finite_difference_calls
+end
+
+@testitem "optimise_distribution: a boundary start is rejected by name" setup=[OptimiseFixture] begin
+    using Bijectors, Optim
+
+    # A zero rate is on the boundary of its prior's support, so the default
+    # start is `-Inf` and the fault is the template rather than the search.
+    leaf = RateLeaf(0.0, Gamma(2.0, 0.5))
+    data = [0.4, 1.2, 0.7]
+
+    thrown = try
+        optimise_distribution(leaf, data, LBFGS())
+        nothing
+    catch caught
+        caught
+    end
+    @test thrown isa ArgumentError
+    @test occursin("rate = 0.0", thrown.msg)
+    @test occursin("`init`", thrown.msg)
+
+    # A finite `init` gets past it, and a non-finite one is rejected too.
+    @test optimise_distribution(leaf, data, LBFGS(); init = [0.0]).rate ≈
+          rate_map(leaf, data)
+    @test_throws ArgumentError optimise_distribution(
+        leaf, data, LBFGS(); init = [-Inf])
 end
 
 @testitem "optimise_distribution: recovers an identity-linked optimum" setup=[OptimiseFixture] begin

@@ -9,7 +9,10 @@ using Optim: Optim
 
 # `Optim.Options` is a positional argument with method-dependent defaults, so
 # it is passed through only when the caller supplies one; the remaining
-# keywords (`autodiff`, `inplace`) go straight to `Optim.optimize`.
+# keywords go straight to `Optim.optimize`. `autodiff` is the one worth
+# setting: `Optim` defaults it to central finite differences, so a
+# gradient-based method spends `2n` objective evaluations per gradient unless
+# the caller names an `ADTypes` backend.
 function DistributionsInference.minimise(objective, init::AbstractVector,
         optimiser::Optim.AbstractOptimizer; options = nothing, kwargs...)
     result = options === nothing ?
