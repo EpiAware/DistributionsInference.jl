@@ -9,12 +9,14 @@
 # once that ceiling lifts.
 [deps]
 ADFixtures = "51837e51-2e8d-4c65-a757-038da73554aa"
+AdvancedMH = "5b7e9947-ddc0-4b3f-9b55-0d8042f74170"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 ComposedDistributions = "2f642b71-32a9-4f47-97c4-6deb7517f7a7"
 DifferentiationInterfaceTest = "a82114a7-5aa3-49a8-9643-716bb13727a3"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
@@ -33,6 +35,9 @@ DistributionsInference = {path = ".."}
 ADFixtures = {path = "../test/ADFixtures"}
 
 [compat]
+# Kept in step with test/Project.toml: the README and getting-started pages
+# sample through the same AdvancedMH call the readback acceptance test drives.
+AdvancedMH = "0.8"
 Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1, 0.2"
 DifferentiationInterfaceTest = "0.9, 0.10"
@@ -41,6 +46,7 @@ Distributions = "0.25.117"
 # 0.39 fails to precompile on Julia 1.12 (its EnzymeCore extension errors).
 DynamicPPL = "0.40, 0.41, 0.42"
 FlexiChains = "0.4, 0.5, 0.6"
+LinearAlgebra = "1"
 Markdown = "1"
 # Mooncake is a direct dep because the `ADFixtures` registry deliberately does
 # not depend on it (its Mooncake rules clash with ComposedDistributions' —

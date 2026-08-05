@@ -1,14 +1,16 @@
 module DistributionsInferenceDynamicPPLFlexiChainsExt
 
 # DistributionsInference x DynamicPPL x FlexiChains: the `VarName`-keyed chain
-# readback (DI#4). A chain sampled from `as_turing` is keyed by `VarName`, so
-# rename it onto the estimated rows' dotted `Symbol` names and hand it to the
-# `Symbol`-keyed readback in `DistributionsInferenceFlexiChainsExt`.
+# readback (DI#4). A chain sampled from `distribution_to_turing` is keyed by
+# `VarName`, so rename it onto the estimated rows' dotted `Symbol` names and
+# hand it to the `Symbol`-keyed readback in
+# `DistributionsInferenceFlexiChainsExt`.
 # Docstrings live on the stubs in `src/readback.jl`.
 
 using DistributionsInference: DistributionsInference, estimated_rows,
                               _row_varname
-import DistributionsInference: distribution_params, readback, readback_draws
+import DistributionsInference: distribution_params, point_estimate,
+                               readback_draws
 using DynamicPPL: VarName
 using FlexiChains: FlexiChains
 
@@ -39,17 +41,17 @@ function _to_symbol_chain(obj, chain::FlexiChains.FlexiChain{<:VarName},
     end
 end
 
-# `prefix` must match the one `as_turing` was called with; every other keyword
-# forwards to the `Symbol`-keyed method.
+# `prefix` must match the one `distribution_to_turing` was called with; every
+# other keyword forwards to the `Symbol`-keyed method.
 function distribution_params(obj, chain::FlexiChains.FlexiChain{<:VarName};
         prefix::Symbol = :d, kwargs...)
     return distribution_params(
         obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
 end
 
-function readback(obj, chain::FlexiChains.FlexiChain{<:VarName};
+function point_estimate(obj, chain::FlexiChains.FlexiChain{<:VarName};
         prefix::Symbol = :d, kwargs...)
-    return readback(obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
+    return point_estimate(obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
 end
 
 function readback_draws(obj, chain::FlexiChains.FlexiChain{<:VarName};

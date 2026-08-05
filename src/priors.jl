@@ -30,7 +30,7 @@ end
 
 Pick a default prior for one `parameter_rows` row, brms-style.
 
-`default_prior(row)` is [`distribution_priors`](@ref)'s per-row default for
+`default_prior(row)` is [`with_priors`](@ref)'s per-row default for
 rows the caller does not override. `row` is a [`parameter_rows`](@ref)-shaped
 `NamedTuple` `(; name, value, prior, support)`; the prior family follows the
 parameter's own name (the last dotted segment of `name`, e.g. `:shape` from
@@ -60,7 +60,7 @@ DistributionsInference.default_prior(row)
 ```
 
 # See also
-- [`distribution_priors`](@ref): assembles a full row set from this default.
+- [`with_priors`](@ref): assembles a full row set from this default.
 "
 function default_prior(row)
     lo, hi = row.support
@@ -83,16 +83,16 @@ end
 
 Assemble a fully-specified row set from a fittable object, brms-style.
 
-`distribution_priors(obj; priors, default)` reads [`parameter_rows`](@ref)`(obj)`
-and returns the same row shape with every row's `prior` field filled: a
-`priors` override for that row's dotted `name`, if given, else the row's own
-attached `prior` if it is already set, else `default(row)` (support-derived,
+`with_priors(obj; priors, default)` reads [`parameter_rows`](@ref)`(obj)` and
+returns the same row shape with every row's `prior` field filled: a `priors`
+override for that row's dotted `name`, if given, else the row's own attached
+`prior` if it is already set, else `default(row)` (support-derived,
 [`default_prior`](@ref) unless a different `default` is given). The result is
 directly usable as `obj`'s replacement row set — e.g. feeding
-[`reconstruct`](@ref)/[`estimated_rows`](@ref)/[`as_logdensity`](@ref) through
-the bare-row-vector identity ([`parameter_rows`](@ref)`(rows) === rows`) — so
-`distribution_priors(obj)` alone is the estimate-everything path for any
-fit-protocol object.
+[`reconstruct`](@ref)/[`estimated_rows`](@ref) or
+[`distribution_to_logdensity`](@ref) through the bare-row-vector identity
+([`parameter_rows`](@ref)`(rows) === rows`) — so `with_priors(obj)` alone is
+the estimate-everything path for any fit-protocol object.
 
 # Arguments
 - `obj`: the fittable object (or a bare row vector).
@@ -109,7 +109,7 @@ using DistributionsInference, Distributions
 
 rows = [(name = :shape, value = 2.0, prior = nothing, support = (0.0, Inf)),
     (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
-priored = DistributionsInference.distribution_priors(rows)
+priored = with_priors(rows)
 priored[1].prior
 ```
 
@@ -117,7 +117,7 @@ priored[1].prior
 - [`default_prior`](@ref): the support-derived per-row default.
 - [`parameter_rows`](@ref): the row inventory read and replaced.
 "
-function distribution_priors(
+function with_priors(
         obj; priors = Dict{Symbol, Any}(), default = default_prior)
     rows = collect(parameter_rows(obj))
     return map(rows) do row

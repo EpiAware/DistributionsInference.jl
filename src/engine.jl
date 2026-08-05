@@ -10,11 +10,11 @@ _default_loglik(obj, data) = sum(record -> Distributions.logpdf(obj, record), da
 A PPL-neutral log-density over a fit-protocol object's estimated parameters.
 
 `FitLogDensity` carries everything needed to evaluate the (unnormalised)
-log-posterior of a fittable object over its ESTIMATED flat parameter vector,
+log-posterior of a fittable object over its estimated flat parameter vector,
 with no PPL dependency: the template `obj`, the observed `data`, a `loglik`
 reducer scoring `data` against the object reconstructed at a draw, and the
 estimated rows' priors flattened once at construction. Build it with
-[`as_logdensity`](@ref); evaluate it on a flat vector with
+[`distribution_to_logdensity`](@ref); evaluate it on a flat vector with
 [`logdensity`](@ref). It also implements the `LogDensityProblems` interface
 directly, so it is sampleable by any LogDensityProblems consumer.
 
@@ -37,7 +37,7 @@ directly, so it is sampleable by any LogDensityProblems consumer.
   for a properly generic object.
 
 # See also
-- [`as_logdensity`](@ref): the assembler.
+- [`distribution_to_logdensity`](@ref): the assembler.
 - [`logdensity`](@ref): evaluate on a flat vector.
 "
 struct FitLogDensity{D, T, L, FP, ES, CF}
@@ -62,23 +62,23 @@ end
 
 Assemble a [`FitLogDensity`](@ref) from a fittable object and data.
 
-`as_logdensity(obj, data; loglik)` packages the template `obj` and the
-observed `data` into the PPL-neutral log-density spec, reading the priors off
-`obj`'s [`parameter_rows`](@ref) (the estimation boundary). The result
-evaluates the (unnormalised) log-posterior over the ESTIMATED flat parameter
-vector via [`logdensity`](@ref), on the CONSTRAINED scale: each prior is
-scored directly against its row's value with no Jacobian correction. An
-object with no estimated rows estimates nothing: the flat vector is empty and
-`logdensity` is just the data likelihood. Sampling on the unconstrained scale
-(the transform and its log-Jacobian) is a `Bijectors` extension concern.
+`distribution_to_logdensity(obj, data; loglik)` packages the template `obj`
+and the observed `data` into the PPL-neutral log-density spec, reading the
+priors off `obj`'s [`parameter_rows`](@ref) (the estimation boundary). The
+result evaluates the (unnormalised) log-posterior over the estimated flat
+parameter vector via [`logdensity`](@ref), on the constrained scale: each
+prior is scored directly against its row's value with no Jacobian correction.
+An object with no estimated rows estimates nothing: the flat vector is empty
+and `logdensity` is just the data likelihood. Sampling on the unconstrained
+scale (the transform and its log-Jacobian) is a `Bijectors` extension concern.
 
 A conditionally available exact likelihood is a `loglik` the caller writes and
 passes in, not a helper this package adds (#44). Choose between the exact and
-approximate branch with an explicit predicate or by dispatch, NEVER by
+approximate branch with an explicit predicate or by dispatch, never by
 catching an exception from the exact path, which would hide a genuine bug in
 the exact branch. Where the exact form does not apply, refuse loudly with a
 named structural reason, the convention [`to_constrained`](@ref) and
-[`as_turing`](@ref) follow for a row kind they do not support.
+[`distribution_to_turing`](@ref) follow for a row kind they do not support.
 
 # Arguments
 - `obj`: the template fittable object, carrying its [`parameter_rows`](@ref).
@@ -112,7 +112,7 @@ end
 
 leaf = ToyLeaf(2.0, 1.0)
 data = [1.5, 2.0, 3.2]
-prob = DistributionsInference.as_logdensity(leaf, data)
+prob = distribution_to_logdensity(leaf, data)
 DistributionsInference.flat_dimension(leaf)
 ```
 
@@ -154,8 +154,7 @@ end
 # never by catching an exception from the exact path.
 leaf2 = ToyLeaf2(2.0, 1.0)
 data2 = [1.5, 2.0, 3.2]
-prob2 = DistributionsInference.as_logdensity(
-    leaf2, data2; loglik = chosen_loglik)
+prob2 = distribution_to_logdensity(leaf2, data2; loglik = chosen_loglik)
 DistributionsInference.flat_dimension(leaf2)
 ```
 
@@ -163,7 +162,7 @@ DistributionsInference.flat_dimension(leaf2)
 - [`logdensity`](@ref): evaluate the assembled spec on a flat vector.
 - [`parameter_rows`](@ref), [`reconstruct`](@ref): the fit protocol this reads.
 "
-function as_logdensity(obj, data; loglik = _default_loglik)
+function distribution_to_logdensity(obj, data; loglik = _default_loglik)
     return FitLogDensity(obj, data, loglik)
 end
 
@@ -181,7 +180,7 @@ Evaluate a [`FitLogDensity`](@ref) on its estimated flat parameter vector.
 
 `logdensity(prob, x)` is the (unnormalised) log-posterior at the estimated
 flat vector `x` (in [`parameter_rows`](@ref)`(prob.obj)` row order restricted
-to the estimated rows), on the CONSTRAINED scale: each prior in `x` is scored
+to the estimated rows), on the constrained scale: each prior in `x` is scored
 directly, with no Jacobian correction (an unconstrained-scale transform is a
 `Bijectors` extension concern). The value is the sum of the priors'
 log-densities at `x`, plus [`extra_logprior`](@ref) (an object-dependent
@@ -219,12 +218,12 @@ end
 
 leaf = FitLeaf(2.0, 1.0)
 data = [1.5, 2.0, 3.2]
-prob = DistributionsInference.as_logdensity(leaf, data)
+prob = distribution_to_logdensity(leaf, data)
 DistributionsInference.logdensity(prob, [2.5])
 ```
 
 # See also
-- [`as_logdensity`](@ref): assemble `prob`.
+- [`distribution_to_logdensity`](@ref): assemble `prob`.
 - [`reconstruct`](@ref): the flat vector -> concrete object hook this calls.
 "
 function logdensity(prob::FitLogDensity, x::AbstractVector)

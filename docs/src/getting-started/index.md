@@ -1,126 +1,47 @@
 # [Getting started](@id getting-started)
 
-Welcome to the `DistributionsInference` documentation.
-This page is the quickstart.
-The home page is generated from the README and already carries the install
-instructions, so start here with what a new user does once the package is
-loaded, and grow it into tutorials as the package develops.
+This page is the map of the documentation.
+The [home page](../index.md) says what the package is for and shows the shortest fit that runs; the tutorials below do the work.
 
-```@example quickstart
-using DistributionsInference, Distributions, Random
-using FlexiChains: FlexiChains
+## Installation
+
+```julia
+using Pkg
+Pkg.add("DistributionsInference")
 ```
 
-## A first example: fit a toy object with no PPL
+Fitting needs a sampler and a chain type as well, and both are chosen by the caller rather than by this package.
+The tutorials sample with `AdvancedMH` or `Turing` and hold the draws in `FlexiChains`.
 
-A type becomes fittable by naming its scalar parameters and how to rebuild
-itself from a flat vector — no other change needed, and no probabilistic
-programming language required.
-
-```@example quickstart
-struct ToyDelay
-    shape::Float64
-    scale::Float64
-end
-
-Distributions.logpdf(d::ToyDelay, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
-
-function DistributionsInference.parameter_rows(d::ToyDelay)
-    return [(name = :shape, value = d.shape,
-            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
-        (name = :scale, value = d.scale, prior = nothing,
-            support = (0.0, Inf))]
-end
-
-function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
-    return ToyDelay(x[1], d.scale)
-end
+```julia
+Pkg.add(["AdvancedMH", "Turing", "FlexiChains"])
 ```
 
-[`parameter_rows`](@ref) is the whole estimation boundary: `shape` carries a
-prior, so it is estimated; `scale` carries none, so it stays fixed.
+Two tutorials ask for more.
+The custom-distribution page finds a maximum-a-posteriori point through `Bijectors` and `Optim`, and the composed-tree page needs `ComposedDistributions`.
 
-```@example quickstart
-leaf = ToyDelay(2.0, 1.0)
-DistributionsInference.parameter_rows(leaf)
+```julia
+Pkg.add(["Bijectors", "Optim", "ComposedDistributions"])
 ```
 
-[`as_logdensity`](@ref) packages the template object and observed data into a
-log-density over just the estimated rows, and [`flat_dimension`](@ref) counts
-them.
+## The route through a fit
 
-```@example quickstart
-data = [1.5, 2.0, 3.2, 1.8, 2.6]
-prob = DistributionsInference.as_logdensity(leaf, data)
-DistributionsInference.flat_dimension(leaf)
-```
+Every fit here is the same three steps, whatever the distribution and whatever the sampler.
 
-[`logdensity`](@ref) scores a candidate flat vector: the prior's log-density
-at that value, plus the data log-likelihood of the object reconstructed
-there.
+| Step | What you write | What it gives |
+|---|---|---|
+| Declare | [`parameter_rows`](@ref) and [`reconstruct`](@ref DistributionsInference.reconstruct) on your type | one row per scalar parameter, and a way back from a flat vector |
+| Score | [`distribution_to_logdensity`](@ref) or [`distribution_to_turing`](@ref) | a `LogDensityProblems` problem, or a `DynamicPPL` model |
+| Read back | [`point_estimate`](@ref) or [`readback_draws`](@ref) | the fitted distribution, not a table of numbers |
 
-```@example quickstart
-DistributionsInference.logdensity(prob, [2.5])
-```
+Only the first step is written per type, and a distribution from a package that already implements the protocol skips it.
 
-`prob` implements the `LogDensityProblems` interface, so any compatible
-sampler can drive it. Here is the tiniest one, a ten-line random-walk
-Metropolis, so this example stays self-contained with no extra dependency.
+## Tutorials
 
-```@example quickstart
-function toy_sample(prob, x0, n; step = 0.2, rng = Xoshiro(1))
-    x, lp = copy(x0), DistributionsInference.logdensity(prob, x0)
-    draws = Vector{Vector{Float64}}(undef, n)
-    for i in 1:n
-        prop = x .+ step .* randn(rng, length(x))
-        if all(>(0), prop)
-            lp_prop = DistributionsInference.logdensity(prob, prop)
-            log(rand(rng)) < lp_prop - lp && ((x, lp) = (prop, lp_prop))
-        end
-        draws[i] = copy(x)
-    end
-    return draws
-end
-
-draws = toy_sample(prob, [2.0], 500)
-length(draws)
-```
-
-[`to_flexichain`](@ref) keys the raw draws by the estimated rows' dotted
-names, the same naming contract a real PPL's sampler output would carry.
-
-```@example quickstart
-chain = DistributionsInference.to_flexichain(leaf, draws)
-```
-
-[`readback`](@ref) reduces the chain to a fitted `ToyDelay` (the posterior
-mean of `shape` by default); [`readback_draws`](@ref) keeps every draw
-instead, for a per-draw posterior-predictive summary.
-
-```@example quickstart
-fit = DistributionsInference.readback(leaf, chain)
-fit.shape
-```
-
-```@example quickstart
-length(DistributionsInference.readback_draws(leaf, chain))
-```
-
-Loading `DynamicPPL` activates [`as_turing`](@ref), a light wrapper over the
-same `prob` that samples with Turing instead of the toy sampler above; the
-same [`readback`](@ref) call reads its chain back too.
-[Fitting an object](@ref fitting) carries `leaf` through both routes in
-full, then runs the identical calls against a `ComposedDistributions` tree
-in place of a hand-written type.
-
-## Learning more
-
-- Carry this example further in [Fitting an object](@ref fitting): sampling
-  with Turing as well as the toy sampler above, and fitting a
-  `ComposedDistributions` tree with the same calls.
-- Want the full interface? See the [Public API](@ref public-api).
-- Want the packages DistributionsInference works alongside? See
-  [Related packages](../index.md) on the home page.
+- [Fitting a custom distribution](@ref custom-distribution) writes the protocol for a hand-rolled type, samples it with no probabilistic programming language in the loop, and finds a maximum-a-posteriori point with an external optimiser.
+- [Sampling with Turing](@ref turing-sampling) fits the same distribution as a `DynamicPPL` model and reads the chain back with the same two calls.
+- [Fitting a composed distribution](@ref composed-distributions) runs both routes against a `ComposedDistributions` tree, including partial pooling, without writing any protocol methods.
+- [Automatic differentiation backends](@ref ad-backends) reports which backends differentiate the log-density and what each costs.
 
 ## Getting help
 

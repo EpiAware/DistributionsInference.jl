@@ -1,5 +1,5 @@
 # Default-prior assembly over the fit protocol: `default_prior`'s per-row
-# heuristic (by name classification, not support) and `distribution_priors`'s
+# heuristic (by name classification, not support) and `with_priors`'s
 # override/attached-prior/default precedence (CD#195/DI#20).
 
 @testitem "default_prior: classifies by the row's own name, not just support" begin
@@ -38,7 +38,7 @@
     @test DistributionsInference.default_prior(dotted_row) isa Truncated
 end
 
-@testitem "distribution_priors: override, attached, then default precedence" begin
+@testitem "with_priors: override, attached, then default precedence" begin
     using DistributionsInference, Distributions
 
     rows = [
@@ -49,18 +49,18 @@ end
 
     # No overrides: the attached prior wins for `scale`, the default fires
     # for `shape`/`mu`.
-    priored = DistributionsInference.distribution_priors(rows)
+    priored = DistributionsInference.with_priors(rows)
     @test priored[1].prior isa Truncated   # shape: default, positive-by-name
     @test priored[2].prior == LogNormal(0.0, 0.1)   # scale: attached, kept
     @test priored[3].prior isa Normal   # mu: default, location-by-name
 
     # A `priors` override for `shape` wins over the default.
     custom = LogNormal(log(2.0), 0.05)
-    overridden = DistributionsInference.distribution_priors(
+    overridden = DistributionsInference.with_priors(
         rows; priors = Dict(:shape => custom))
     @test overridden[1].prior == custom
     # An override also wins over an already-attached prior.
-    overridden2 = DistributionsInference.distribution_priors(
+    overridden2 = DistributionsInference.with_priors(
         rows; priors = Dict(:scale => custom))
     @test overridden2[2].prior == custom
 
@@ -73,17 +73,17 @@ end
     @test DistributionsInference.flat_dimension(priored) == 3   # all now priored
 end
 
-@testitem "distribution_priors: a custom default function is honoured" begin
+@testitem "with_priors: a custom default function is honoured" begin
     using DistributionsInference, Distributions
 
     rows = [(name = :shape, value = 2.0, prior = nothing,
         support = (0.0, Inf))]
     always_flat(row) = Uniform(0, 10)
-    priored = DistributionsInference.distribution_priors(rows; default = always_flat)
+    priored = DistributionsInference.with_priors(rows; default = always_flat)
     @test priored[1].prior == Uniform(0, 10)
 end
 
-@testitem "distribution_priors: default = nothing refuses to invent a prior" begin
+@testitem "with_priors: default = nothing refuses to invent a prior" begin
     using DistributionsInference, Distributions
 
     # `default = nothing` turns off the brms-style heuristic entirely: a row
@@ -92,7 +92,7 @@ end
     bare = [(name = :shape, value = 2.0, prior = nothing,
         support = (0.0, Inf))]
     err = try
-        DistributionsInference.distribution_priors(bare; default = nothing)
+        DistributionsInference.with_priors(bare; default = nothing)
         nothing
     catch caught
         caught
@@ -104,23 +104,23 @@ end
     # source, so the refusal is about the missing prior and not about
     # `default = nothing` on its own.
     override = LogNormal(log(2.0), 0.1)
-    from_override = DistributionsInference.distribution_priors(
+    from_override = DistributionsInference.with_priors(
         bare; priors = Dict(:shape => override), default = nothing)
     @test only(from_override).prior == override
 
     attached = [(name = :shape, value = 2.0, prior = override,
         support = (0.0, Inf))]
-    from_attached = DistributionsInference.distribution_priors(
+    from_attached = DistributionsInference.with_priors(
         attached; default = nothing)
     @test only(from_attached).prior == override
 
-    # A row set where only SOME rows lack a prior still fails, naming the one
+    # A row set where only some rows lack a prior still fails, naming the one
     # that does — the mixed case a whole-object check would miss.
     mixed = [
         (name = :shape, value = 2.0, prior = override, support = (0.0, Inf)),
         (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
     mixed_err = try
-        DistributionsInference.distribution_priors(mixed; default = nothing)
+        DistributionsInference.with_priors(mixed; default = nothing)
         nothing
     catch caught
         caught

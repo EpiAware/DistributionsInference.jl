@@ -10,106 +10,95 @@
 | [![cov ForwardDiff](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-forwarddiff)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-forwarddiff) | [![cov ReverseDiff](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-reversediff)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-reversediff) | [![cov Enzyme forward](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-enzyme-forward)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-enzyme-forward) | [![cov Enzyme reverse](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-enzyme-reverse)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-enzyme-reverse) | [![cov Mooncake reverse](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-mooncake-reverse)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-mooncake-reverse) | [![cov Mooncake forward](https://codecov.io/gh/EpiAware/DistributionsInference.jl/graph/badge.svg?flag=ad-mooncake-forward)](https://app.codecov.io/gh/EpiAware/DistributionsInference.jl?flags%5B0%5D=ad-mooncake-forward) |
 <!-- badges:end -->
 
-The inference layer for the EpiAware composable-modelling stack: a PPL-neutral fit protocol and log-density engine, so any object that names its own parameters is fittable without committing to a probabilistic programming language.
+The inference layer for the EpiAware composable-modelling stack.
+A distribution names its own parameters and becomes fittable through a PPL-neutral log-density, with no commitment to a probabilistic programming language.
 
 ## Why DistributionsInference?
 
-- Fitting an object today usually means committing to one PPL's macros; here
-  a type opts in by naming its own scalar parameters, and it becomes
-  fittable everywhere, hand-rolled sampler and PPL alike.
-- The log-density this produces has no PPL dependency, so it evaluates
-  through whatever `LogDensityProblems`-compatible sampler a project already
-  uses.
-- A parameter becomes estimated by attaching a prior at the row level;
-  nothing else about a type needs to change to be fitted.
-- Reading a fitted chain back onto a concrete object is the same one call
-  whether the chain came from a hand-rolled sampler or from Turing.
-- Turing, Bijectors and the chain readback are opt-in layers over the same
-  protocol, not requirements, so a project can start with the bare
-  log-density and add a PPL later without rewriting its model.
-- Ported from ComposedDistributions.jl's own fit protocol, so a composed
-  distribution and a plain hand-written type share one estimation surface.
+- Fitting a distribution usually means rewriting it inside one probabilistic programming language's macros; here a distribution names its own scalar parameters once and every sampler reads that one declaration.
+- `distribution_to_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, so anything that works with `LogDensityProblems` works on the distribution.
+- A distribution declares its parameters as a table of rows, one row per scalar parameter carrying its name, value, prior and support.
+  Attaching a prior to a row is what makes that parameter estimated.
+  The rows are plain `NamedTuple`s, so the inventory is a row table any Tables.jl consumer reads, without this package depending on Tables.jl.
+- `point_estimate` post-processes sampler output onto a fitted distribution in one call.
+  It is generic across samplers and extensible to a new chain type by adding a method.
+- The distribution that comes back is the same kind of object that went in, so a fitted `Gamma` is a `Gamma` and can be used anywhere a distribution can.
 
 ## Getting started
 
 See [documentation](https://distributionsinference.epiaware.org/dev/) for a full walkthrough.
 
-A type becomes fittable by naming its scalar parameters and how to rebuild
-itself from a flat vector — no other change needed.
+Start with an ordinary `Distributions.jl` distribution, a `Gamma`, and no type of your own.
+The package ships no `parameter_rows`/`reconstruct` methods for `Distributions.jl` types, so those two methods are yours to write, once per family.
+Writing them is the protocol rather than boilerplate the design could drop; the gap is that no methods ship for the `Distributions.jl` families yet.
+Nothing else about the distribution changes.
 
 ```julia
 using DistributionsInference, Distributions, Random
 
-struct ToyDelay
-    shape::Float64
-    scale::Float64
+function DistributionsInference.parameter_rows(d::Gamma)
+    return [(name = :shape, value = shape(d),
+            prior = LogNormal(log(2.0), 0.5), support = (0.0, Inf)),
+        (name = :scale, value = scale(d),
+            prior = LogNormal(0.0, 0.5), support = (0.0, Inf))]
 end
 
-Distributions.logpdf(d::ToyDelay, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
-
-function DistributionsInference.parameter_rows(d::ToyDelay)
-    return [(name = :shape, value = d.shape,
-            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
-        (name = :scale, value = d.scale, prior = nothing,
-            support = (0.0, Inf))]
-end
-
-function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
-    return ToyDelay(x[1], d.scale)
+function DistributionsInference.reconstruct(::Gamma, x::AbstractVector)
+    return Gamma(x[1], x[2])
 end
 ```
 
-`as_logdensity` packages a template object and data into a log-density over
-just the one estimated parameter (`shape`; `scale` stays fixed).
+`parameter_rows` is the estimation boundary, in that a row carrying a prior is estimated and a row with `prior = nothing` stays fixed at its value.
+`distribution_to_logdensity` packages a template distribution and the data into a log-density over the estimated rows.
 
 ```julia
-leaf = ToyDelay(2.0, 1.0)
-data = [1.5, 2.0, 3.2, 1.8, 2.6]
-prob = DistributionsInference.as_logdensity(leaf, data)
-DistributionsInference.flat_dimension(leaf)
+template = Gamma(2.0, 1.0)
+data = rand(Xoshiro(1), Gamma(2.0, 1.0), 200)
+prob = distribution_to_logdensity(template, data)
+DistributionsInference.flat_dimension(template)
 ```
 
-Any `LogDensityProblems`-compatible sampler can drive `prob`; here is the
-tiniest one, a ten-line random-walk Metropolis, so this stays self-contained.
+`prob` is a `LogDensityProblems` problem, so any sampler that consumes that interface can drive it.
+Here that is `AdvancedMH`'s random-walk Metropolis, wrapped in a guard because a random-walk proposal does not respect positive support on its own.
 
 ```julia
-function toy_sample(prob, x0, n; step = 0.2, rng = Xoshiro(1))
-    x, lp = copy(x0), DistributionsInference.logdensity(prob, x0)
-    draws = Vector{Vector{Float64}}(undef, n)
-    for i in 1:n
-        prop = x .+ step .* randn(rng, length(x))
-        if all(>(0), prop)
-            lp_prop = DistributionsInference.logdensity(prob, prop)
-            log(rand(rng)) < lp_prop - lp && ((x, lp) = (prop, lp_prop))
-        end
-        draws[i] = copy(x)
-    end
-    return draws
+using AdvancedMH
+using LinearAlgebra: I
+
+model = AdvancedMH.DensityModel() do x
+    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(prob, x)
 end
-
-draws = toy_sample(prob, [2.0], 500)
+sampler = RWMH(MvNormal(zeros(2), 0.05^2 * I))
+transitions = sample(Xoshiro(1), model, sampler, 4000;
+    param_names = ["shape", "scale"], progress = false)
+draws = [t.params for t in transitions][2001:end]
+length(draws)
 ```
 
-`readback` reduces the draws to a fitted `ToyDelay`, through the same
-dotted-name chain a real PPL's sampler would hand back.
-The chain readback is a package extension, so add and load `FlexiChains` for
-this last step; everything above needs only `DistributionsInference`.
+`point_estimate` reads the draws back onto the distribution, through the same dotted-name chain a real PPL's sampler would hand back.
+What it returns is a `Gamma`, printed here rather than picked apart.
+The chain readback is a package extension, so add and load `FlexiChains` for this last step; everything above needs only `DistributionsInference`.
 
 ```julia
-using FlexiChains: FlexiChains  # Pkg.add("FlexiChains") if not installed
+using FlexiChains: FlexiChains
 
-chain = DistributionsInference.to_flexichain(leaf, draws)
-fit = DistributionsInference.readback(leaf, chain)
-fit.shape
+chain = to_flexichain(template, draws)
+point_estimate(template, chain)
 ```
 
-The [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/)
-carries this same object further: reading every draw with `readback_draws`,
-and sampling with Turing instead of the toy sampler above.
+The [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/) goes further, with a distribution type of your own, every draw read back through `readback_draws`, and sampling with Turing instead of AdvancedMH.
 
 ## Related packages
 
-- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) is the package this fit protocol was ported from; a package extension here reads a composed tree's generated codec directly, so its estimated leaves (including pooled and shared parameters) are fittable with no extra glue.
+- [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) defines the distributions this fits; a type that has a `logpdf` and can name its scalar parameters is a candidate.
+- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) builds a distribution by composing others into chains, branches and outcomes; a package extension here reads a composed tree's generated codec directly, so its estimated leaves, pooled and shared parameters included, are fittable with no extra glue.
+- [ModifiedDistributions.jl](https://modifieddistributions.epiaware.org/dev/) wraps a distribution to change one behaviour, such as rescaling, likelihood weighting or a hazard shift; a modifier used as a leaf inside a composed tree is already fittable, but the extension for fitting a standalone modifier is parked until that package registers in General.
+- [ReparameterisedDistributions.jl](https://reparameteriseddistributions.epiaware.org/dev/) switches a family between parameter conventions, so a distribution can be fitted in the coordinates its priors were elicited in rather than the family's native ones.
+- [CensoredDistributions.jl](https://censoreddistributions.epiaware.org/dev/) applies primary event censoring, interval censoring and right truncation to a delay, and returns a `Distributions.jl` distribution.
+- [ConvolvedDistributions.jl](https://convolveddistributions.epiaware.org/dev/) builds the distribution of a sum, difference or product of independent delays, again as a `Distributions.jl` distribution.
+
+ComposedDistributions is the only one of these covered by an extension today.
+For the rest, as for a plain `Distributions.jl` distribution, the two protocol methods are yours to write.
 
 ## Where to learn more
 

@@ -86,15 +86,15 @@ Build a dotted-name `FlexiChain` from raw sampler draws.
 
 `to_flexichain(obj, draws)` keys `draws` by [`estimated_rows`](@ref)`(obj)`'s
 dotted `name`s (in [`parameter_rows`](@ref) order), so the result reads back
-onto `obj` with [`readback`](@ref)/[`readback_draws`](@ref). `draws` is
+onto `obj` with [`point_estimate`](@ref)/[`readback_draws`](@ref). `draws` is
 accepted in either raw shape a `LogDensityProblems`-compatible sampler hands
 back: a `dim x niter` matrix, or a `niter`-length vector of `dim`-length
 vectors, where `dim` is [`flat_dimension`](@ref)`(obj)`. An object estimating
 nothing (`dim == 0`) still needs `draws` to carry the draw count — pass a
 `(0, niter)` matrix or a `niter`-length vector of empty vectors.
 
-No `DynamicPPL`/`Turing` involvement: this works with the draws of ANY sampler
-that consumes [`as_logdensity`](@ref)`(obj, data)` through the
+No `DynamicPPL`/`Turing` involvement: this works with the draws of any sampler
+that consumes [`distribution_to_logdensity`](@ref)`(obj, data)` through the
 `LogDensityProblems` interface.
 
 This has no method until `FlexiChains` is loaded; the chain construction lives
@@ -123,12 +123,13 @@ end
 
 leaf = FlexiLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]  # 1 estimated parameter, 4 draws
-chain = DistributionsInference.to_flexichain(leaf, reshape(draws, 1, :))
+chain = to_flexichain(leaf, reshape(draws, 1, :))
 FlexiChains.parameters(chain)
 ```
 
 # See also
-- [`readback`](@ref): reduce the chain back onto `obj` (point summary/draw).
+- [`point_estimate`](@ref): reduce the chain back onto `obj` (point
+  summary/draw).
 - [`readback_draws`](@ref): the vectorised, every-draw form.
 "
 function to_flexichain(obj, draws)
@@ -147,12 +148,12 @@ estimated parameter values read from `chain`, keyed by each
 [`estimated_rows`](@ref)`(obj)` row's dotted `name`, *before* any object is
 rebuilt — a single `draw`'s values, or each row's draws reduced by `summary`
 over the `draws` selection (default: the mean over every draw).
-[`readback`](@ref) is a thin layer on top: it collapses this result to a flat
-vector and calls [`reconstruct`](@ref).
+[`point_estimate`](@ref) is a thin layer on top: it collapses this result to a
+flat vector and calls [`reconstruct`](@ref).
 
 This has no method until `FlexiChains` is loaded; the read lives in the
 `DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
-sampled from [`as_turing`](@ref)) is read by the
+sampled from [`distribution_to_turing`](@ref)) is read by the
 `DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
 `DynamicPPL` loaded as well.
 
@@ -191,12 +192,12 @@ end
 
 leaf = ParamsLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]
-chain = DistributionsInference.to_flexichain(leaf, reshape(draws, 1, :))
-DistributionsInference.distribution_params(leaf, chain)
+chain = to_flexichain(leaf, reshape(draws, 1, :))
+distribution_params(leaf, chain)
 ```
 
 # See also
-- [`readback`](@ref): rebuilds `obj` from this primitive's result.
+- [`point_estimate`](@ref): rebuilds `obj` from this primitive's result.
 - [`readback_draws`](@ref): the vectorised, every-draw form (its own
   optimised implementation, not layered on this — see its docstring).
 "
@@ -208,15 +209,16 @@ end
 
 Read a dotted-name `FlexiChain` back onto a fitted object.
 
-`readback(obj, chain)` reduces `chain` (built by [`to_flexichain`](@ref)) to a
-flat estimated parameter vector and rebuilds a concrete object via
-[`reconstruct`](@ref): a point summary by default (`summary` applied to each
-estimated row's draws, default `mean`), a single iteration (`draw`), or a
-summary restricted to a subset of iterations (`draws`).
+`point_estimate(obj, chain)` reduces `chain` (built by
+[`to_flexichain`](@ref)) to a flat estimated parameter vector and rebuilds a
+concrete object via [`reconstruct`](@ref): a point summary by default
+(`summary` applied to each estimated row's draws, default `mean`), a single
+iteration (`draw`), or a summary restricted to a subset of iterations
+(`draws`).
 
 This has no method until `FlexiChains` is loaded; the read lives in the
 `DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
-sampled from [`as_turing`](@ref)) is read by the
+sampled from [`distribution_to_turing`](@ref)) is read by the
 `DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
 `DynamicPPL` loaded as well.
 
@@ -254,8 +256,8 @@ end
 
 leaf = ReadbackLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]
-chain = DistributionsInference.to_flexichain(leaf, reshape(draws, 1, :))
-DistributionsInference.readback(leaf, chain).shape
+chain = to_flexichain(leaf, reshape(draws, 1, :))
+point_estimate(leaf, chain).shape
 ```
 
 # See also
@@ -263,23 +265,23 @@ DistributionsInference.readback(leaf, chain).shape
 - [`to_flexichain`](@ref): build the chain this reads.
 - [`readback_draws`](@ref): the vectorised, every-draw form.
 "
-function readback(obj, chain; kwargs...)
-    return _no_chain_method(:readback, chain)
+function point_estimate(obj, chain; kwargs...)
+    return _no_chain_method(:point_estimate, chain)
 end
 
 @doc "
 
 Read every draw of a dotted-name `FlexiChain` back onto a fitted object.
 
-`readback_draws(obj, chain)` is the vectorised form of [`readback`](@ref):
-where `readback` reduces the chain to one reconstructed object,
+`readback_draws(obj, chain)` is the vectorised form of [`point_estimate`](@ref):
+where `point_estimate` reduces the chain to one reconstructed object,
 `readback_draws` keeps every draw, returning a vector of reconstructed
 objects (one per selected iteration) — e.g. for a per-draw
 posterior-predictive summary.
 
 This has no method until `FlexiChains` is loaded; the read lives in the
 `DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
-sampled from [`as_turing`](@ref)) is read by the
+sampled from [`distribution_to_turing`](@ref)) is read by the
 `DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
 `DynamicPPL` loaded as well.
 
@@ -314,21 +316,21 @@ end
 
 leaf = DrawsLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]
-chain = DistributionsInference.to_flexichain(leaf, reshape(draws, 1, :))
-length(DistributionsInference.readback_draws(leaf, chain))
+chain = to_flexichain(leaf, reshape(draws, 1, :))
+length(readback_draws(leaf, chain))
 ```
 
 !!! note \"Not layered on `distribution_params`\"
-    Unlike [`readback`](@ref), this does *not* call
+    Unlike [`point_estimate`](@ref), this does *not* call
     [`distribution_params`](@ref) once per draw, which would re-fetch and
     re-validate every estimated row's column on each call. It materialises
     each column once instead, so the two are independent implementations of
     the same per-draw extraction.
 
 # See also
-- [`readback`](@ref): the single-draw / reduced read this vectorises.
-- [`distribution_params`](@ref): the params-first primitive `readback` (but
-  not this function) layers on.
+- [`point_estimate`](@ref): the single-draw / reduced read this vectorises.
+- [`distribution_params`](@ref): the params-first primitive `point_estimate`
+  (but not this function) layers on.
 - [`to_flexichain`](@ref): build the chain this reads.
 "
 function readback_draws(obj, chain; kwargs...)

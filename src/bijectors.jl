@@ -6,7 +6,7 @@
 
 Map an unconstrained vector to the constrained scale and its log-Jacobian.
 
-`to_constrained(prob, z)` returns `(x, logjac)`: the constrained ESTIMATED flat
+`to_constrained(prob, z)` returns `(x, logjac)`: the constrained estimated flat
 parameters `x` corresponding to the unconstrained vector `z`, and the
 log-determinant Jacobian of that (inverse) transform. The transform is built
 per row from [`FitLogDensity`](@ref)'s stored `flat_priors` (each estimated
@@ -19,9 +19,9 @@ An estimated row with no per-row prior (`prior === nothing`, scored instead
 through [`extra_logprior`](@ref) — an object-dependent prior, e.g. a
 hierarchical population term; see [`parameter_rows`](@ref)) has no
 distribution to build a bijector from, so it is rejected with a clear
-`ArgumentError`, mirroring [`as_turing`](@ref)'s rejection of the same row
-kind. A type needing an unconstrained transform for such a row supplies its
-own [`to_constrained`](@ref) method.
+`ArgumentError`, mirroring [`distribution_to_turing`](@ref)'s rejection of the
+same row kind. A type needing an unconstrained transform for such a row
+supplies its own [`to_constrained`](@ref) method.
 
 This has no method until `Bijectors` is loaded; the prior-driven transform
 lives in the `DistributionsInferenceBijectorsExt` extension.
@@ -55,7 +55,7 @@ end
 
 leaf = ConstrainedLeaf(2.0, 1.0)
 data = [1.5, 2.0, 3.2]
-prob = DistributionsInference.as_logdensity(leaf, data)
+prob = distribution_to_logdensity(leaf, data)
 # An unconstrained draw maps to the constrained (positive) shape plus a
 # log-Jacobian.
 x, logjac = DistributionsInference.to_constrained(prob, [0.0])
@@ -63,26 +63,29 @@ x
 ```
 
 # See also
-- [`as_logdensity`](@ref): assemble `prob`.
+- [`distribution_to_logdensity`](@ref): assemble `prob`.
 - [`logdensity`](@ref): the constrained-scale density this transform feeds.
 - [`parameter_rows`](@ref), [`reconstruct`](@ref): the fit protocol this reads.
 "
-function to_constrained end
+function to_constrained(prob, z)
+    return _extension_required(:to_constrained, "Bijectors",
+        "DistributionsInferenceBijectorsExt")
+end
 
 @doc "
 
-The NEGATIVE unconstrained log-posterior, as a plain callable for an
+The negative unconstrained log-posterior, as a plain callable for an
 external optimiser.
 
-`as_optimisation_objective(prob)` returns `f(z) -> Real`: the negative of
+`logdensity_to_objective(prob)` returns `f(z) -> Real`: the negative of
 [`to_constrained`](@ref)'s unconstrained-scale log-target
 `logdensity(prob, x) + logjac` at `(x, logjac) = to_constrained(prob, z)`.
-Because [`as_logdensity`](@ref)'s objective is already a plain (unnormalised)
-log-density, minimising `f` with any standard optimisation package finds a
-maximum-A-POSTERIORI point directly. `logdensity` always scores an ESTIMATED
-row's own prior (that is what makes a row estimated; see
-[`parameter_rows`](@ref)), so a genuine maximum-LIKELIHOOD point needs a
-prior whose curvature is negligible next to the data likelihood rather than a
+Because [`distribution_to_logdensity`](@ref)'s objective is already a plain
+(unnormalised) log-density, minimising `f` with any standard optimisation
+package finds a maximum a posteriori point directly. `logdensity` always
+scores an estimated row's own prior (that is what makes a row estimated; see
+[`parameter_rows`](@ref)), so a genuine maximum likelihood point needs a prior
+whose curvature is negligible next to the data likelihood rather than a
 `loglik` swap alone. The optimiser stays external (`Optim.jl`,
 `Optimization.jl`, or any package that accepts a plain callable and an initial
 vector); DistributionsInference ships no estimator method itself.
@@ -122,16 +125,20 @@ end
 
 leaf = OptimLeaf(2.0, 1.0)
 data = [1.5, 2.0, 3.2, 2.8, 1.9]
-prob = DistributionsInference.as_logdensity(leaf, data)
-f = DistributionsInference.as_optimisation_objective(prob)
+prob = distribution_to_logdensity(leaf, data)
+f = logdensity_to_objective(prob)
 # `f` is a plain callable, ready for any external optimiser.
 f([0.0])
 ```
 
 # See also
 - [`to_constrained`](@ref): the unconstrained transform this composes.
-- [`as_logdensity`](@ref), [`logdensity`](@ref): the underlying objective.
+- [`distribution_to_logdensity`](@ref), [`logdensity`](@ref): the underlying
+  objective.
 - [`reconstruct`](@ref): rebuild the fitted object from the optimiser's
   minimiser, via [`to_constrained`](@ref) back to the constrained scale.
 "
-function as_optimisation_objective end
+function logdensity_to_objective(prob)
+    return _extension_required(:logdensity_to_objective, "Bijectors",
+        "DistributionsInferenceBijectorsExt")
+end

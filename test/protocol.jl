@@ -4,7 +4,7 @@
 @testsnippet ToyFixture begin
     using DistributionsInference, Distributions
 
-    # A minimal fit-protocol object: a Gamma leaf with its shape ESTIMATED (an
+    # A minimal fit-protocol object: a Gamma leaf with its shape estimated (an
     # attached prior) and its scale fixed. Implementable without loading us
     # (CD#185).
     struct ToyGammaLeaf
@@ -40,7 +40,7 @@ end
 
     # The two generic fallbacks are the protocol's only error surface for a
     # type that never implemented it, so the message has to name the offending
-    # type AND the method to add. An `Int` stands in for any such type: it
+    # type and the method to add. An `Int` stands in for any such type: it
     # matches neither the bare-row-vector identity nor a user method.
     rows_err = try
         DistributionsInference.parameter_rows(1)
@@ -168,7 +168,7 @@ end
 
     template = PenalisedLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    prob = DistributionsInference.as_logdensity(template, data)
+    prob = DistributionsInference.distribution_to_logdensity(template, data)
     x = [2.5]
     expected = -0.5 * 2.5^2 + sum(y -> logpdf(Gamma(2.5, 1.0), y), data)
     @test DistributionsInference.logdensity(prob, x) ≈ expected
@@ -177,7 +177,7 @@ end
 @testitem "reconstruct: a concrete estimated field is guarded against a tracer number (DI#48)" begin
     using DistributionsInference, Distributions, ForwardDiff
 
-    # The bug this guards: an ESTIMATED field typed to a CONCRETE Float64
+    # The bug this guards: an estimated field typed to a concrete Float64
     # rejects a `ForwardDiff.Dual` with an opaque `MethodError` inside
     # `reconstruct`.
     struct ConcreteFitLeaf
@@ -201,7 +201,7 @@ end
 
     leaf = ConcreteFitLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
 
     @test DistributionsInference.logdensity(prob, [2.5]) ≈
           logpdf(LogNormal(log(2.0), 0.2), 2.5) +
@@ -221,7 +221,7 @@ end
     @test occursin("ConcreteFitLeaf", err.msg)
     @test occursin("generically typed", err.msg)
 
-    # A GENERICALLY typed field: the same `Dual`-valued vector flows through
+    # A generically typed field: the same `Dual`-valued vector flows through
     # untouched, no guard fires.
     struct GenericFitLeaf{S <: Real}
         shape::S
@@ -243,7 +243,7 @@ end
     end
 
     generic_leaf = GenericFitLeaf(2.0, 1.0)
-    generic_prob = DistributionsInference.as_logdensity(generic_leaf, data)
+    generic_prob = DistributionsInference.distribution_to_logdensity(generic_leaf, data)
     @test DistributionsInference.logdensity(generic_prob, dual_x) isa
           ForwardDiff.Dual
 end

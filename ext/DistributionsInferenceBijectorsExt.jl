@@ -40,7 +40,7 @@ function DistributionsInference.to_constrained(
 end
 
 # Composes `to_constrained` with the core `logdensity` (DI#46).
-function DistributionsInference.as_optimisation_objective(prob::FitLogDensity)
+function DistributionsInference.logdensity_to_objective(prob::FitLogDensity)
     return function (z::AbstractVector)
         x, logjac = DistributionsInference.to_constrained(prob, z)
         return -(logdensity(prob, x) + logjac)

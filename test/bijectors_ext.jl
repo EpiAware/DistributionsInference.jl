@@ -1,5 +1,5 @@
 # DistributionsInference × Bijectors extension: `to_constrained` maps an
-# unconstrained flat vector to the constrained ESTIMATED parameters plus a
+# unconstrained flat vector to the constrained estimated parameters plus a
 # log-Jacobian, built per row from `FitLogDensity`'s `flat_priors`.
 
 @testitem "Bijectors extension loads" begin
@@ -19,7 +19,7 @@ end
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(mu, sigma))
     data = Float64[]
     zero_lik(d, ds) = 0.0
-    prob = DistributionsInference.as_logdensity(leaf, data; loglik = zero_lik)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data; loglik = zero_lik)
 
     for z0 in (-0.6, 0.0, 1.1)
         x, logjac = DistributionsInference.to_constrained(prob, [z0])
@@ -35,7 +35,7 @@ end
     leaf = TwoParamLeaf(2.0, 1.0)
     data = Float64[]
     zero_lik(d, ds) = 0.0
-    prob = DistributionsInference.as_logdensity(leaf, data; loglik = zero_lik)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data; loglik = zero_lik)
     n = DistributionsInference.flat_dimension(leaf)
     @test n == 2 == length(prob.flat_priors)
 
@@ -93,11 +93,11 @@ end
 
     leaf = MixedLinkLeaf(0.0, 1.0, 0.4)
     zero_lik(d, ds) = 0.0
-    prob = DistributionsInference.as_logdensity(
+    prob = DistributionsInference.distribution_to_logdensity(
         leaf, Float64[]; loglik = zero_lik)
     @test DistributionsInference.flat_dimension(leaf) == 3
 
-    # Chosen so the three constrained values land in DISJOINT places: `mu` is
+    # Chosen so the three constrained values land in disjoint places: `mu` is
     # negative, `sigma` is above 1, and `p` is inside `(0, 1)`. A permuted
     # `to_constrained` result then violates a support check, which a `z`
     # whose constrained image happens to be positive and below 1 in every row
@@ -119,7 +119,7 @@ end
     end
     @test DistributionsInference.logdensity(prob, x) + logjac ≈ target
 
-    # Each field takes its OWN row of the constrained vector, checked against
+    # Each field takes its own row of the constrained vector, checked against
     # the already-verified `x` rather than against a support every row could
     # satisfy, so a row-order slip in `to_constrained` fails here.
     rebuilt = DistributionsInference.reconstruct(leaf, x)
@@ -137,7 +137,7 @@ end
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     data = Float64[]
     zero_lik(d, ds) = 0.0
-    prob = DistributionsInference.as_logdensity(fixed_leaf, data; loglik = zero_lik)
+    prob = DistributionsInference.distribution_to_logdensity(fixed_leaf, data; loglik = zero_lik)
     @test DistributionsInference.flat_dimension(fixed_leaf) == 0
 
     x, logjac = DistributionsInference.to_constrained(prob, Float64[])
@@ -151,7 +151,7 @@ end
     leaf = TwoParamLeaf(2.0, 1.0)
     data = Float64[]
     zero_lik(d, ds) = 0.0
-    prob = DistributionsInference.as_logdensity(leaf, data; loglik = zero_lik)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data; loglik = zero_lik)
     n = DistributionsInference.flat_dimension(leaf)
     z = [-0.3, 0.5]
     x, logjac = DistributionsInference.to_constrained(prob, z)
@@ -171,7 +171,7 @@ end
     leaf = ToyGammaLeaf(2.0, 1.5, LogNormal(log(2.0), 0.2))
     data = Float64[]
     zero_lik(d, ds) = 0.0
-    prob = DistributionsInference.as_logdensity(leaf, data; loglik = zero_lik)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data; loglik = zero_lik)
 
     z0 = 0.35
     x, _ = DistributionsInference.to_constrained(prob, [z0])
@@ -187,7 +187,7 @@ end
     leaf = NoPriorLeaf(2.0, 1.0)
     data = Float64[]
     zero_lik(d, ds) = 0.0
-    prob = DistributionsInference.as_logdensity(leaf, data; loglik = zero_lik)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data; loglik = zero_lik)
     @test DistributionsInference.flat_dimension(leaf) == 1
 
     @test_throws ArgumentError DistributionsInference.to_constrained(prob, [0.1])
@@ -204,7 +204,7 @@ end
 
     leaf = TwoParamLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2, 2.8]
-    prob = DistributionsInference.as_logdensity(leaf, data)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
 
     n = DistributionsInference.flat_dimension(leaf)
     z0 = fill(0.1, n)
@@ -225,13 +225,13 @@ end
     end
 end
 
-@testitem "as_optimisation_objective: the negative of to_constrained ∘ logdensity" setup=[TuringFixture] begin
+@testitem "logdensity_to_objective: the negative of to_constrained ∘ logdensity" setup=[TuringFixture] begin
     using Bijectors
 
     leaf = TwoParamLeaf(2.0, 1.0)
     data = [1.5, 2.0, 3.2, 2.8]
-    prob = DistributionsInference.as_logdensity(leaf, data)
-    f = DistributionsInference.as_optimisation_objective(prob)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
+    f = DistributionsInference.logdensity_to_objective(prob)
 
     n = DistributionsInference.flat_dimension(leaf)
     z = fill(0.2, n)
@@ -248,14 +248,14 @@ end
     @test_throws DimensionMismatch f(z[1:(end - 1)])
 end
 
-@testitem "as_optimisation_objective: minimising it finds the MAP point (Optim.jl)" setup=[ToyFixture] begin
+@testitem "logdensity_to_objective: minimising it finds the MAP point (Optim.jl)" setup=[ToyFixture] begin
     using Bijectors, Optim
 
     mu, sigma = log(2.0), 0.2
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(mu, sigma))
     data = [1.5, 2.0, 3.2, 2.8, 1.9, 4.1, 2.5, 3.0]
-    prob = DistributionsInference.as_logdensity(leaf, data)
-    f = DistributionsInference.as_optimisation_objective(prob)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
+    f = DistributionsInference.logdensity_to_objective(prob)
 
     res = optimize(f, [0.0], LBFGS())
     z_hat = Optim.minimizer(res)
@@ -271,16 +271,16 @@ end
     @test fitted.scale == leaf.scale
 end
 
-@testitem "as_optimisation_objective: a diffuse prior tracks the MLE" setup=[ToyFixture] begin
+@testitem "logdensity_to_objective: a diffuse prior tracks the MLE" setup=[ToyFixture] begin
     using Bijectors, Optim, Distributions
 
-    # `logdensity` always scores an ESTIMATED row's own prior, so an MLE point
+    # `logdensity` always scores an estimated row's own prior, so an MLE point
     # needs the prior's curvature to be negligible next to the likelihood.
     diffuse = LogNormal(0.0, 100.0)
     leaf = ToyGammaLeaf(2.0, 1.0, diffuse)
     data = [1.5, 2.0, 3.2, 2.8, 1.9, 4.1, 2.5, 3.0]
-    prob = DistributionsInference.as_logdensity(leaf, data)
-    f = DistributionsInference.as_optimisation_objective(prob)
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
+    f = DistributionsInference.logdensity_to_objective(prob)
 
     res = optimize(f, [0.0], LBFGS())
     z_hat = Optim.minimizer(res)

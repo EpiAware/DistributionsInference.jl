@@ -5,7 +5,16 @@
 # Literate tutorial sources under `TUTORIALS_SUBDIR`. Light tutorials emit
 # `@example` blocks Documenter runs in-process; heavy ones (live MCMC fits,
 # multi-backend AD, plotting) each run in a fresh subprocess.
-const LIGHT_TUTORIALS = String[]
+#
+# The three fitting tutorials are light despite sampling: each fits at most
+# five parameters from a handful of records, so they run in seconds and a fast
+# build (`--skip-notebooks`) still executes them, which is where their code is
+# checked. They need no `TUTORIAL_STUBS` entry for the same reason.
+const LIGHT_TUTORIALS = String[
+    "custom-distribution.jl",
+    "turing.jl",
+    "composed-distributions.jl"
+]
 
 # The `ad-backends.jl` page itself is kit-managed and re-applied on every
 # sync; only this registration is package-owned.
@@ -57,7 +66,10 @@ const README_EXECUTE = true
 # README headings whose whole section is dropped from the home page. The
 # managed badge block is always stripped via its `<!-- badges:start -->` /
 # `<!-- badges:end -->` markers.
-const INDEX_STRIP_SECTIONS = String[]
+#
+# "Getting help" is dropped here so the docs carry it once, on the
+# getting-started overview; the README keeps it for readers on GitHub.
+const INDEX_STRIP_SECTIONS = String["Getting help"]
 
 # Whether the build generates the benchmark page (`src/benchmarks.md`); `false`
 # also drops its `pages.jl` nav entry.

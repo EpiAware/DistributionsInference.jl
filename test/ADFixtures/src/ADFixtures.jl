@@ -11,10 +11,10 @@
 # the engine's own hot path (DI#33): the engine's `logdensity` over several
 # fit-protocol objects; `to_constrained` composed with it, the
 # unconstrained-scale target a sampler differentiates (identical to
-# `-as_optimisation_objective(prob)`), covering the `Bijectors` extension's
+# `-logdensity_to_objective(prob)`), covering the `Bijectors` extension's
 # log, identity and logit links; both paths over a `ComposedDistributions`
-# tree; and `as_turing`'s model through `LogDensityProblems`, the
-# `DynamicPPL` extension's `Vector{Real}` path into `reconstruct`. `readback`
+# tree; and `distribution_to_turing`'s model through `LogDensityProblems`, the
+# `DynamicPPL` extension's `Vector{Real}` path into `reconstruct`. `point_estimate`
 # and friends are absent: they map an already-sampled chain onto a
 # reconstructed object, so there is no parameter vector to differentiate
 # (their coverage is in `test/readback.jl`).
@@ -192,18 +192,18 @@ _engine_target(x, prob) = DistributionsInference.logdensity(prob, x)
 # The unconstrained-scale target a sampler or optimiser differentiates:
 # `to_constrained` (the `Bijectors` extension) composed with the core
 # `logdensity`, plus the transform's log-Jacobian. Identical to
-# `-as_optimisation_objective(prob)(z)`, so covering this covers both.
+# `-logdensity_to_objective(prob)(z)`, so covering this covers both.
 function _unconstrained_target(z, prob)
     x, logjac = DistributionsInference.to_constrained(prob, z)
     return DistributionsInference.logdensity(prob, x) + logjac
 end
 
-# The turing model `as_turing` builds (the `DynamicPPL` extension), reached
+# The turing model `distribution_to_turing` builds (the `DynamicPPL` extension), reached
 # through the same `LogDensityProblems` interface a gradient-based sampler
 # uses. The model threads the draw through an abstractly-typed
 # `Vector{Real}` before `reconstruct`, a path no other scenario takes.
 #
-# Its reference gradient is ForwardDiff over THIS target, like every other
+# Its reference gradient is ForwardDiff over this target, like every other
 # scenario, so the matrix only checks that the six backends agree on the
 # turing model. What ties the model to `logdensity(prob, x)` is
 # `test/turing_ext.jl`, whose "model log-density equals logdensity" items
@@ -245,7 +245,7 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
         _scenario(f, θ, contexts, name; with_reference = with_reference))
 
     # --- The engine, one estimated parameter ------------------------------
-    one_param = DistributionsInference.as_logdensity(
+    one_param = DistributionsInference.distribution_to_logdensity(
         GammaFit(2.0, 1.0), _GAMMA_DATA)
     scen(_engine_target, [2.0], (Constant(one_param),),
         "fit-protocol engine logdensity")
@@ -261,17 +261,17 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
         "fit-protocol engine logdensity (shape at 1.0, xlogy edge case)")
 
     # --- The engine, several estimated parameters -------------------------
-    two_gamma = DistributionsInference.as_logdensity(
+    two_gamma = DistributionsInference.distribution_to_logdensity(
         GammaShapeScaleFit(2.0, 1.5), _GAMMA_DATA)
     scen(_engine_target, [2.2, 1.3], (Constant(two_gamma),),
         "engine logdensity (Gamma shape and scale estimated)")
 
-    normal_prob = DistributionsInference.as_logdensity(
+    normal_prob = DistributionsInference.distribution_to_logdensity(
         NormalFit(0.0, 1.0), _NORMAL_DATA)
     scen(_engine_target, [0.35, 1.2], (Constant(normal_prob),),
         "engine logdensity (Normal location and scale estimated)")
 
-    unit_prob = DistributionsInference.as_logdensity(
+    unit_prob = DistributionsInference.distribution_to_logdensity(
         UnitIntervalFit(0.4, 5.0), _UNIT_DATA)
     scen(_engine_target, [0.45, 6.0], (Constant(unit_prob),),
         "engine logdensity (unit-interval mean and concentration estimated)")
@@ -295,7 +295,7 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
         "unconstrained logdensity (logit and log links)")
 
     # --- The `ComposedDistributions` extension ----------------------------
-    composed_prob = DistributionsInference.as_logdensity(
+    composed_prob = DistributionsInference.distribution_to_logdensity(
         _composed_tree(), _COMPOSED_DATA)
     scen(_engine_target, [2.2, 3.1], (Constant(composed_prob),),
         "engine logdensity (ComposedDistributions tree)")
@@ -305,10 +305,10 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
 
     # --- The `DynamicPPL` extension's turing model ------------------------
     turing_ldf = DynamicPPL.LogDensityFunction(
-        DistributionsInference.as_turing(
+        DistributionsInference.distribution_to_turing(
         GammaShapeScaleFit(2.0, 1.5), _GAMMA_DATA))
     scen(_turing_target, [2.2, 1.3], (Constant(turing_ldf),),
-        "as_turing model logdensity (Gamma shape and scale estimated)")
+        "distribution_to_turing model logdensity (Gamma shape and scale estimated)")
 
     return out
 end
