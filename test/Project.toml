@@ -49,14 +49,14 @@ ForwardDiff = "0.10, 1"
 JuliaFormatter = "2"
 LinearAlgebra = "1"
 LogDensityProblems = "2"
-Optim = "1, 2.2"
+Optim = "2.2"
 Pkg = "1"
 Random = "1"
 Statistics = "1"
 Test = "1"
 TestItemRunner = "1"
 TestItems = "1"
-Turing = "0.42, 0.43, 0.44, 0.45, 0.46"
+Turing = "0.45, 0.46"
 
 [sources]
 DistributionsInference = {path = ".."}
