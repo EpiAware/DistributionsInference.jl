@@ -11,26 +11,26 @@
 <!-- badges:end -->
 
 The inference layer for the EpiAware composable-modelling stack.
-A distribution names its own parameters and becomes fittable through a PPL-neutral log-density, with no commitment to a probabilistic programming language.
+A distribution names its own parameters and becomes fittable through a plain log-density that any sampler can read.
 
 ## Why DistributionsInference?
 
-- Fitting a distribution usually means rewriting it inside one probabilistic programming language's macros; here a distribution names its own scalar parameters once and every sampler reads that one declaration.
-- `distribution_to_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, so anything that works with `LogDensityProblems` works on the distribution.
+- Fitting a distribution usually means rewriting it inside one probabilistic programming language's macros.
+  Here it names its own scalar parameters once and every sampler reads that declaration.
+- `distribution_to_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, which any consumer of that interface can drive.
 - A distribution declares its parameters as a table of rows, one row per scalar parameter carrying its name, value, prior and support.
   Attaching a prior to a row is what makes that parameter estimated.
-  The rows are plain `NamedTuple`s, so the inventory is a row table any Tables.jl consumer reads, without this package depending on Tables.jl.
+  The rows are plain `NamedTuple`s, which any Tables.jl consumer reads.
 - `point_estimate` post-processes sampler output onto a fitted distribution in one call.
-  It is generic across samplers and extensible to a new chain type by adding a method.
-- The distribution that comes back is the same kind of object that went in, so a fitted `Gamma` is a `Gamma` and can be used anywhere a distribution can.
+- Supporting a new chain type takes one added method.
+- The distribution that comes back is the same kind of object that went in, so a fitted `Gamma` is a `Gamma`.
 
 ## Getting started
 
 See [documentation](https://distributionsinference.epiaware.org/dev/) for a full walkthrough.
 
-Start with an ordinary `Distributions.jl` distribution, a `Gamma`, and no type of your own.
-The package ships no `parameter_rows`/`reconstruct` methods for `Distributions.jl` types, so those two methods are yours to write, once per family.
-Writing them is the protocol rather than boilerplate the design could drop; the gap is that no methods ship for the `Distributions.jl` families yet.
+Start with a plain `Distributions.jl` `Gamma`.
+The package ships no `parameter_rows`/`reconstruct` methods for `Distributions.jl` types, so write those two once per family.
 Nothing else about the distribution changes.
 
 ```julia
@@ -48,7 +48,8 @@ function DistributionsInference.reconstruct(::Gamma, x::AbstractVector)
 end
 ```
 
-`parameter_rows` is the estimation boundary, in that a row carrying a prior is estimated and a row with `prior = nothing` stays fixed at its value.
+`parameter_rows` sets the estimation boundary.
+A row carrying a prior is estimated; a row with `prior = nothing` stays at its value.
 `distribution_to_logdensity` packages a template distribution and the data into a log-density over the estimated rows.
 
 ```julia
@@ -75,9 +76,9 @@ draws = [t.params for t in transitions][2001:end]
 length(draws)
 ```
 
-`point_estimate` reads the draws back onto the distribution, through the same dotted-name chain a real PPL's sampler would hand back.
-What it returns is a `Gamma`, printed here rather than picked apart.
-The chain readback is a package extension, so add and load `FlexiChains` for this last step; everything above needs only `DistributionsInference`.
+`point_estimate` reads the draws back onto the distribution through the same dotted-name chain a real PPL's sampler would hand back.
+What it returns is a `Gamma`.
+The chain readback is a package extension, so add and load `FlexiChains` for this last step.
 
 ```julia
 using FlexiChains: FlexiChains
@@ -86,12 +87,12 @@ chain = to_flexichain(template, draws)
 point_estimate(template, chain)
 ```
 
-The [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/) goes further, with a distribution type of your own, every draw read back through `readback_draws`, and sampling with Turing instead of AdvancedMH.
+The [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/) goes further, with a distribution type of your own and sampling through Turing.
 
 ## Related packages
 
 - [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) defines the distributions this fits; a type that has a `logpdf` and can name its scalar parameters is a candidate.
-- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) builds a distribution by composing others into chains, branches and outcomes; a package extension here reads a composed tree's generated codec directly, so its estimated leaves, pooled and shared parameters included, are fittable with no extra glue.
+- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) builds a distribution by composing others into chains, branches and outcomes; a package extension here reads a composed tree's generated codec directly, so its estimated leaves, pooled and shared parameters included, are fittable as they stand.
 - [ModifiedDistributions.jl](https://modifieddistributions.epiaware.org/dev/) wraps a distribution to change one behaviour, such as rescaling, likelihood weighting or a hazard shift; a modifier used as a leaf inside a composed tree is already fittable, but the extension for fitting a standalone modifier is parked until that package registers in General.
 - [ReparameterisedDistributions.jl](https://reparameteriseddistributions.epiaware.org/dev/) switches a family between parameter conventions, so a distribution can be fitted in the coordinates its priors were elicited in rather than the family's native ones.
 - [CensoredDistributions.jl](https://censoreddistributions.epiaware.org/dev/) applies primary event censoring, interval censoring and right truncation to a delay, and returns a `Distributions.jl` distribution.

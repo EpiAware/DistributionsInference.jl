@@ -2,15 +2,13 @@
 #
 # A tree built with
 # [ComposedDistributions](https://composeddistributions.epiaware.org/dev/) is
-# fittable with no protocol methods written at all.
+# fittable as it stands.
 # Loading both packages activates an extension that maps the tree's own
 # `params_table` onto this package's row schema, so every verb from
-# [Fitting a custom distribution](@ref custom-distribution) works on the tree
-# as it stands.
+# [Fitting a custom distribution](@ref custom-distribution) works on the tree.
 #
 # This tutorial fits a two-event pathway through both routes, then fits a
-# partially pooled tree, where the parameters being estimated are not the ones
-# anyone wrote down.
+# partially pooled tree.
 
 using DistributionsInference, Distributions, Random
 using ComposedDistributions
@@ -93,11 +91,10 @@ pooled = compose((
 
 [row.name for row in DistributionsInference.estimated_rows(pooled)]
 
-# Those are not the parameters anyone wrote down.
 # A location-scale population is reparameterised non-centred, so what is
 # estimated is the population's two hyperparameters and one standard normal
-# offset per district, and the estimation boundary moved without the fitting
-# code hearing about it.
+# offset per district.
+# The estimation boundary moved and the fitting code is unchanged.
 
 pooled_data = [rand(rng, pooled) for _ in 1:200]
 Random.seed!(1)
@@ -106,8 +103,8 @@ pooled_chain = sample(distribution_to_turing(pooled, pooled_data), NUTS(0.9),
     initial_params = InitFromPrior())
 distribution_params(pooled, pooled_chain)
 
-# The readback puts the offsets back through the population, so what comes out
-# is a district's shape rather than its latent.
+# The readback puts the offsets back through the population, so a district's
+# shape comes out rather than its offset.
 
 event(point_estimate(pooled, pooled_chain), :north)
 
@@ -115,39 +112,6 @@ event(point_estimate(pooled, pooled_chain), :north)
 # The default initialisation draws uniformly on the unconstrained scale, which
 # for a hierarchical shape can start the chain at `exp(16)` and underflow the
 # likelihood.
-
-# ## The one tree Turing refuses
-#
-# A centred pool scores its members against the reconstructed population rather
-# than against a fixed prior of their own, and `DynamicPPL` has no sampling
-# path for that yet.
-# `distribution_to_turing` says so instead of mis-scoring the model.
-
-centred_pool() = pool(:region, LogNormal(log(2.0), 0.3); noncentred = false)
-centred = compose((
-    north = uncertain(Gamma(2.0, 1.0); shape = centred_pool()),
-    south = uncertain(Gamma(2.0, 1.0); shape = centred_pool())))
-
-centred_data = [rand(rng, centred) for _ in 1:200]
-
-try
-    distribution_to_turing(centred, centred_data)
-catch err
-    println(sprint(showerror, err))
-end
-
-# The log-density route has no such gap, so a centred tree fits through
-# [`distribution_to_logdensity`](@ref) and a gradient-free sampler.
-
-centred_prob = distribution_to_logdensity(centred, centred_data)
-centred_model = AdvancedMH.DensityModel() do x
-    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(centred_prob, x)
-end
-centred_sampler = RWMH(MvNormal(zeros(2), 0.05^2 * I))
-centred_transitions = sample(Xoshiro(1), centred_model, centred_sampler, 2000;
-    param_names = ["north.shape", "south.shape"], progress = false)
-centred_draws = [t.params for t in centred_transitions][1001:end]
-event(point_estimate(centred, to_flexichain(centred, centred_draws)), :north)
 
 # ## Next
 #

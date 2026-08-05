@@ -3,11 +3,12 @@
 # A distribution written by hand becomes fittable by answering two questions:
 # what are its scalar parameters, and how does it rebuild itself from a flat
 # vector.
-# Nothing else changes, and no probabilistic programming language is involved.
+# Nothing else changes.
 #
-# This tutorial writes those two methods for a gamma-backed delay, samples the
-# posterior with a plain Metropolis sampler, reads the draws back onto the
-# distribution, swaps the likelihood for a survival one, and finds a
+# This tutorial writes those two methods for a Weibull-backed delay, samples the
+# posterior with a plain Metropolis sampler and reads the draws back onto the
+# distribution.
+# It then swaps the likelihood for a survival one and finds a
 # maximum-a-posteriori point with an external optimiser.
 
 using DistributionsInference, Distributions, Random
@@ -26,7 +27,9 @@ struct ToyDelay{T <: Real}
     scale::T
 end
 
-Distributions.logpdf(d::ToyDelay, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+function Distributions.logpdf(d::ToyDelay, y::Real)
+    return logpdf(Weibull(d.shape, d.scale), y)
+end
 
 function DistributionsInference.parameter_rows(d::ToyDelay)
     return [
@@ -40,7 +43,7 @@ function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
     return ToyDelay(x[1], oftype(x[1], d.scale))
 end
 
-delay = ToyDelay(2.0, 1.0)
+delay = ToyDelay(2.0, 2.5)
 data = [1.5, 2.0, 3.2, 1.8, 2.6]
 
 parameter_rows(delay)
@@ -67,7 +70,7 @@ DistributionsInference.flat_dimension(delay)
 
 DistributionsInference.logdensity(prob, [2.0])
 
-# ## Sampling with no probabilistic programming language
+# ## Sampling the log-density directly
 #
 # `prob` implements the `LogDensityProblems` interface, so any consumer of that
 # interface can drive it.
@@ -92,7 +95,8 @@ length(draws)
 # ## Reading the fit back onto the distribution
 #
 # [`to_flexichain`](@ref) keys the raw draws by the estimated rows' dotted
-# names, the naming contract every readback verb here uses.
+# names.
+# Every readback verb below looks those names up.
 
 chain = to_flexichain(delay, draws)
 
@@ -102,38 +106,37 @@ chain = to_flexichain(delay, draws)
 fitted = point_estimate(delay, chain)
 fitted.shape
 
-# The fixed row came back untouched, at its template value.
+# The fixed row came back at its template value.
 
 fitted.scale
 
-# [`distribution_params`](@ref) is the params-first primitive underneath: the
-# same reduction keyed by dotted name, before the object is rebuilt.
+# [`distribution_params`](@ref) is the params-first primitive underneath, the
+# same reduction keyed by dotted name before the object is rebuilt.
 
 distribution_params(delay, chain)
 
-# [`readback_draws`](@ref) keeps every draw instead of reducing them, which is
-# what a per-draw posterior-predictive summary needs.
+# [`readback_draws`](@ref) keeps every draw instead of reducing them, for a
+# per-draw posterior-predictive summary.
 
 all_fitted = readback_draws(delay, chain)
-quantile([mean(Gamma(d.shape, d.scale)) for d in all_fitted], [0.025, 0.975])
+quantile([mean(Weibull(d.shape, d.scale)) for d in all_fitted], [0.025, 0.975])
 
 # ## Swapping the likelihood
 #
-# `loglik` is a reducer `(obj, data) -> Real`, not a fixed sum of `logpdf`.
+# `loglik` is any reducer `(obj, data) -> Real`.
 # Right-censored records, known only to exceed a bound, score through `logccdf`
-# instead.
+# rather than `logpdf`.
 
 function survival_loglik(obj, records)
-    return sum(y -> logccdf(Gamma(obj.shape, obj.scale), y), records)
+    return sum(y -> logccdf(Weibull(obj.shape, obj.scale), y), records)
 end
 bounds = [1.0, 1.5, 2.0]
 survival_prob = distribution_to_logdensity(delay, bounds;
     loglik = survival_loglik)
 DistributionsInference.logdensity(survival_prob, [2.0])
 
-# Everything above works unchanged on `survival_prob`: the parameter
-# inventory, the priors and the readback do not know which reducer scored the
-# data.
+# The parameter inventory, the priors and the readback never see the reducer,
+# so everything above works unchanged on `survival_prob`.
 
 survival_model = AdvancedMH.DensityModel() do x
     any(<=(0), x) ? -Inf : DistributionsInference.logdensity(survival_prob, x)
@@ -143,22 +146,22 @@ survival_transitions = sample(Xoshiro(1), survival_model, sampler, 2000;
 survival_draws = [t.params for t in survival_transitions][1001:end]
 point_estimate(delay, to_flexichain(delay, survival_draws)).shape
 
-# A gradient-free sampler is the right choice here: `logccdf` for a `Gamma` has
-# no `ForwardDiff` rule, so this reducer cannot be handed to `NUTS`.
-# The same applies to a reducer that draws random replicates internally to
-# marginalise a latent variable, which is noisier as well as usually
-# non-differentiable; raise its replicate count until the posterior summary
-# stops moving.
+# `logccdf` for a `Weibull` differentiates, so
+# [Sampling with Turing](@ref turing-sampling) hands this same reducer to
+# `NUTS`.
+# A reducer that draws random replicates internally to marginalise a latent
+# variable is noisy as well as usually non-differentiable, so keep it on a
+# gradient-free sampler and raise its replicate count until the posterior
+# summary stops moving.
 
 # ## A point estimate instead of a posterior
 #
 # The objective is an unnormalised log-density, so an external optimiser can
 # find its mode directly.
-# [`logdensity_to_objective`](@ref) is the wiring only: the unconstrained
+# [`logdensity_to_objective`](@ref) supplies the wiring: the unconstrained
 # transform, the negated objective and
 # [`reconstruct`](@ref DistributionsInference.reconstruct), once `Bijectors` is
 # loaded.
-# The optimiser stays external.
 
 using Bijectors, Optim
 
@@ -168,8 +171,8 @@ z_hat = Optim.minimizer(res)
 
 # `z_hat` is on the unconstrained scale.
 # [`to_constrained`](@ref DistributionsInference.to_constrained) and
-# [`reconstruct`](@ref DistributionsInference.reconstruct) push it back, the
-# same readback path every sampler above reconstructs through.
+# [`reconstruct`](@ref DistributionsInference.reconstruct) push it back through
+# the same readback path every sampler above used.
 
 x_hat, _ = DistributionsInference.to_constrained(prob, z_hat)
 map_fit = DistributionsInference.reconstruct(prob.obj, x_hat)
@@ -177,8 +180,7 @@ map_fit.shape
 
 # That is the maximum-a-posteriori point, because `logdensity` always adds an
 # estimated row's own prior.
-# Maximum likelihood needs a prior flat enough to leave the likelihood alone,
-# rather than a different reducer.
+# Maximum likelihood needs a prior flat enough to leave the likelihood alone.
 
 struct ToyDelayML{T <: Real}
     shape::T
@@ -186,7 +188,7 @@ struct ToyDelayML{T <: Real}
 end
 
 function Distributions.logpdf(d::ToyDelayML, y::Real)
-    return logpdf(Gamma(d.shape, d.scale), y)
+    return logpdf(Weibull(d.shape, d.scale), y)
 end
 
 function DistributionsInference.parameter_rows(d::ToyDelayML)
@@ -200,7 +202,7 @@ function DistributionsInference.reconstruct(d::ToyDelayML, x::AbstractVector)
     return ToyDelayML(x[1], oftype(x[1], d.scale))
 end
 
-ml_delay = ToyDelayML(2.0, 1.0)
+ml_delay = ToyDelayML(2.0, 2.5)
 ml_prob = distribution_to_logdensity(ml_delay, data)
 ml_res = optimize(logdensity_to_objective(ml_prob),
     zeros(DistributionsInference.flat_dimension(ml_delay)), LBFGS())
@@ -216,8 +218,8 @@ DistributionsInference.reconstruct(ml_delay, ml_x).shape
 # - [Sampling with Turing](@ref turing-sampling) fits this same distribution
 #   through `DynamicPPL` and reads the chain back with the same calls.
 # - [Fitting a composed distribution](@ref composed-distributions) runs both
-#   routes against a tree built by `ComposedDistributions`, with no protocol
-#   methods written at all.
+#   routes against a tree built by `ComposedDistributions`. Its extension
+#   writes the protocol methods.
 # - [Public API](@ref public-api) lists the rest of the protocol
 #   ([`with_priors`](@ref),
 #   [`estimated_rows`](@ref DistributionsInference.estimated_rows),

@@ -13,8 +13,7 @@ pages = [
         "Tutorials" => [
             "Fitting a custom distribution" => "$_TUTORIALS/custom-distribution.md",
             "Sampling with Turing" => "$_TUTORIALS/turing.md",
-            "Fitting a composed distribution" => "$_TUTORIALS/composed-distributions.md",
-            "Automatic differentiation backends" => "$_TUTORIALS/ad-backends.md"
+            "Fitting a composed distribution" => "$_TUTORIALS/composed-distributions.md"
         ]
     ],
     "API reference" => [

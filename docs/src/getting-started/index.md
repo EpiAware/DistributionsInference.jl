@@ -1,7 +1,7 @@
 # [Getting started](@id getting-started)
 
-This page is the map of the documentation.
-The [home page](../index.md) says what the package is for and shows the shortest fit that runs; the tutorials below do the work.
+The [home page](../index.md) says what the package is for and shows the shortest fit that runs.
+The tutorials below go further.
 
 ## Installation
 
@@ -10,7 +10,7 @@ using Pkg
 Pkg.add("DistributionsInference")
 ```
 
-Fitting needs a sampler and a chain type as well, and both are chosen by the caller rather than by this package.
+Fitting needs a sampler and a chain type as well, and you choose both.
 The tutorials sample with `AdvancedMH` or `Turing` and hold the draws in `FlexiChains`.
 
 ```julia
@@ -26,22 +26,22 @@ Pkg.add(["Bijectors", "Optim", "ComposedDistributions"])
 
 ## The route through a fit
 
-Every fit here is the same three steps, whatever the distribution and whatever the sampler.
+Every fit here is the same three steps, whatever the distribution and sampler.
 
 | Step | What you write | What it gives |
 |---|---|---|
 | Declare | [`parameter_rows`](@ref) and [`reconstruct`](@ref DistributionsInference.reconstruct) on your type | one row per scalar parameter, and a way back from a flat vector |
 | Score | [`distribution_to_logdensity`](@ref) or [`distribution_to_turing`](@ref) | a `LogDensityProblems` problem, or a `DynamicPPL` model |
-| Read back | [`point_estimate`](@ref) or [`readback_draws`](@ref) | the fitted distribution, not a table of numbers |
+| Read back | [`point_estimate`](@ref) or [`readback_draws`](@ref) | the fitted distribution |
 
 Only the first step is written per type, and a distribution from a package that already implements the protocol skips it.
 
 ## Tutorials
 
-- [Fitting a custom distribution](@ref custom-distribution) writes the protocol for a hand-rolled type, samples it with no probabilistic programming language in the loop, and finds a maximum-a-posteriori point with an external optimiser.
+- [Fitting a custom distribution](@ref custom-distribution) writes the protocol for a hand-rolled type, samples it with AdvancedMH, and finds a maximum-a-posteriori point with an external optimiser.
 - [Sampling with Turing](@ref turing-sampling) fits the same distribution as a `DynamicPPL` model and reads the chain back with the same two calls.
-- [Fitting a composed distribution](@ref composed-distributions) runs both routes against a `ComposedDistributions` tree, including partial pooling, without writing any protocol methods.
-- [Automatic differentiation backends](@ref ad-backends) reports which backends differentiate the log-density and what each costs.
+- [Fitting a composed distribution](@ref composed-distributions) runs both routes against a `ComposedDistributions` tree, partial pooling included.
+  Its extension writes the protocol methods.
 
 ## Getting help
 

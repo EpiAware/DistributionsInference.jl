@@ -50,11 +50,10 @@ LinearAlgebra = "1"
 Markdown = "1"
 # Mooncake is a direct dep because the `ADFixtures` registry deliberately does
 # not depend on it (its Mooncake rules clash with ComposedDistributions' —
-# DI#73), so it no longer arrives transitively. This makes Mooncake AVAILABLE
-# in the docs environment; it does not make the AD-backends page able to run
-# its Mooncake rows, because the kit-managed page has no `using Mooncake` and
-# a `[deps]` entry only installs a package rather than loading it. See the
-# `FORCE_STUB_TUTORIALS` note in docs/docs_config.jl.
+# DI#73), so it no longer arrives transitively. This installs Mooncake in the
+# docs environment without loading it, so the AD-backends page still cannot
+# run its Mooncake rows. See the `HEAVY_TUTORIALS` note in docs/docs_config.jl
+# for why that page is unregistered.
 Mooncake = "0.5"
 Optim = "1"
 Random = "1"
