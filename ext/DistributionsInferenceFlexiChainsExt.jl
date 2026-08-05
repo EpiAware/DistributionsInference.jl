@@ -1,14 +1,14 @@
 # DistributionsInference x FlexiChains: the dotted-name chain readback. Build
 # a `FlexiChain` from a sampler's raw draws (`to_flexichain`), read its
 # estimated values by dotted name (`distribution_params`), and read a chain
-# back onto a fitted object (`point_estimate`, `readback_draws`). All four are
-# declared with their docstrings in `src/readback.jl`.
+# back onto a fitted object (`point_estimate`, `distribution_draws`). All four
+# are declared with their docstrings in `src/readback.jl`.
 module DistributionsInferenceFlexiChainsExt
 
 using DistributionsInference: DistributionsInference, estimated_rows,
                               reconstruct, _draws_matrix
 import DistributionsInference: to_flexichain, distribution_params,
-                               point_estimate, readback_draws
+                               point_estimate, distribution_draws
 using FlexiChains: FlexiChains
 using Statistics: mean
 
@@ -88,7 +88,7 @@ function point_estimate(obj, chain::FlexiChains.FlexiChain; summary = mean,
     return reconstruct(obj, collect(values(nt)))
 end
 
-function readback_draws(obj, chain::FlexiChains.FlexiChain; draws = nothing)
+function distribution_draws(obj, chain::FlexiChains.FlexiChain; draws = nothing)
     rows = estimated_rows(obj)
     sel = _draw_indices(chain, draws)
     idx = sel isa Colon ? (1:FlexiChains.niters(chain)) : sel

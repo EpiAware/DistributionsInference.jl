@@ -163,7 +163,7 @@ end
     expected_x = [mean(d[i] for d in draws) for i in 1:n]
     @test fitted == ComposedDistributions.reconstruct(tree, expected_x)
 
-    all_fitted = DistributionsInference.readback_draws(tree, chain)
+    all_fitted = DistributionsInference.distribution_draws(tree, chain)
     @test length(all_fitted) == length(draws)
     @test all_fitted[end] == ComposedDistributions.reconstruct(tree, draws[end])
 end

@@ -10,10 +10,10 @@ The protocol (`parameter_rows`, `reconstruct`), default-prior assembly over it
 (`default_prior`, `with_priors`) and the engine (`distribution_to_logdensity`,
 `logdensity`, `FitLogDensity`) are implemented here. Everything else arrives
 through an extension: `FlexiChains` (the dotted-name readback,
-`to_flexichain`, `distribution_params`, `point_estimate`, `readback_draws`),
+`to_flexichain`, `distribution_params`, `point_estimate`, `distribution_draws`),
 `DynamicPPL` (`distribution_to_turing`), `DynamicPPL` x `FlexiChains` (the
 `VarName`-keyed dispatch of
-`distribution_params`/`point_estimate`/`readback_draws`), `Bijectors`
+`distribution_params`/`point_estimate`/`distribution_draws`), `Bijectors`
 (`to_constrained` and `logdensity_to_objective` built on it),
 and `ComposedDistributions` (the fit protocol over a composed tree's own
 codec). The `ModifiedDistributions` extension is parked until that package

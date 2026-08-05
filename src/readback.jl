@@ -86,8 +86,8 @@ Build a dotted-name `FlexiChain` from raw sampler draws.
 
 `to_flexichain(obj, draws)` keys `draws` by [`estimated_rows`](@ref)`(obj)`'s
 dotted `name`s (in [`parameter_rows`](@ref) order), so the result reads back
-onto `obj` with [`point_estimate`](@ref)/[`readback_draws`](@ref). `draws` is
-accepted in either raw shape a `LogDensityProblems`-compatible sampler hands
+onto `obj` with [`point_estimate`](@ref)/[`distribution_draws`](@ref). `draws`
+is accepted in either raw shape a `LogDensityProblems`-compatible sampler hands
 back: a `dim x niter` matrix, or a `niter`-length vector of `dim`-length
 vectors, where `dim` is [`flat_dimension`](@ref)`(obj)`. An object estimating
 nothing (`dim == 0`) still needs `draws` to carry the draw count — pass a
@@ -130,7 +130,7 @@ FlexiChains.parameters(chain)
 # See also
 - [`point_estimate`](@ref): reduce the chain back onto `obj` (point
   summary/draw).
-- [`readback_draws`](@ref): the vectorised, every-draw form.
+- [`distribution_draws`](@ref): the vectorised, every-draw form.
 "
 function to_flexichain(obj, draws)
     _flexichains_loaded() || _flexichains_required(:to_flexichain)
@@ -198,7 +198,7 @@ distribution_params(leaf, chain)
 
 # See also
 - [`point_estimate`](@ref): rebuilds `obj` from this primitive's result.
-- [`readback_draws`](@ref): the vectorised, every-draw form (its own
+- [`distribution_draws`](@ref): the vectorised, every-draw form (its own
   optimised implementation, not layered on this — see its docstring).
 "
 function distribution_params(obj, chain; kwargs...)
@@ -263,7 +263,7 @@ point_estimate(leaf, chain).shape
 # See also
 - [`distribution_params`](@ref): the params-first primitive this layers on.
 - [`to_flexichain`](@ref): build the chain this reads.
-- [`readback_draws`](@ref): the vectorised, every-draw form.
+- [`distribution_draws`](@ref): the vectorised, every-draw form.
 "
 function point_estimate(obj, chain; kwargs...)
     return _no_chain_method(:point_estimate, chain)
@@ -273,11 +273,11 @@ end
 
 Read every draw of a dotted-name `FlexiChain` back onto a fitted object.
 
-`readback_draws(obj, chain)` is the vectorised form of [`point_estimate`](@ref):
-where `point_estimate` reduces the chain to one reconstructed object,
-`readback_draws` keeps every draw, returning a vector of reconstructed
-objects (one per selected iteration) — e.g. for a per-draw
-posterior-predictive summary.
+`distribution_draws(obj, chain)` is the vectorised form of
+[`point_estimate`](@ref): where `point_estimate` reduces the chain to one
+reconstructed object, `distribution_draws` keeps every draw, returning a
+vector of reconstructed objects (one per selected iteration) — e.g. for a
+per-draw posterior-predictive summary.
 
 This has no method until `FlexiChains` is loaded; the read lives in the
 `DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
@@ -317,7 +317,7 @@ end
 leaf = DrawsLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]
 chain = to_flexichain(leaf, reshape(draws, 1, :))
-length(readback_draws(leaf, chain))
+length(distribution_draws(leaf, chain))
 ```
 
 !!! note \"Not layered on `distribution_params`\"
@@ -333,6 +333,6 @@ length(readback_draws(leaf, chain))
   (but not this function) layers on.
 - [`to_flexichain`](@ref): build the chain this reads.
 "
-function readback_draws(obj, chain; kwargs...)
-    return _no_chain_method(:readback_draws, chain)
+function distribution_draws(obj, chain; kwargs...)
+    return _no_chain_method(:distribution_draws, chain)
 end

@@ -20,13 +20,13 @@ end
 
     @test exported == [
         :DistributionsInference,
+        :distribution_draws,
         :distribution_params,
         :distribution_to_logdensity,
         :distribution_to_turing,
         :logdensity_to_objective,
         :parameter_rows,
         :point_estimate,
-        :readback_draws,
         :to_flexichain,
         :with_priors]
     @test public_only == [

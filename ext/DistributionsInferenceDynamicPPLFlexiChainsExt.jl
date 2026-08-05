@@ -10,7 +10,7 @@ module DistributionsInferenceDynamicPPLFlexiChainsExt
 using DistributionsInference: DistributionsInference, estimated_rows,
                               _row_varname
 import DistributionsInference: distribution_params, point_estimate,
-                               readback_draws
+                               distribution_draws
 using DynamicPPL: VarName
 using FlexiChains: FlexiChains
 
@@ -54,9 +54,10 @@ function point_estimate(obj, chain::FlexiChains.FlexiChain{<:VarName};
     return point_estimate(obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
 end
 
-function readback_draws(obj, chain::FlexiChains.FlexiChain{<:VarName};
+function distribution_draws(obj, chain::FlexiChains.FlexiChain{<:VarName};
         prefix::Symbol = :d, kwargs...)
-    return readback_draws(obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
+    symbol_chain = _to_symbol_chain(obj, chain, prefix)
+    return distribution_draws(obj, symbol_chain; kwargs...)
 end
 
 end # module DistributionsInferenceDynamicPPLFlexiChainsExt

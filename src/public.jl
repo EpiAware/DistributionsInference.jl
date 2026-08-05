@@ -30,11 +30,10 @@ public FitLogDensity, logdensity
 # `DistributionsInferenceFlexiChainsExt`, and the last three also dispatch on a
 # `VarName`-keyed chain once `DynamicPPL` is loaded alongside `FlexiChains`.
 #
-# `readback_draws` keeps the `readback` stem the `point_estimate` rename gave
-# up. It returns one object per draw, so neither a plural of `point_estimate`
-# nor a `distribution_*` spelling describes it; the two are related in their
-# docstrings instead of in their names.
-export to_flexichain, distribution_params, point_estimate, readback_draws
+# `distribution_params` reads a chain's estimated values by name;
+# `point_estimate` and `distribution_draws` rebuild the distribution from them,
+# reduced to one object or kept one per draw.
+export to_flexichain, distribution_params, point_estimate, distribution_draws
 
 # A DynamicPPL model over a fittable object's estimated parameters. Stub here
 # (docstring in `turing.jl`); the model lives in

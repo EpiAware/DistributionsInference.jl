@@ -1,6 +1,6 @@
 # The dotted-name FlexiChains readback: `to_flexichain`,
-# `point_estimate`/`readback_draws` selection semantics (deliberately matching
-# ComposedDistributions' `chain_to_params`/`param_draws`), and the DI#3
+# `point_estimate`/`distribution_draws` selection semantics (deliberately
+# matching ComposedDistributions' `chain_to_params`/`param_draws`), and the DI#3
 # acceptance criterion (a real AdvancedMH round-trip). Every method here
 # lives in `DistributionsInferenceFlexiChainsExt`, so each test item loads
 # `FlexiChains` itself rather than relying on a sibling item having done so.
@@ -24,7 +24,8 @@ end
     rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
         support = (0.0, Inf))]
     for f in (DistributionsInference.distribution_params,
-        DistributionsInference.point_estimate, DistributionsInference.readback_draws)
+        DistributionsInference.point_estimate,
+        DistributionsInference.distribution_draws)
         thrown = try
             f(rows, [1.0 2.0])
             nothing
@@ -56,7 +57,7 @@ end
         () -> DistributionsInference.to_flexichain(rows, reshape([1.0], 1, :)),
         () -> DistributionsInference.distribution_params(rows, nothing),
         () -> DistributionsInference.point_estimate(rows, nothing),
-        () -> DistributionsInference.readback_draws(rows, nothing)]
+        () -> DistributionsInference.distribution_draws(rows, nothing)]
     for call in calls
         thrown = try
             call()
@@ -134,7 +135,8 @@ end
 
     fitted = DistributionsInference.point_estimate(fixed_leaf, chain_mat)
     @test fitted == fixed_leaf
-    all_fitted = DistributionsInference.readback_draws(fixed_leaf, chain_mat)
+    all_fitted = DistributionsInference.distribution_draws(
+        fixed_leaf, chain_mat)
     @test length(all_fitted) == 5
     @test all(==(fixed_leaf), all_fitted)
 end
@@ -245,21 +247,22 @@ end
     @test DistributionsInference.point_estimate(leaf, chain).scale == leaf.scale
 end
 
-@testitem "readback_draws: keeps every draw, restricted by `draws`" setup=[ToyFixture] begin
+@testitem "distribution_draws: keeps every draw, restricted by `draws`" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     values = [1.0, 2.0, 3.0, 4.0]
     chain = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
 
-    all_fitted = DistributionsInference.readback_draws(leaf, chain)
+    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
     @test length(all_fitted) == 4
     @test [f.shape for f in all_fitted] == values
 
-    subset = DistributionsInference.readback_draws(leaf, chain; draws = 2:3)
+    subset = DistributionsInference.distribution_draws(leaf, chain; draws = 2:3)
     @test [f.shape for f in subset] == [2.0, 3.0]
 
-    predicate = DistributionsInference.readback_draws(leaf, chain; draws = i -> i > 2)
+    predicate = DistributionsInference.distribution_draws(
+        leaf, chain; draws = i -> i > 2)
     @test [f.shape for f in predicate] == [3.0, 4.0]
 end
 
@@ -315,7 +318,7 @@ end
     @test abs(fitted.shape - true_shape) < 0.5
     @test fitted.scale == scale
 
-    all_fitted = DistributionsInference.readback_draws(leaf, chain)
+    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
     @test length(all_fitted) == length(draws)
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
 end

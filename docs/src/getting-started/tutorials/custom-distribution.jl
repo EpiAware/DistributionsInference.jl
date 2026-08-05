@@ -115,10 +115,10 @@ fitted.scale
 
 distribution_params(delay, chain)
 
-# [`readback_draws`](@ref) keeps every draw instead of reducing them, for a
+# [`distribution_draws`](@ref) keeps every draw instead of reducing them, for a
 # per-draw posterior-predictive summary.
 
-all_fitted = readback_draws(delay, chain)
+all_fitted = distribution_draws(delay, chain)
 quantile([mean(Weibull(d.shape, d.scale)) for d in all_fitted], [0.025, 0.975])
 
 # ## Swapping the likelihood
