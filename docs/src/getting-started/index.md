@@ -40,7 +40,8 @@ Only the first step is written per type, and a distribution from a package that 
 
 - [Fitting a custom distribution](@ref custom-distribution) writes the protocol for a hand-rolled type, samples it with AdvancedMH, and finds a maximum-a-posteriori point with an external optimiser.
 - [Sampling with Turing](@ref turing-sampling) fits the same distribution as a `DynamicPPL` model and reads the chain back with the same two calls.
-- [Fitting a composed distribution](@ref composed-distributions) runs both routes against a `ComposedDistributions` tree, partial pooling included, on the protocol its extension implements for you.
+- [Fitting a composed distribution](@ref composed-distributions) runs both routes against a `ComposedDistributions` tree, partial pooling included.
+  Its extension writes the protocol methods.
 
 ## Getting help
 

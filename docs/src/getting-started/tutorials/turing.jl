@@ -79,19 +79,22 @@ quantile([mean(Weibull(d.shape, d.scale)) for d in fits], [0.025, 0.5, 0.975])
 #
 # `distribution_to_turing` takes the same `loglik` reducer as
 # `distribution_to_logdensity`.
-# The survival reducer from
-# [Fitting a custom distribution](@ref custom-distribution) scores
-# right-censored records through `logccdf`, and `NUTS` samples it unchanged.
+# Aggregated records, a delay and the number of cases reporting it, score
+# through a weighted sum rather than one term per row, and `NUTS` samples the
+# result with no other change.
 
-function survival_loglik(obj, records)
-    return sum(y -> logccdf(Weibull(obj.shape, obj.scale), y), records)
-end
-bounds = [1.0, 1.5, 2.0]
+weighted_loglik(obj, records) = sum(w * logpdf(obj, y) for (y, w) in records)
+counts = [(1.5, 12.0), (2.0, 30.0), (3.2, 8.0), (1.8, 21.0), (2.6, 15.0)]
 Random.seed!(1)
-survival_chain = sample(
-    distribution_to_turing(delay, bounds; loglik = survival_loglik),
+weighted_chain = sample(
+    distribution_to_turing(delay, counts; loglik = weighted_loglik),
     NUTS(), 500; chain_type = VNChain, progress = false)
-point_estimate(delay, survival_chain).shape
+point_estimate(delay, weighted_chain).shape
+
+# The survival reducer from
+# [Fitting a custom distribution](@ref custom-distribution) goes through the
+# same keyword: `logccdf` for a `Weibull` differentiates, so `NUTS` samples
+# that one unchanged too.
 
 # ## Next
 #

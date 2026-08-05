@@ -149,6 +149,10 @@ point_estimate(delay, to_flexichain(delay, survival_draws)).shape
 # `logccdf` for a `Weibull` differentiates, so
 # [Sampling with Turing](@ref turing-sampling) hands this same reducer to
 # `NUTS`.
+# A reducer that draws random replicates internally to marginalise a latent
+# variable is noisy as well as usually non-differentiable, so keep it on a
+# gradient-free sampler and raise its replicate count until the posterior
+# summary stops moving.
 
 # ## A point estimate instead of a posterior
 #
@@ -214,8 +218,8 @@ DistributionsInference.reconstruct(ml_delay, ml_x).shape
 # - [Sampling with Turing](@ref turing-sampling) fits this same distribution
 #   through `DynamicPPL` and reads the chain back with the same calls.
 # - [Fitting a composed distribution](@ref composed-distributions) runs both
-#   routes against a tree built by `ComposedDistributions`, on the protocol its
-#   extension implements for you.
+#   routes against a tree built by `ComposedDistributions`. Its extension
+#   writes the protocol methods.
 # - [Public API](@ref public-api) lists the rest of the protocol
 #   ([`with_priors`](@ref),
 #   [`estimated_rows`](@ref DistributionsInference.estimated_rows),

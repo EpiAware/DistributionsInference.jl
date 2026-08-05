@@ -91,7 +91,6 @@ pooled = compose((
 
 [row.name for row in DistributionsInference.estimated_rows(pooled)]
 
-# Those are not the parameters anyone wrote down.
 # A location-scale population is reparameterised non-centred, so what is
 # estimated is the population's two hyperparameters and one standard normal
 # offset per district.

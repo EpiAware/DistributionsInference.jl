@@ -21,7 +21,8 @@ A distribution names its own parameters and becomes fittable through a plain log
 - A distribution declares its parameters as a table of rows, one row per scalar parameter carrying its name, value, prior and support.
   Attaching a prior to a row is what makes that parameter estimated.
   The rows are plain `NamedTuple`s, which any Tables.jl consumer reads.
-- `point_estimate` post-processes sampler output onto a fitted distribution in one call, and a new chain type needs one added method.
+- `point_estimate` post-processes sampler output onto a fitted distribution in one call.
+- Supporting a new chain type takes one added method.
 - The distribution that comes back is the same kind of object that went in, so a fitted `Gamma` is a `Gamma`.
 
 ## Getting started
@@ -75,7 +76,8 @@ draws = [t.params for t in transitions][2001:end]
 length(draws)
 ```
 
-`point_estimate` reads the draws back onto the distribution through the same dotted-name chain a real PPL's sampler would hand back, and returns a `Gamma`.
+`point_estimate` reads the draws back onto the distribution through the same dotted-name chain a real PPL's sampler would hand back.
+What it returns is a `Gamma`.
 The chain readback is a package extension, so add and load `FlexiChains` for this last step.
 
 ```julia
@@ -90,7 +92,7 @@ The [getting started guide](https://distributionsinference.epiaware.org/dev/gett
 ## Related packages
 
 - [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) defines the distributions this fits; a type that has a `logpdf` and can name its scalar parameters is a candidate.
-- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) builds a distribution by composing others into chains, branches and outcomes; a package extension here reads a composed tree's generated codec directly, so its estimated leaves are fittable as they stand, pooled and shared parameters included.
+- [ComposedDistributions.jl](https://composeddistributions.epiaware.org/dev/) builds a distribution by composing others into chains, branches and outcomes; a package extension here reads a composed tree's generated codec directly, so its estimated leaves, pooled and shared parameters included, are fittable as they stand.
 - [ModifiedDistributions.jl](https://modifieddistributions.epiaware.org/dev/) wraps a distribution to change one behaviour, such as rescaling, likelihood weighting or a hazard shift; a modifier used as a leaf inside a composed tree is already fittable, but the extension for fitting a standalone modifier is parked until that package registers in General.
 - [ReparameterisedDistributions.jl](https://reparameteriseddistributions.epiaware.org/dev/) switches a family between parameter conventions, so a distribution can be fitted in the coordinates its priors were elicited in rather than the family's native ones.
 - [CensoredDistributions.jl](https://censoreddistributions.epiaware.org/dev/) applies primary event censoring, interval censoring and right truncation to a delay, and returns a `Distributions.jl` distribution.
