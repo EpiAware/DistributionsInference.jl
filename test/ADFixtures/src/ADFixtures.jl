@@ -253,9 +253,11 @@ function scenarios(; with_reference::Bool = false, category::Symbol = :marginal)
     # The `xlogy` edge case (DI#7, CD#99): `shape == 1.0` routes a nonzero
     # cotangent into `LogExpFunctions.xlogy`'s `iszero(x)` branch inside
     # `Distributions.gammalogpdf`, where Mooncake derives `0` instead of
-    # `log(y)` (chalk-lab/Mooncake.jl#1241). `DistributionsInferenceMooncakeExt`
-    # imports the `ChainRulesCore` rules as Mooncake primitives to fix this; if
-    # those ever stop working, quarantine this scenario via
+    # `log(y)`. `EpiAwareADToolsLogExpFunctionsMooncakeExt` imports the
+    # `ChainRulesCore` rules as Mooncake primitives to fix this; it lives in
+    # the kit rather than in this package so it cannot clash with the copy in
+    # `ComposedDistributions` (DI#73). This scenario is the regression test
+    # that the rules still reach here; if they ever stop, quarantine it via
     # `broken_scenario_names`/`backend_broken_scenarios` below.
     scen(_engine_target, [1.0], (Constant(one_param),),
         "fit-protocol engine logdensity (shape at 1.0, xlogy edge case)")

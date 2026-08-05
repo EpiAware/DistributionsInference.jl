@@ -15,10 +15,9 @@ through an extension: `FlexiChains` (the dotted-name readback,
 `VarName`-keyed dispatch of
 `distribution_params`/`point_estimate`/`readback_draws`), `Bijectors`
 (`to_constrained` and `logdensity_to_objective` built on it),
-`ComposedDistributions` (the fit protocol over a composed tree's own codec)
-and `Mooncake` (gradient rules for `xlogy`/`xlog1py`). The
-`ModifiedDistributions` extension is parked until that package registers in
-General (#17).
+and `ComposedDistributions` (the fit protocol over a composed tree's own
+codec). The `ModifiedDistributions` extension is parked until that package
+registers in General (#17).
 
 ```@example
 using DistributionsInference
@@ -26,15 +25,13 @@ using DistributionsInference
 """
 module DistributionsInference
 
-# All module-scope `using`/`import` statements live here, not in the
-# included files.
 using Distributions: Distributions
 using DocStringExtensions: @template, DOCSTRING, EXPORTS, IMPORTS,
                            TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 using LogDensityProblems: LogDensityProblems
+using EpiAwareADTools: EpiAwareADTools
+using LogExpFunctions: LogExpFunctions
 
-# Must precede any docstring: a `@template` only applies to docstrings
-# written after it.
 include("docstrings.jl")
 
 include("extensions.jl")
