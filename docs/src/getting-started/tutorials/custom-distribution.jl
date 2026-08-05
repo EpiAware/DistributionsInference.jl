@@ -5,7 +5,7 @@
 # vector.
 # Nothing else changes, and no probabilistic programming language is involved.
 #
-# This tutorial writes those two methods for a gamma-backed delay, samples the
+# This tutorial writes those two methods for a Weibull-backed delay, samples the
 # posterior with a plain Metropolis sampler, reads the draws back onto the
 # distribution, swaps the likelihood for a survival one, and finds a
 # maximum-a-posteriori point with an external optimiser.
@@ -26,7 +26,9 @@ struct ToyDelay{T <: Real}
     scale::T
 end
 
-Distributions.logpdf(d::ToyDelay, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+function Distributions.logpdf(d::ToyDelay, y::Real)
+    return logpdf(Weibull(d.shape, d.scale), y)
+end
 
 function DistributionsInference.parameter_rows(d::ToyDelay)
     return [
@@ -40,7 +42,7 @@ function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
     return ToyDelay(x[1], oftype(x[1], d.scale))
 end
 
-delay = ToyDelay(2.0, 1.0)
+delay = ToyDelay(2.0, 2.5)
 data = [1.5, 2.0, 3.2, 1.8, 2.6]
 
 parameter_rows(delay)
@@ -115,7 +117,7 @@ distribution_params(delay, chain)
 # what a per-draw posterior-predictive summary needs.
 
 all_fitted = readback_draws(delay, chain)
-quantile([mean(Gamma(d.shape, d.scale)) for d in all_fitted], [0.025, 0.975])
+quantile([mean(Weibull(d.shape, d.scale)) for d in all_fitted], [0.025, 0.975])
 
 # ## Swapping the likelihood
 #
@@ -124,7 +126,7 @@ quantile([mean(Gamma(d.shape, d.scale)) for d in all_fitted], [0.025, 0.975])
 # instead.
 
 function survival_loglik(obj, records)
-    return sum(y -> logccdf(Gamma(obj.shape, obj.scale), y), records)
+    return sum(y -> logccdf(Weibull(obj.shape, obj.scale), y), records)
 end
 bounds = [1.0, 1.5, 2.0]
 survival_prob = distribution_to_logdensity(delay, bounds;
@@ -143,12 +145,9 @@ survival_transitions = sample(Xoshiro(1), survival_model, sampler, 2000;
 survival_draws = [t.params for t in survival_transitions][1001:end]
 point_estimate(delay, to_flexichain(delay, survival_draws)).shape
 
-# A gradient-free sampler is the right choice here: `logccdf` for a `Gamma` has
-# no `ForwardDiff` rule, so this reducer cannot be handed to `NUTS`.
-# The same applies to a reducer that draws random replicates internally to
-# marginalise a latent variable, which is noisier as well as usually
-# non-differentiable; raise its replicate count until the posterior summary
-# stops moving.
+# `logccdf` for a `Weibull` differentiates, so
+# [Sampling with Turing](@ref turing-sampling) hands this same reducer to
+# `NUTS`.
 
 # ## A point estimate instead of a posterior
 #
@@ -186,7 +185,7 @@ struct ToyDelayML{T <: Real}
 end
 
 function Distributions.logpdf(d::ToyDelayML, y::Real)
-    return logpdf(Gamma(d.shape, d.scale), y)
+    return logpdf(Weibull(d.shape, d.scale), y)
 end
 
 function DistributionsInference.parameter_rows(d::ToyDelayML)
@@ -200,7 +199,7 @@ function DistributionsInference.reconstruct(d::ToyDelayML, x::AbstractVector)
     return ToyDelayML(x[1], oftype(x[1], d.scale))
 end
 
-ml_delay = ToyDelayML(2.0, 1.0)
+ml_delay = ToyDelayML(2.0, 2.5)
 ml_prob = distribution_to_logdensity(ml_delay, data)
 ml_res = optimize(logdensity_to_objective(ml_prob),
     zeros(DistributionsInference.flat_dimension(ml_delay)), LBFGS())

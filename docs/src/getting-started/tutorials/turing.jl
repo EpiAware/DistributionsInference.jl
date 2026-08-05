@@ -23,7 +23,9 @@ struct ToyDelay{T <: Real}
     scale::T
 end
 
-Distributions.logpdf(d::ToyDelay, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+function Distributions.logpdf(d::ToyDelay, y::Real)
+    return logpdf(Weibull(d.shape, d.scale), y)
+end
 
 function DistributionsInference.parameter_rows(d::ToyDelay)
     return [
@@ -37,7 +39,7 @@ function DistributionsInference.reconstruct(d::ToyDelay, x::AbstractVector)
     return ToyDelay(x[1], oftype(x[1], d.scale))
 end
 
-delay = ToyDelay(2.0, 1.0)
+delay = ToyDelay(2.0, 2.5)
 data = [1.5, 2.0, 3.2, 1.8, 2.6]
 
 # ## The model
@@ -70,7 +72,7 @@ point_estimate(delay, chain).shape
 # Every draw, kept rather than reduced, for a posterior-predictive summary.
 
 fits = readback_draws(delay, chain)
-quantile([mean(Gamma(d.shape, d.scale)) for d in fits], [0.025, 0.5, 0.975])
+quantile([mean(Weibull(d.shape, d.scale)) for d in fits], [0.025, 0.5, 0.975])
 
 # Switching sampler does not touch this code, because the readback contract is
 # the dotted names rather than the chain's provenance.
@@ -79,23 +81,19 @@ quantile([mean(Gamma(d.shape, d.scale)) for d in fits], [0.025, 0.5, 0.975])
 #
 # `distribution_to_turing` takes the same `loglik` reducer as
 # `distribution_to_logdensity`.
-# Aggregated records, a delay and the number of cases reporting it, score
-# through a weighted sum rather than one term per row, and `NUTS` samples the
-# result with no other change.
+# The survival reducer from
+# [Fitting a custom distribution](@ref custom-distribution) scores
+# right-censored records through `logccdf`, and `NUTS` samples it unchanged.
 
-weighted_loglik(obj, records) = sum(w * logpdf(obj, y) for (y, w) in records)
-counts = [(1.5, 12.0), (2.0, 30.0), (3.2, 8.0), (1.8, 21.0), (2.6, 15.0)]
+function survival_loglik(obj, records)
+    return sum(y -> logccdf(Weibull(obj.shape, obj.scale), y), records)
+end
+bounds = [1.0, 1.5, 2.0]
 Random.seed!(1)
-weighted_chain = sample(
-    distribution_to_turing(delay, counts; loglik = weighted_loglik),
+survival_chain = sample(
+    distribution_to_turing(delay, bounds; loglik = survival_loglik),
     NUTS(), 500; chain_type = VNChain, progress = false)
-point_estimate(delay, weighted_chain).shape
-
-# A reducer must be differentiable to be sampled this way.
-# The survival reducer in
-# [Fitting a custom distribution](@ref custom-distribution) is not, because
-# `logccdf` for a `Gamma` has no `ForwardDiff` rule, so it stays with a
-# gradient-free sampler.
+point_estimate(delay, survival_chain).shape
 
 # ## Next
 #
