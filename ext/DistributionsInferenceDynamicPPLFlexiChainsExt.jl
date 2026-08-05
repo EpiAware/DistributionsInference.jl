@@ -15,7 +15,7 @@ using DynamicPPL: VarName
 using FlexiChains: FlexiChains
 
 # Rename a `VarName`-keyed chain's parameters onto the estimated rows' dotted
-# `Symbol` names, so it matches what `to_flexichain` would have built.
+# `Symbol` names, the keying the `Symbol`-chain readback expects.
 # `_row_varname` is the DynamicPPL extension's method, reached by dispatch on
 # the core stub, so the two extensions cannot drift apart on the naming.
 function _to_symbol_chain(obj, chain::FlexiChains.FlexiChain{<:VarName},

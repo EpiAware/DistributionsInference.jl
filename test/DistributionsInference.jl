@@ -27,7 +27,6 @@ end
         :logdensity_to_objective,
         :parameter_rows,
         :point_estimate,
-        :to_flexichain,
         :with_priors]
     @test public_only == [
         :FitLogDensity,

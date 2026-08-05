@@ -1,13 +1,13 @@
-# DistributionsInference x FlexiChains: the dotted-name chain readback. Build
-# a `FlexiChain` from a sampler's raw draws (`to_flexichain`), read its
-# estimated values by dotted name (`distribution_params`), and read a chain
-# back onto a fitted object (`point_estimate`, `distribution_draws`). All four
-# are declared with their docstrings in `src/readback.jl`.
+# DistributionsInference x FlexiChains: the dotted-name chain readback. Read a
+# chain's estimated values by dotted name (`distribution_params`), and read a
+# chain back onto a fitted object (`point_estimate`, `distribution_draws`), plus
+# the internal raw-draws constructor (`_to_flexichain`). All four are declared
+# with their docstrings in `src/readback.jl`.
 module DistributionsInferenceFlexiChainsExt
 
 using DistributionsInference: DistributionsInference, estimated_rows,
                               reconstruct, _draws_matrix
-import DistributionsInference: to_flexichain, distribution_params,
+import DistributionsInference: _to_flexichain, distribution_params,
                                point_estimate, distribution_draws
 using FlexiChains: FlexiChains
 using Statistics: mean
@@ -15,10 +15,10 @@ using Statistics: mean
 # Typed on each raw draw shape rather than the stub's own `(obj, draws)`
 # signature: an identical signature would overwrite the core method (the one
 # that names this extension when it is missing) instead of adding to it.
-to_flexichain(obj, draws::AbstractMatrix) = _to_flexichain(obj, draws)
-to_flexichain(obj, draws::AbstractVector) = _to_flexichain(obj, draws)
+_to_flexichain(obj, draws::AbstractMatrix) = _chain_from_draws(obj, draws)
+_to_flexichain(obj, draws::AbstractVector) = _chain_from_draws(obj, draws)
 
-function _to_flexichain(obj, draws)
+function _chain_from_draws(obj, draws)
     rows = estimated_rows(obj)
     dim = length(rows)
     mat = _draws_matrix(draws, dim)

@@ -12,7 +12,7 @@
 # maximum-a-posteriori point with an external optimiser.
 
 using DistributionsInference, Distributions, Random
-using FlexiChains: FlexiChains
+using FlexiChains: FlexiChain, Parameter
 
 # ## Declaring the parameters
 #
@@ -94,11 +94,14 @@ length(draws)
 
 # ## Reading the fit back onto the distribution
 #
-# [`to_flexichain`](@ref) keys the raw draws by the estimated rows' dotted
-# names.
-# Every readback verb below looks those names up.
+# The readback reads a `FlexiChain` keyed by the estimated rows' dotted names,
+# the naming contract every readback verb here uses.
+# Building that chain out of a sampler's raw draws is FlexiChains' own
+# constructor rather than a step this package owns.
 
-chain = to_flexichain(delay, draws)
+niter = length(draws)
+chain = FlexiChain{Symbol}(niter, 1,
+    Dict(Parameter(:shape) => reshape(first.(draws), niter, 1)))
 
 # [`point_estimate`](@ref) reduces the chain straight back to a `ToyDelay`,
 # posterior mean by default.
@@ -144,7 +147,10 @@ end
 survival_transitions = sample(Xoshiro(1), survival_model, sampler, 2000;
     param_names = ["shape"], progress = false)
 survival_draws = [t.params for t in survival_transitions][1001:end]
-point_estimate(delay, to_flexichain(delay, survival_draws)).shape
+survival_chain = FlexiChain{Symbol}(length(survival_draws), 1,
+    Dict(Parameter(:shape) => reshape(
+        first.(survival_draws), length(survival_draws), 1)))
+point_estimate(delay, survival_chain).shape
 
 # `logccdf` for a `Weibull` differentiates, so
 # [Sampling with Turing](@ref turing-sampling) hands this same reducer to

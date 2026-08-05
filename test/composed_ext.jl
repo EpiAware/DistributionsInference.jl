@@ -157,7 +157,7 @@ end
     # Distinct per-dimension offsets, so a row read back under the wrong
     # dotted name is caught rather than masked by a shared value.
     draws = [[0.05 * i + 0.01 * j for j in 1:n] for i in 1:20]
-    chain = DistributionsInference.to_flexichain(tree, draws)
+    chain = DistributionsInference._to_flexichain(tree, draws)
 
     fitted = DistributionsInference.point_estimate(tree, chain)
     expected_x = [mean(d[i] for d in draws) for i in 1:n]

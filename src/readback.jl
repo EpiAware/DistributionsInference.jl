@@ -76,15 +76,15 @@ function _no_chain_method(f::Symbol, chain)
     throw(ArgumentError(
         "`$f` has no method for a chain of type $(typeof(chain)): it reads " *
         "a `FlexiChains.FlexiChain` keyed by the estimated rows' dotted " *
-        "names (build one with `to_flexichain`), or a `VarName`-keyed chain " *
-        "once `DynamicPPL` is loaded alongside `FlexiChains`."))
+        "names, or a `VarName`-keyed chain once `DynamicPPL` is loaded " *
+        "alongside `FlexiChains`."))
 end
 
 @doc "
 
-Build a dotted-name `FlexiChain` from raw sampler draws.
+Build a dotted-name `FlexiChain` from raw sampler draws. Internal.
 
-`to_flexichain(obj, draws)` keys `draws` by [`estimated_rows`](@ref)`(obj)`'s
+`_to_flexichain(obj, draws)` keys `draws` by [`estimated_rows`](@ref)`(obj)`'s
 dotted `name`s (in [`parameter_rows`](@ref) order), so the result reads back
 onto `obj` with [`point_estimate`](@ref)/[`distribution_draws`](@ref). `draws`
 is accepted in either raw shape a `LogDensityProblems`-compatible sampler hands
@@ -93,9 +93,9 @@ vectors, where `dim` is [`flat_dimension`](@ref)`(obj)`. An object estimating
 nothing (`dim == 0`) still needs `draws` to carry the draw count — pass a
 `(0, niter)` matrix or a `niter`-length vector of empty vectors.
 
-No `DynamicPPL`/`Turing` involvement: this works with the draws of any sampler
-that consumes [`distribution_to_logdensity`](@ref)`(obj, data)` through the
-`LogDensityProblems` interface.
+Not part of the public surface: standardising a sampler's raw draws into a
+chain type belongs to `FlexiChains` or to the inference package that produced
+them, not here (#91 takes the conversion off the readback path entirely).
 
 This has no method until `FlexiChains` is loaded; the chain construction lives
 in the `DistributionsInferenceFlexiChainsExt` extension.
@@ -104,36 +104,13 @@ in the `DistributionsInferenceFlexiChainsExt` extension.
 - `obj`: the fittable object the draws were sampled for.
 - `draws`: the raw draws, `dim x niter` or a `niter`-vector of `dim`-vectors.
 
-# Examples
-```@example
-using DistributionsInference, Distributions
-using FlexiChains: FlexiChains
-
-struct FlexiLeaf
-    shape::Float64
-    scale::Float64
-end
-
-function DistributionsInference.parameter_rows(d::FlexiLeaf)
-    return [(name = :shape, value = d.shape,
-            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
-        (name = :scale, value = d.scale, prior = nothing,
-            support = (0.0, Inf))]
-end
-
-leaf = FlexiLeaf(2.0, 1.0)
-draws = [2.1, 2.4, 2.0, 2.6]  # 1 estimated parameter, 4 draws
-chain = to_flexichain(leaf, reshape(draws, 1, :))
-FlexiChains.parameters(chain)
-```
-
 # See also
-- [`point_estimate`](@ref): reduce the chain back onto `obj` (point
+- [`point_estimate`](@ref): reduce a chain back onto `obj` (point
   summary/draw).
 - [`distribution_draws`](@ref): the vectorised, every-draw form.
 "
-function to_flexichain(obj, draws)
-    _flexichains_loaded() || _flexichains_required(:to_flexichain)
+function _to_flexichain(obj, draws)
+    _flexichains_loaded() || _flexichains_required(:_to_flexichain)
     # With the extension loaded, either accepted raw shape would have matched
     # its typed methods, so reaching here means the shape is wrong.
     return _malformed_draws(draws)
@@ -159,8 +136,8 @@ sampled from [`distribution_to_turing`](@ref)) is read by the
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
-- `chain`: the `FlexiChain` to read parameter values from (see
-  [`to_flexichain`](@ref)).
+- `chain`: the `FlexiChain` to read parameter values from, keyed by the
+  estimated rows' dotted names.
 
 # Keyword Arguments
 - `summary`: the reduction `AbstractVector -> scalar` applied to each row's
@@ -176,7 +153,7 @@ and a repeated name means a protocol bug in `obj`'s `parameter_rows`.
 # Examples
 ```@example
 using DistributionsInference, Distributions
-using FlexiChains: FlexiChains
+using FlexiChains: FlexiChain, Parameter
 
 struct ParamsLeaf
     shape::Float64
@@ -192,7 +169,8 @@ end
 
 leaf = ParamsLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]
-chain = to_flexichain(leaf, reshape(draws, 1, :))
+chain = FlexiChain{Symbol}(
+    4, 1, Dict(Parameter(:shape) => reshape(draws, 4, 1)))
 distribution_params(leaf, chain)
 ```
 
@@ -209,9 +187,9 @@ end
 
 Read a dotted-name `FlexiChain` back onto a fitted object.
 
-`point_estimate(obj, chain)` reduces `chain` (built by
-[`to_flexichain`](@ref)) to a flat estimated parameter vector and rebuilds a
-concrete object via [`reconstruct`](@ref): a point summary by default
+`point_estimate(obj, chain)` reduces `chain` to a flat estimated parameter
+vector and rebuilds a concrete object via [`reconstruct`](@ref): a point
+summary by default
 (`summary` applied to each estimated row's draws, default `mean`), a single
 iteration (`draw`), or a summary restricted to a subset of iterations
 (`draws`).
@@ -224,8 +202,8 @@ sampled from [`distribution_to_turing`](@ref)) is read by the
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
-- `chain`: the `FlexiChain` to read parameter values from (see
-  [`to_flexichain`](@ref)).
+- `chain`: the `FlexiChain` to read parameter values from, keyed by the
+  estimated rows' dotted names.
 
 # Keyword Arguments
 - `summary`: the reduction `AbstractVector -> scalar` applied to each row's
@@ -237,7 +215,7 @@ sampled from [`distribution_to_turing`](@ref)) is read by the
 # Examples
 ```@example
 using DistributionsInference, Distributions
-using FlexiChains: FlexiChains
+using FlexiChains: FlexiChain, Parameter
 
 struct ReadbackLeaf
     shape::Float64
@@ -256,13 +234,13 @@ end
 
 leaf = ReadbackLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]
-chain = to_flexichain(leaf, reshape(draws, 1, :))
+chain = FlexiChain{Symbol}(
+    4, 1, Dict(Parameter(:shape) => reshape(draws, 4, 1)))
 point_estimate(leaf, chain).shape
 ```
 
 # See also
 - [`distribution_params`](@ref): the params-first primitive this layers on.
-- [`to_flexichain`](@ref): build the chain this reads.
 - [`distribution_draws`](@ref): the vectorised, every-draw form.
 "
 function point_estimate(obj, chain; kwargs...)
@@ -287,8 +265,8 @@ sampled from [`distribution_to_turing`](@ref)) is read by the
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
-- `chain`: the `FlexiChain` to read every draw from (see
-  [`to_flexichain`](@ref)).
+- `chain`: the `FlexiChain` to read every draw from, keyed by the estimated
+  rows' dotted names.
 
 # Keyword Arguments
 - `draws`: a subset of iterations to keep (a range / index vector, or a
@@ -297,7 +275,7 @@ sampled from [`distribution_to_turing`](@ref)) is read by the
 # Examples
 ```@example
 using DistributionsInference, Distributions
-using FlexiChains: FlexiChains
+using FlexiChains: FlexiChain, Parameter
 
 struct DrawsLeaf
     shape::Float64
@@ -316,7 +294,8 @@ end
 
 leaf = DrawsLeaf(2.0, 1.0)
 draws = [2.1, 2.4, 2.0, 2.6]
-chain = to_flexichain(leaf, reshape(draws, 1, :))
+chain = FlexiChain{Symbol}(
+    4, 1, Dict(Parameter(:shape) => reshape(draws, 4, 1)))
 length(distribution_draws(leaf, chain))
 ```
 
@@ -331,7 +310,6 @@ length(distribution_draws(leaf, chain))
 - [`point_estimate`](@ref): the single-draw / reduced read this vectorises.
 - [`distribution_params`](@ref): the params-first primitive `point_estimate`
   (but not this function) layers on.
-- [`to_flexichain`](@ref): build the chain this reads.
 "
 function distribution_draws(obj, chain; kwargs...)
     return _no_chain_method(:distribution_draws, chain)

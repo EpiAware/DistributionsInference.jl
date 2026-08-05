@@ -10,7 +10,7 @@ The protocol (`parameter_rows`, `reconstruct`), default-prior assembly over it
 (`default_prior`, `with_priors`) and the engine (`distribution_to_logdensity`,
 `logdensity`, `FitLogDensity`) are implemented here. Everything else arrives
 through an extension: `FlexiChains` (the dotted-name readback,
-`to_flexichain`, `distribution_params`, `point_estimate`, `distribution_draws`),
+`distribution_params`, `point_estimate`, `distribution_draws`),
 `DynamicPPL` (`distribution_to_turing`), `DynamicPPL` x `FlexiChains` (the
 `VarName`-keyed dispatch of
 `distribution_params`/`point_estimate`/`distribution_draws`), `Bijectors`

@@ -79,11 +79,15 @@ length(draws)
 `point_estimate` reads the draws back onto the distribution through the same dotted-name chain a real PPL's sampler would hand back.
 What it returns is a `Gamma`.
 The chain readback is a package extension, so add and load `FlexiChains` for this last step.
+The chain itself is FlexiChains' own type, keyed by the names `parameter_rows` declared, and building one from a sampler's raw draws is FlexiChains' constructor rather than a step this package owns.
 
 ```julia
-using FlexiChains: FlexiChains
+using FlexiChains: FlexiChain, Parameter
 
-chain = to_flexichain(template, draws)
+niter = length(draws)
+chain = FlexiChain{Symbol}(niter, 1,
+    Dict(Parameter(:shape) => reshape(first.(draws), niter, 1),
+        Parameter(:scale) => reshape(last.(draws), niter, 1)))
 point_estimate(template, chain)
 ```
 

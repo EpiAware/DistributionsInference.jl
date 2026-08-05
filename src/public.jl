@@ -27,13 +27,15 @@ public FitLogDensity, logdensity
 
 # The dotted-name `FlexiChains` readback. Declared here as chain-free stubs
 # (with their docstrings, in `readback.jl`); every method lives in
-# `DistributionsInferenceFlexiChainsExt`, and the last three also dispatch on a
+# `DistributionsInferenceFlexiChainsExt`, and all three also dispatch on a
 # `VarName`-keyed chain once `DynamicPPL` is loaded alongside `FlexiChains`.
 #
 # `distribution_params` reads a chain's estimated values by name;
 # `point_estimate` and `distribution_draws` rebuild the distribution from them,
-# reduced to one object or kept one per draw.
-export to_flexichain, distribution_params, point_estimate, distribution_draws
+# reduced to one object or kept one per draw. Building a chain out of a
+# sampler's raw draws is not on the surface: that conversion belongs to
+# `FlexiChains` or to the inference package that produced them (#104).
+export distribution_params, point_estimate, distribution_draws
 
 # A DynamicPPL model over a fittable object's estimated parameters. Stub here
 # (docstring in `turing.jl`); the model lives in
