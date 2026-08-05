@@ -293,3 +293,91 @@ end
     fd = (loglik(x_hat[1] + h) - loglik(x_hat[1] - h)) / (2h)
     @test fd ≈ 0.0 atol = 1e-2
 end
+
+@testitem "to_unconstrained: inverts to_constrained across mixed links" begin
+    using DistributionsInference, Distributions
+    using Bijectors
+
+    # The same mixed-link object the `to_constrained` item above uses: an
+    # identity link, a log link and a logit link in one flat vector, so a
+    # per-row slip in either direction shows up here.
+    struct RoundTripLeaf{M <: Real, S <: Real, P <: Real}
+        mu::M
+        sigma::S
+        p::P
+    end
+
+    function DistributionsInference.parameter_rows(d::RoundTripLeaf)
+        return [
+            (name = :mu, value = d.mu, prior = Normal(0.0, 2.0),
+                support = (-Inf, Inf)),
+            (name = :sigma, value = d.sigma,
+                prior = truncated(Normal(1.0, 1.0); lower = 0.0),
+                support = (0.0, Inf)),
+            (name = :p, value = d.p, prior = Beta(2.0, 2.0),
+                support = (0.0, 1.0))]
+    end
+
+    function DistributionsInference.reconstruct(
+            d::RoundTripLeaf, x::AbstractVector)
+        return RoundTripLeaf(x[1], x[2], x[3])
+    end
+
+    leaf = RoundTripLeaf(-1.5, 2.0, 0.4)
+    zero_lik(d, ds) = 0.0
+    prob = DistributionsInference.distribution_to_logdensity(
+        leaf, Float64[]; loglik = zero_lik)
+
+    x = [-1.5, 2.0, 0.4]
+    z = DistributionsInference.to_unconstrained(prob, x)
+
+    # Each link against its own closed form: identity, log, logit.
+    @test z[1] ≈ x[1]
+    @test z[2] ≈ log(x[2])
+    @test z[3] ≈ log(x[3] / (1 - x[3]))
+
+    back, _ = DistributionsInference.to_constrained(prob, z)
+    @test back ≈ x
+
+    @test_throws DimensionMismatch DistributionsInference.to_unconstrained(
+        prob, x[1:(end - 1)])
+end
+
+@testitem "to_unconstrained rejects an estimated row with no per-row prior" setup=[TuringFixture] begin
+    using Bijectors
+
+    leaf = NoPriorLeaf(2.0, 1.0)
+    zero_lik(d, ds) = 0.0
+    prob = DistributionsInference.distribution_to_logdensity(
+        leaf, Float64[]; loglik = zero_lik)
+
+    @test_throws ArgumentError DistributionsInference.to_unconstrained(
+        prob, [0.1])
+end
+
+@testitem "objective_to_distribution: to_constrained then reconstruct" setup=[ToyFixture] begin
+    using Bijectors
+
+    leaf = ToyGammaLeaf(2.0, 1.5, LogNormal(log(2.0), 0.2))
+    data = [1.5, 2.0, 3.2]
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
+
+    z = [0.35]
+    fitted = objective_to_distribution(prob, z)
+    x, _ = DistributionsInference.to_constrained(prob, z)
+
+    @test fitted == DistributionsInference.reconstruct(prob.obj, x)
+    @test fitted.shape ≈ exp(z[1])
+    @test fitted.scale == leaf.scale
+end
+
+@testitem "objective_to_distribution: a 0-estimated object rebuilds at the empty vector" setup=[ToyFixture] begin
+    using Bijectors
+
+    fixed_leaf = ToyGammaLeaf(2.0, 1.0)
+    zero_lik(d, ds) = 0.0
+    prob = DistributionsInference.distribution_to_logdensity(
+        fixed_leaf, Float64[]; loglik = zero_lik)
+
+    @test objective_to_distribution(prob, Float64[]) == fixed_leaf
+end

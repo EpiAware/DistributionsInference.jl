@@ -20,7 +20,8 @@ A distribution names its own parameters and becomes fittable through a plain log
 - `distribution_to_logdensity` turns a distribution and its data into a `LogDensityProblems` problem, which any consumer of that interface can drive.
 - A distribution declares its parameters as a table of rows, one row per scalar parameter carrying its name, value, prior and support.
   Attaching a prior to a row is what makes that parameter estimated.
-  The rows are plain `NamedTuple`s, which any Tables.jl consumer reads.
+  The rows are plain `NamedTuple`s, so the inventory is a row table any Tables.jl consumer reads, without this package depending on Tables.jl.
+- `optimise_distribution` fits a distribution to data with an optimiser of your choosing in one call, for a point estimate rather than a posterior, and the pieces it composes stay available for a fit you drive yourself.
 - `point_estimate` post-processes sampler output onto a fitted distribution in one call.
 - Supporting a new chain type takes one added method.
 - The distribution that comes back is the same kind of object that went in, so a fitted `Gamma` is a `Gamma`.
@@ -79,11 +80,15 @@ length(draws)
 `point_estimate` reads the draws back onto the distribution through the same dotted-name chain a real PPL's sampler would hand back.
 What it returns is a `Gamma`.
 The chain readback is a package extension, so add and load `FlexiChains` for this last step.
+The chain itself is FlexiChains' own type, keyed by the names `parameter_rows` declared, and building one from a sampler's raw draws is FlexiChains' constructor rather than a step this package owns.
 
 ```julia
-using FlexiChains: FlexiChains
+using FlexiChains: FlexiChain, Parameter
 
-chain = to_flexichain(template, draws)
+niter = length(draws)
+chain = FlexiChain{Symbol}(niter, 1,
+    Dict(Parameter(:shape) => reshape(first.(draws), niter, 1),
+        Parameter(:scale) => reshape(last.(draws), niter, 1)))
 point_estimate(template, chain)
 ```
 

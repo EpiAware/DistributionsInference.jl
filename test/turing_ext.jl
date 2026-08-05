@@ -207,7 +207,7 @@ end
     @test fitted.scale == scale
     @test fitted.shape > 0
 
-    all_fitted = DistributionsInference.readback_draws(leaf, chain)
+    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
     @test length(all_fitted) == 200
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
 
@@ -259,7 +259,7 @@ end
     @test fitted.shape > 0
     @test fitted.scale > 0
 
-    all_fitted = DistributionsInference.readback_draws(leaf, chain)
+    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
     @test length(all_fitted) == 200
 
     # A chain read back at the wrong prefix errors rather than silently
@@ -284,7 +284,7 @@ end
     fitted = DistributionsInference.point_estimate(fixed_leaf, chain)
     @test fitted == fixed_leaf
 
-    all_fitted = DistributionsInference.readback_draws(fixed_leaf, chain)
+    all_fitted = DistributionsInference.distribution_draws(fixed_leaf, chain)
     @test length(all_fitted) == 50
     @test all(==(fixed_leaf), all_fitted)
 end

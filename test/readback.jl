@@ -1,6 +1,6 @@
-# The dotted-name FlexiChains readback: `to_flexichain`,
-# `point_estimate`/`readback_draws` selection semantics (deliberately matching
-# ComposedDistributions' `chain_to_params`/`param_draws`), and the DI#3
+# The dotted-name FlexiChains readback: `_to_flexichain`,
+# `point_estimate`/`distribution_draws` selection semantics (deliberately
+# matching ComposedDistributions' `chain_to_params`/`param_draws`), and the DI#3
 # acceptance criterion (a real AdvancedMH round-trip). Every method here
 # lives in `DistributionsInferenceFlexiChainsExt`, so each test item loads
 # `FlexiChains` itself rather than relying on a sibling item having done so.
@@ -24,7 +24,8 @@ end
     rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
         support = (0.0, Inf))]
     for f in (DistributionsInference.distribution_params,
-        DistributionsInference.point_estimate, DistributionsInference.readback_draws)
+        DistributionsInference.point_estimate,
+        DistributionsInference.distribution_draws)
         thrown = try
             f(rows, [1.0 2.0])
             nothing
@@ -53,10 +54,10 @@ end
         error("the FlexiChains extension loaded without FlexiChains")
 
     calls = [
-        () -> DistributionsInference.to_flexichain(rows, reshape([1.0], 1, :)),
+        () -> DistributionsInference._to_flexichain(rows, reshape([1.0], 1, :)),
         () -> DistributionsInference.distribution_params(rows, nothing),
         () -> DistributionsInference.point_estimate(rows, nothing),
-        () -> DistributionsInference.readback_draws(rows, nothing)]
+        () -> DistributionsInference.distribution_draws(rows, nothing)]
     for call in calls
         thrown = try
             call()
@@ -84,21 +85,21 @@ end
     @test occursin("clear-error-ok", output)
 end
 
-@testitem "to_flexichain: matrix and vector-of-vectors input agree" setup=[ToyFixture] begin
+@testitem "_to_flexichain: matrix and vector-of-vectors input agree" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     values = [2.1, 2.4, 2.0, 2.6]
 
-    chain_mat = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
-    chain_vec = DistributionsInference.to_flexichain(leaf, [[v] for v in values])
+    chain_mat = DistributionsInference._to_flexichain(leaf, reshape(values, 1, :))
+    chain_vec = DistributionsInference._to_flexichain(leaf, [[v] for v in values])
 
     @test FlexiChains.niters(chain_mat) == FlexiChains.niters(chain_vec) == 4
     @test Set(FlexiChains.parameters(chain_mat)) == Set([:shape])
     @test vec(chain_mat[:shape]) == vec(chain_vec[:shape]) == values
 end
 
-@testitem "to_flexichain: keys are the estimated rows' dotted names" begin
+@testitem "_to_flexichain: keys are the estimated rows' dotted names" begin
     using DistributionsInference, Distributions
     using FlexiChains: FlexiChains
 
@@ -110,7 +111,7 @@ end
         (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
 
     draws = [1.0 2.0 3.0; 0.5 0.4 0.3]  # 2 estimated params x 3 draws
-    chain = DistributionsInference.to_flexichain(rows, draws)
+    chain = DistributionsInference._to_flexichain(rows, draws)
 
     @test Set(FlexiChains.parameters(chain)) ==
           Set([Symbol("leaf.shape"), Symbol("leaf.rate")])
@@ -118,14 +119,14 @@ end
     @test vec(chain[Symbol("leaf.rate")]) == [0.5, 0.4, 0.3]
 end
 
-@testitem "to_flexichain: the 0-estimated edge case" setup=[ToyFixture] begin
+@testitem "_to_flexichain: the 0-estimated edge case" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
 
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)  # no prior: nothing estimated
     @test DistributionsInference.flat_dimension(fixed_leaf) == 0
 
-    chain_mat = DistributionsInference.to_flexichain(fixed_leaf, zeros(0, 5))
-    chain_vec = DistributionsInference.to_flexichain(
+    chain_mat = DistributionsInference._to_flexichain(fixed_leaf, zeros(0, 5))
+    chain_vec = DistributionsInference._to_flexichain(
         fixed_leaf, [Float64[] for _ in 1:5])
 
     @test FlexiChains.niters(chain_mat) == FlexiChains.niters(chain_vec) == 5
@@ -134,21 +135,22 @@ end
 
     fitted = DistributionsInference.point_estimate(fixed_leaf, chain_mat)
     @test fitted == fixed_leaf
-    all_fitted = DistributionsInference.readback_draws(fixed_leaf, chain_mat)
+    all_fitted = DistributionsInference.distribution_draws(
+        fixed_leaf, chain_mat)
     @test length(all_fitted) == 5
     @test all(==(fixed_leaf), all_fitted)
 end
 
-@testitem "to_flexichain: malformed draws raise" setup=[ToyFixture] begin
+@testitem "_to_flexichain: malformed draws raise" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
 
-    @test_throws DimensionMismatch DistributionsInference.to_flexichain(
+    @test_throws DimensionMismatch DistributionsInference._to_flexichain(
         leaf, [1.0 2.0; 3.0 4.0])  # 2 rows but only 1 estimated parameter
-    @test_throws DimensionMismatch DistributionsInference.to_flexichain(
+    @test_throws DimensionMismatch DistributionsInference._to_flexichain(
         leaf, [[1.0, 2.0], [3.0, 4.0]])  # draws of length 2, dim is 1
-    @test_throws ArgumentError DistributionsInference.to_flexichain(
+    @test_throws ArgumentError DistributionsInference._to_flexichain(
         leaf, "not a matrix or vector-of-vectors")
 end
 
@@ -157,7 +159,7 @@ end
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     values = [1.0, 2.0, 3.0, 4.0]
-    chain = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
+    chain = DistributionsInference._to_flexichain(leaf, reshape(values, 1, :))
 
     nt = DistributionsInference.distribution_params(leaf, chain)
     @test nt isa NamedTuple
@@ -174,7 +176,7 @@ end
     @test DistributionsInference.point_estimate(leaf, chain).shape == nt.shape
 
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
-    fixed_chain = DistributionsInference.to_flexichain(fixed_leaf, zeros(0, 3))
+    fixed_chain = DistributionsInference._to_flexichain(fixed_leaf, zeros(0, 3))
     @test DistributionsInference.distribution_params(fixed_leaf, fixed_chain) ==
           NamedTuple()
 end
@@ -188,7 +190,7 @@ end
             support = (0.0, Inf)),
         (name = :scale, value = 1.0, prior = nothing, support = (0.0, Inf))]
     draws = [1.0 2.0 3.0]
-    chain = DistributionsInference.to_flexichain(rows, draws)
+    chain = DistributionsInference._to_flexichain(rows, draws)
 
     nt = DistributionsInference.distribution_params(rows, chain)
     @test keys(nt) == (Symbol("leaf.shape"),)
@@ -207,7 +209,7 @@ end
             support = (0.0, Inf)),
         (name = :shape, value = 1.0, prior = LogNormal(0.0, 0.2),
             support = (0.0, Inf))]
-    chain = DistributionsInference.to_flexichain(rows, [1.0 2.0 3.0; 4.0 5.0 6.0])
+    chain = DistributionsInference._to_flexichain(rows, [1.0 2.0 3.0; 4.0 5.0 6.0])
 
     err = try
         DistributionsInference.distribution_params(rows, chain)
@@ -226,7 +228,7 @@ end
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     values = [1.0, 2.0, 3.0, 4.0]
-    chain = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
+    chain = DistributionsInference._to_flexichain(leaf, reshape(values, 1, :))
 
     # Default summary is `mean` over every draw.
     @test DistributionsInference.point_estimate(leaf, chain).shape ≈ 2.5
@@ -245,21 +247,22 @@ end
     @test DistributionsInference.point_estimate(leaf, chain).scale == leaf.scale
 end
 
-@testitem "readback_draws: keeps every draw, restricted by `draws`" setup=[ToyFixture] begin
+@testitem "distribution_draws: keeps every draw, restricted by `draws`" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
 
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     values = [1.0, 2.0, 3.0, 4.0]
-    chain = DistributionsInference.to_flexichain(leaf, reshape(values, 1, :))
+    chain = DistributionsInference._to_flexichain(leaf, reshape(values, 1, :))
 
-    all_fitted = DistributionsInference.readback_draws(leaf, chain)
+    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
     @test length(all_fitted) == 4
     @test [f.shape for f in all_fitted] == values
 
-    subset = DistributionsInference.readback_draws(leaf, chain; draws = 2:3)
+    subset = DistributionsInference.distribution_draws(leaf, chain; draws = 2:3)
     @test [f.shape for f in subset] == [2.0, 3.0]
 
-    predicate = DistributionsInference.readback_draws(leaf, chain; draws = i -> i > 2)
+    predicate = DistributionsInference.distribution_draws(
+        leaf, chain; draws = i -> i > 2)
     @test [f.shape for f in predicate] == [3.0, 4.0]
 end
 
@@ -271,7 +274,7 @@ end
 
     rows = [(name = :not_shape, value = 2.0, prior = LogNormal(0.0, 0.2),
         support = (0.0, Inf))]
-    mismatched_chain = DistributionsInference.to_flexichain(rows, reshape([2.0], 1, :))
+    mismatched_chain = DistributionsInference._to_flexichain(rows, reshape([2.0], 1, :))
 
     @test_throws ArgumentError DistributionsInference.point_estimate(leaf, mismatched_chain)
 end
@@ -285,7 +288,7 @@ end
 
     # As in the engine's own acceptance test, but with a real
     # `LogDensityProblems` consumer rather than a hand-rolled loop, and draws
-    # read back through `to_flexichain`/`point_estimate`.
+    # read back through `_to_flexichain`/`point_estimate`.
     rng = Random.Xoshiro(1)
     true_shape = 3.0
     scale = 1.5
@@ -303,10 +306,10 @@ end
     spl = RWMH(MvNormal(zeros(1), 0.05^2 * I))
     transitions = sample(
         rng, model, spl, 5000; param_names = ["shape"], progress = false)
-    # `.params` is the niter-vector-of-dim-vectors `to_flexichain` accepts.
+    # `.params` is the niter-vector-of-dim-vectors `_to_flexichain` accepts.
     draws = [t.params for t in transitions][2001:end]
 
-    chain = DistributionsInference.to_flexichain(leaf, draws)
+    chain = DistributionsInference._to_flexichain(leaf, draws)
     @test FlexiChains.niters(chain) == length(draws)
 
     fitted = DistributionsInference.point_estimate(leaf, chain)
@@ -315,7 +318,7 @@ end
     @test abs(fitted.shape - true_shape) < 0.5
     @test fitted.scale == scale
 
-    all_fitted = DistributionsInference.readback_draws(leaf, chain)
+    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
     @test length(all_fitted) == length(draws)
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
 end

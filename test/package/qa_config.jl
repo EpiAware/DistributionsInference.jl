@@ -62,6 +62,9 @@ const QA_CONFIG = (
             prefixes = ("DistributionsInference", "Bijectors")),
         (; name = :DistributionsInferenceComposedDistributionsExt,
             triggers = ("ComposedDistributions",),
-            prefixes = ("DistributionsInference", "ComposedDistributions"))
+            prefixes = ("DistributionsInference", "ComposedDistributions")),
+        (; name = :DistributionsInferenceOptimExt,
+            triggers = ("Optim",),
+            prefixes = ("DistributionsInference", "Optim"))
     )
 )

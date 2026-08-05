@@ -12,7 +12,7 @@
 # maximum-a-posteriori point with an external optimiser.
 
 using DistributionsInference, Distributions, Random
-using FlexiChains: FlexiChains
+using FlexiChains: FlexiChain, Parameter
 
 # ## Declaring the parameters
 #
@@ -94,11 +94,14 @@ length(draws)
 
 # ## Reading the fit back onto the distribution
 #
-# [`to_flexichain`](@ref) keys the raw draws by the estimated rows' dotted
-# names.
-# Every readback verb below looks those names up.
+# The readback reads a `FlexiChain` keyed by the estimated rows' dotted names,
+# the naming contract every readback verb here uses.
+# Building that chain out of a sampler's raw draws is FlexiChains' own
+# constructor rather than a step this package owns.
 
-chain = to_flexichain(delay, draws)
+niter = length(draws)
+chain = FlexiChain{Symbol}(niter, 1,
+    Dict(Parameter(:shape) => reshape(first.(draws), niter, 1)))
 
 # [`point_estimate`](@ref) reduces the chain straight back to a `ToyDelay`,
 # posterior mean by default.
@@ -115,10 +118,10 @@ fitted.scale
 
 distribution_params(delay, chain)
 
-# [`readback_draws`](@ref) keeps every draw instead of reducing them, for a
+# [`distribution_draws`](@ref) keeps every draw instead of reducing them, for a
 # per-draw posterior-predictive summary.
 
-all_fitted = readback_draws(delay, chain)
+all_fitted = distribution_draws(delay, chain)
 quantile([mean(Weibull(d.shape, d.scale)) for d in all_fitted], [0.025, 0.975])
 
 # ## Swapping the likelihood
@@ -144,7 +147,10 @@ end
 survival_transitions = sample(Xoshiro(1), survival_model, sampler, 2000;
     param_names = ["shape"], progress = false)
 survival_draws = [t.params for t in survival_transitions][1001:end]
-point_estimate(delay, to_flexichain(delay, survival_draws)).shape
+survival_chain = FlexiChain{Symbol}(length(survival_draws), 1,
+    Dict(Parameter(:shape) => reshape(
+        first.(survival_draws), length(survival_draws), 1)))
+point_estimate(delay, survival_chain).shape
 
 # `logccdf` for a `Weibull` differentiates, so
 # [Sampling with Turing](@ref turing-sampling) hands this same reducer to
@@ -156,27 +162,31 @@ point_estimate(delay, to_flexichain(delay, survival_draws)).shape
 
 # ## A point estimate instead of a posterior
 #
-# The objective is an unnormalised log-density, so an external optimiser can
-# find its mode directly.
-# [`logdensity_to_objective`](@ref) supplies the wiring: the unconstrained
-# transform, the negated objective and
-# [`reconstruct`](@ref DistributionsInference.reconstruct), once `Bijectors` is
-# loaded.
+# The objective is an unnormalised log-density, so an optimiser can find its
+# mode directly.
+# [`optimise_distribution`](@ref) runs that round trip in one call and hands
+# back a `ToyDelay`, once `Bijectors` and an optimiser package are loaded.
+# The optimiser itself stays the caller's choice.
 
 using Bijectors, Optim
 
-f = logdensity_to_objective(prob)
-res = optimize(f, zeros(DistributionsInference.flat_dimension(delay)), LBFGS())
-z_hat = Optim.minimizer(res)
-
-# `z_hat` is on the unconstrained scale.
-# [`to_constrained`](@ref DistributionsInference.to_constrained) and
-# [`reconstruct`](@ref DistributionsInference.reconstruct) push it back through
-# the same readback path every sampler above used.
-
-x_hat, _ = DistributionsInference.to_constrained(prob, z_hat)
-map_fit = DistributionsInference.reconstruct(prob.obj, x_hat)
+map_fit = optimise_distribution(delay, data, LBFGS())
 map_fit.shape
+
+# The fit starts at the template's own parameter values rather than at an
+# arbitrary zero; `init` starts it somewhere else, and `loglik` swaps the
+# reducer as it does for [`distribution_to_logdensity`](@ref).
+#
+# The steps are still individually available.
+# [`logdensity_to_objective`](@ref) gives the callable,
+# [`minimise`](@ref DistributionsInference.minimise) runs the optimiser, and
+# [`objective_to_distribution`](@ref) maps the minimiser back onto the
+# distribution.
+
+f = logdensity_to_objective(prob)
+z0 = DistributionsInference.to_unconstrained(prob, [delay.shape])
+objective_to_distribution(prob, DistributionsInference.minimise(
+    f, z0, LBFGS())).shape
 
 # That is the maximum-a-posteriori point, because `logdensity` always adds an
 # estimated row's own prior.
@@ -202,13 +212,8 @@ function DistributionsInference.reconstruct(d::ToyDelayML, x::AbstractVector)
     return ToyDelayML(x[1], oftype(x[1], d.scale))
 end
 
-ml_delay = ToyDelayML(2.0, 2.5)
-ml_prob = distribution_to_logdensity(ml_delay, data)
-ml_res = optimize(logdensity_to_objective(ml_prob),
-    zeros(DistributionsInference.flat_dimension(ml_delay)), LBFGS())
-ml_x, _ = DistributionsInference.to_constrained(
-    ml_prob, Optim.minimizer(ml_res))
-DistributionsInference.reconstruct(ml_delay, ml_x).shape
+ml_delay = ToyDelayML(2.0, 1.0)
+optimise_distribution(ml_delay, data, LBFGS()).shape
 
 # The data pull the shape above the prior mean of 2 either way, and the diffuse
 # prior pulls it back less.

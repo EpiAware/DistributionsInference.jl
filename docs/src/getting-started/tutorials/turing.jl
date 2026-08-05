@@ -62,14 +62,15 @@ chain = sample(model, NUTS(), 500; chain_type = VNChain, progress = false)
 # ## Reading the chain back
 #
 # The sites are keyed by the same dotted names the protocol declared, under the
-# model's prefix, so [`point_estimate`](@ref) and [`readback_draws`](@ref) read
-# a `VNChain` exactly as they read a hand-rolled chain.
+# model's prefix, so [`point_estimate`](@ref) and
+# [`distribution_draws`](@ref) read a `VNChain` exactly as they read a
+# hand-rolled chain.
 
 point_estimate(delay, chain).shape
 
 # Keeping every draw gives a posterior-predictive summary.
 
-fits = readback_draws(delay, chain)
+fits = distribution_draws(delay, chain)
 quantile([mean(Weibull(d.shape, d.scale)) for d in fits], [0.025, 0.5, 0.975])
 
 # The readback contract is the dotted names, so switching sampler leaves this

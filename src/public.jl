@@ -27,24 +27,33 @@ public FitLogDensity, logdensity
 
 # The dotted-name `FlexiChains` readback. Declared here as chain-free stubs
 # (with their docstrings, in `readback.jl`); every method lives in
-# `DistributionsInferenceFlexiChainsExt`, and the last three also dispatch on a
+# `DistributionsInferenceFlexiChainsExt`, and all three also dispatch on a
 # `VarName`-keyed chain once `DynamicPPL` is loaded alongside `FlexiChains`.
 #
-# `readback_draws` keeps the `readback` stem the `point_estimate` rename gave
-# up. It returns one object per draw, so neither a plural of `point_estimate`
-# nor a `distribution_*` spelling describes it; the two are related in their
-# docstrings instead of in their names.
-export to_flexichain, distribution_params, point_estimate, readback_draws
+# `distribution_params` reads a chain's estimated values by name;
+# `point_estimate` and `distribution_draws` rebuild the distribution from them,
+# reduced to one object or kept one per draw. Building a chain out of a
+# sampler's raw draws is not on the surface: that conversion belongs to
+# `FlexiChains` or to the inference package that produced them (#104).
+export distribution_params, point_estimate, distribution_draws
 
 # A DynamicPPL model over a fittable object's estimated parameters. Stub here
 # (docstring in `turing.jl`); the model lives in
 # `DistributionsInferenceDynamicPPLExt`.
 export distribution_to_turing
 
-# The unconstrained <-> constrained transform and the negative unconstrained
-# log-posterior built on it. Stubs here (docstrings in `bijectors.jl`); both
-# methods live in `DistributionsInferenceBijectorsExt`. `to_constrained` is a
-# transform an engine author calls, not a fitting entry point, so it stays
-# unexported.
-export logdensity_to_objective
-public to_constrained
+# The unconstrained <-> constrained transform and the objective round trip
+# built on it. Stubs here (docstrings in `bijectors.jl`); every method lives in
+# `DistributionsInferenceBijectorsExt`. Both transforms are what an engine
+# author calls rather than fitting entry points, so they stay unexported, while
+# the two ends of the objective round trip a caller writes are exported.
+export logdensity_to_objective, objective_to_distribution
+public to_constrained, to_unconstrained
+
+# The one-call optimiser fit, and the single optimiser-package-specific step it
+# calls (docstrings in `optimise.jl`). `optimise_distribution` is written in
+# core over the transforms above; `minimise` is a hook an optimiser package's
+# extension fills in, so it is documented and public without being exported.
+# The `Optim` method lives in `DistributionsInferenceOptimExt`.
+export optimise_distribution
+public minimise
