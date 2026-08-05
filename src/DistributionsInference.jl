@@ -25,22 +25,13 @@ using DistributionsInference
 """
 module DistributionsInference
 
-# All module-scope `using`/`import` statements live here, not in the
-# included files.
 using Distributions: Distributions
 using DocStringExtensions: @template, DOCSTRING, EXPORTS, IMPORTS,
                            TYPEDEF, TYPEDFIELDS, TYPEDSIGNATURES
 using LogDensityProblems: LogDensityProblems
-# Loaded for effect, not for names: together these trigger
-# `EpiAwareADToolsLogExpFunctionsMooncakeExt`, which registers the corrected
-# `xlogy`/`xlog1py` Mooncake rules the engine needs for Gamma shape-gradients
-# at `shape == 1`. Hosted in the kit so this package and
-# `ComposedDistributions` cannot load two copies (#73).
 using EpiAwareADTools: EpiAwareADTools
 using LogExpFunctions: LogExpFunctions
 
-# Must precede any docstring: a `@template` only applies to docstrings
-# written after it.
 include("docstrings.jl")
 
 include("extensions.jl")
