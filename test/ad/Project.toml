@@ -31,5 +31,5 @@ DistributionsInference = {path = "../.."}
 Bijectors = "0.13, 0.14, 0.15, 0.16"
 ComposedDistributions = "0.1, 0.2"
 DynamicPPL = "0.40, 0.41, 0.42"
-EpiAwarePackageTools = "0.2"
+EpiAwarePackageTools = "0.2, 0.3"
 LogDensityProblems = "2"
