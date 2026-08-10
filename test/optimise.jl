@@ -171,11 +171,16 @@ end
     @test occursin("rate = 0.0", thrown.msg)
     @test occursin("`init`", thrown.msg)
 
-    # A finite `init` gets past it, and a non-finite one is rejected too.
-    @test optimise_distribution(leaf, data, LBFGS(); init = [0.0]).rate ≈
-          rate_map(leaf, data)
+    # `init` is on the constrained scale, so an explicit boundary value fails
+    # the same way the defaulted-from-template one above does.
+    @test_throws ArgumentError optimise_distribution(
+        leaf, data, LBFGS(); init = [0.0])
     @test_throws ArgumentError optimise_distribution(
         leaf, data, LBFGS(); init = [-Inf])
+
+    # A finite, in-support constrained `init` gets past it.
+    @test optimise_distribution(leaf, data, LBFGS(); init = [1.0]).rate ≈
+          rate_map(leaf, data)
 end
 
 @testitem "optimise_distribution: recovers an identity-linked optimum" setup=[OptimiseFixture] begin
@@ -249,6 +254,29 @@ end
     fixed_leaf = ToyGammaLeaf(2.0, 1.0)
     @test DistributionsInference.flat_dimension(fixed_leaf) == 0
     @test optimise_distribution(fixed_leaf, [1.5, 2.0], LBFGS()) == fixed_leaf
+end
+
+@testitem "optimise_distribution: a constrained init matches the old unconstrained round trip" setup=[
+    OptimiseFixture] begin
+    using Bijectors, Optim
+
+    # `init` used to be on the unconstrained scale; a caller who mapped their
+    # own starting point through `to_unconstrained` by hand got the same
+    # answer this constrained `init` now gives directly.
+    leaf = RateLeaf(1.0, Gamma(2.0, 0.5))
+    data = [0.4, 1.2, 0.7, 2.1, 0.9, 1.5, 0.3]
+    prob = distribution_to_logdensity(leaf, data)
+    x0 = [2.0]
+
+    fitted = optimise_distribution(leaf, data, LBFGS(); init = x0)
+
+    z0 = DistributionsInference.to_unconstrained(prob, x0)
+    z_hat = DistributionsInference.minimise(
+        logdensity_to_objective(prob), z0, LBFGS())
+    by_hand = objective_to_distribution(prob, z_hat)
+
+    @test fitted.rate ≈ by_hand.rate
+    @test fitted.rate≈rate_map(leaf, data) atol=1e-6
 end
 
 @testitem "optimise_distribution: the lower-level pieces reach the same point" setup=[OptimiseFixture] begin

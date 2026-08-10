@@ -43,10 +43,13 @@ loaded as well.
 # Keyword Arguments
 - `loglik`: a reducer `(obj, data) -> Real` scoring `data` against the
   reconstructed object (default: sum of `logpdf(obj, record)`).
-- `init`: the starting point on the unconstrained scale (default: `obj`'s own
-  estimated values through [`to_unconstrained`](@ref)). A template value on the
-  boundary of its prior's support has no unconstrained image, and is rejected
-  with the offending row named rather than passed to the optimiser.
+- `init`: the starting point on the CONSTRAINED scale — the units `obj`'s own
+  [`parameter_rows`](@ref) values are in, and a caller thinks in (default:
+  `obj`'s own estimated values). Mapped through [`to_unconstrained`](@ref)
+  internally before the optimiser sees it. A value on the boundary of its
+  prior's support (a zero rate, a zero or one probability) has no
+  unconstrained image, and is rejected with the offending row named rather
+  than passed to the optimiser.
 - other keywords are forwarded to [`minimise`](@ref), and from there to the
   optimiser package. With `Optim`, `options` takes an `Optim.Options` and
   `autodiff` an `ADTypes` backend; see [`minimise`](@ref) for why a
@@ -97,17 +100,31 @@ function optimise_distribution(
     # Nothing is estimated, so the template already is the fit and no
     # transform (and no `Bijectors`) is needed to say so.
     flat_dimension(prob.obj) == 0 && return reconstruct(prob.obj, Float64[])
-    z0 = init === nothing ?
-         to_unconstrained(prob, _template_values(prob.obj)) : init
+    # `init` is on the constrained scale (the units `obj`'s own rows are in);
+    # mapped through `to_unconstrained` here so the optimiser always sees an
+    # unconstrained start, whether it is the template's own values or a
+    # caller-given one. A value strictly outside its prior's support (e.g.
+    # `-Inf` for a positive-support row) sends a link function like `log`
+    # negative, which raises a `DomainError` rather than returning `-Inf`;
+    # caught and folded into the same non-finite-start rejection below, so
+    # every out-of-support start gets the one named error regardless of
+    # which failure mode the link function happens to take.
+    x0 = init === nothing ? _template_values(prob.obj) : init
+    z0 = try
+        to_unconstrained(prob, x0)
+    catch e
+        e isa DomainError ? fill(-Inf, length(x0)) : rethrow()
+    end
     all(isfinite, z0) || _reject_nonfinite_start(prob, z0, init === nothing)
     z_hat = minimise(logdensity_to_objective(prob), z0, optimiser; kwargs...)
     return objective_to_distribution(prob, z_hat)
 end
 
-# A template value sitting on the boundary of its prior's support (a zero
-# rate, a zero or one probability) has no unconstrained image, so the default
+# A constrained value sitting on the boundary of its prior's support (a zero
+# rate, a zero or one probability) has no unconstrained image, so the mapped
 # start is `+/-Inf` and the optimiser fails on a non-finite objective. Name
-# the row instead, since the fault is in the template rather than the search.
+# the row instead, since the fault is in the starting point rather than the
+# search.
 function _reject_nonfinite_start(prob, z0, defaulted)
     rows = estimated_rows(prob.obj)
     bad = findall(!isfinite, z0)
@@ -116,12 +133,12 @@ function _reject_nonfinite_start(prob, z0, defaulted)
             "flat coordinates $(bad)"
     source = defaulted ?
              "the template's own values map to a non-finite point at" :
-             "the `init` given is non-finite at"
+             "the `init` given maps to a non-finite point at"
     throw(ArgumentError(
         "`optimise_distribution` cannot start the optimiser: $source " *
-        "$named. A value on the boundary of its prior's support has no " *
-        "unconstrained image; move it inside the support, or pass a finite " *
-        "`init`."))
+        "$named. A constrained value on the boundary of its prior's " *
+        "support has no unconstrained image; move it inside the support, " *
+        "or pass a finite constrained `init`."))
 end
 
 @doc "
