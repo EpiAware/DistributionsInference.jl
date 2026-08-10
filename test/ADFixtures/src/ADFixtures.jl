@@ -222,13 +222,19 @@ const _COMPOSED_DATA = [[0.5, 2.0], [1.0, 3.0], [0.8, 1.7]]
 # A two-leaf `ComposedDistributions` tree with BOTH leaves uncertain, so the
 # extension's `parameter_rows`/`reconstruct` translation is differentiated
 # through at a genuine multi-parameter flat vector rather than a single
-# coordinate.
+# coordinate. The two leaves carry DIFFERENT prior families (`LogNormal` vs a
+# truncated `Normal`) so the tree's `flat_priors` is abstractly typed, the
+# same shape `to_constrained` builds its per-row bijector list from — the
+# path a hand-written mixed-prior fit type (scenarios 7 and 8 above) already
+# covers, but which the extension's own `parameter_rows`/`reconstruct`
+# translation had not reached until now (DI#78).
 function _composed_tree()
     return compose((
         onset_admit = uncertain(
             Gamma(2.0, 1.0); shape = LogNormal(log(2.0), 0.2)),
         admit_death = uncertain(
-            Gamma(3.0, 1.5); shape = LogNormal(log(3.0), 0.2))))
+            Gamma(3.0, 1.5);
+            shape = truncated(Normal(3.0, 0.5); lower = 0.0))))
 end
 
 """
