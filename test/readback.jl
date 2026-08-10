@@ -266,6 +266,59 @@ end
     @test [f.shape for f in predicate] == [3.0, 4.0]
 end
 
+@testitem "distribution_draws: pools draws across every chain" setup=[ToyFixture] begin
+    using FlexiChains: FlexiChains
+
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    # 2 chains x 3 iterations, distinct value ranges per chain so pooling
+    # (rather than truncation to chain 1) can be checked by value, not just
+    # count. `_chain_column` returns the full niter x nchains array and
+    # `vec` flattens it column-major, so chain 1 occupies entries 1:3 and
+    # chain 2 occupies entries 4:6 of the pooled range.
+    chain1 = [1.0, 2.0, 3.0]
+    chain2 = [10.0, 20.0, 30.0]
+    mat = reshape(vcat(chain1, chain2), 3, 2)  # niter x nchains
+    data = Dict{FlexiChains.ParameterOrExtra{<:Symbol}, Matrix}(
+        FlexiChains.Parameter(:shape) => mat)
+    chain = FlexiChains.FlexiChain{Symbol}(3, 2, data)
+    @test FlexiChains.nchains(chain) == 2
+
+    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
+    @test length(all_fitted) == 6
+    @test [f.shape for f in all_fitted] == vcat(chain1, chain2)
+
+    # A predicate selector operates over the pooled 1:6 range, not 1:3.
+    predicate = DistributionsInference.distribution_draws(
+        leaf, chain; draws = i -> i > 3)
+    @test [f.shape for f in predicate] == chain2
+
+    explicit = DistributionsInference.distribution_draws(
+        leaf, chain; draws = 4:6)
+    @test [f.shape for f in explicit] == chain2
+end
+
+@testitem "distribution_params: a predicate selector pools across chains" setup=[ToyFixture] begin
+    using FlexiChains: FlexiChains
+
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    chain1 = [1.0, 2.0, 3.0]
+    chain2 = [10.0, 20.0, 30.0]
+    mat = reshape(vcat(chain1, chain2), 3, 2)
+    data = Dict{FlexiChains.ParameterOrExtra{<:Symbol}, Matrix}(
+        FlexiChains.Parameter(:shape) => mat)
+    chain = FlexiChains.FlexiChain{Symbol}(3, 2, data)
+
+    # Before the fix, a predicate's index range was capped at
+    # `1:niters(chain)` (3), so `i -> i > 3` selected nothing out of a
+    # 6-draw pooled range.
+    nt = DistributionsInference.distribution_params(
+        leaf, chain; draws = i -> i > 3)
+    @test nt.shape ≈ mean(chain2)
+
+    nt_all = DistributionsInference.distribution_params(leaf, chain)
+    @test nt_all.shape ≈ mean(vcat(chain1, chain2))
+end
+
 @testitem "point_estimate: a chain missing an estimated parameter errors" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
 
