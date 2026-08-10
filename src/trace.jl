@@ -5,18 +5,36 @@
 # divergence flags, ...) an engine will populate under #94; nothing populates
 # it yet, but the field ships now, since adding one later would be breaking
 # (see the #90 sign-off).
+#
+# `T` is a phantom parameter (it names no field), so it cannot be inferred
+# from arguments the way `O`/`D`/`S` can. There is exactly one path to a
+# `PosteriorTrace`: the outer constructor below, which computes `T` itself
+# from `reconstruct`'s return type and calls the struct's own `{T,O,D,S}`
+# constructor explicitly. Both `draws_to_trace` and the slicing `getindex`
+# route through it — neither constructs a `PosteriorTrace{...}` directly —
+# so `T` is never left to (failed) inference. See the #90 sign-off's
+# "adversarial review" correction for the bug this avoids: the issue's own
+# centrepiece slicing example did not run under the naive
+# `PosteriorTrace(obj, draws, names, nchains)` call the auto-generated inner
+# constructor cannot resolve.
 
 @doc "
 
 A pooled posterior trace over a fittable object's estimated parameters.
 
-`PosteriorTrace{T, O, D} <: AbstractVector{T}` holds the raw draws a sampler
-produced for `obj`, without reconstructing an object per draw until asked:
-`trace[i]` calls [`reconstruct`](@ref)`(obj, draws[:, i])` on demand, so a
-trace is as cheap to hold as its draw matrix. `T` is fixed once, from
+`PosteriorTrace{T, O, D, S} <: AbstractVector{T}` holds the raw draws a
+sampler produced for `obj`, without reconstructing an object per draw until
+asked: `trace[i]` calls [`reconstruct`](@ref)`(obj, draws[:, i])` on demand,
+so a trace is as cheap to hold as its draw matrix. `T` is fixed once, from
 `reconstruct`'s return type on the first draw — which is also why an empty
 trace (`ndraws == 0`) is refused at construction rather than given an
-invented element type.
+invented element type. `reconstruct` must return one concrete type per
+`(obj, eltype(draws))` for `T` to mean anything: an implementation that
+branches on a draw's runtime values to pick different concrete result types
+would make later elements silently disagree with `T`. `S` (the type of
+`stats`) is a real parameter, not folded into a bare `stats::NamedTuple`
+field: an unparameterised `NamedTuple` field is abstract, so every access
+would infer non-concrete and box.
 
 Multiple chains are pooled into one `dim x ndraws` matrix; `nchains` records
 how many were combined, and construction refuses an `ndraws` not divisible by
@@ -43,17 +61,19 @@ longer describes the data.
 - [`parameter_draws`](@ref), [`trace_to_distribution`](@ref),
   [`point_estimate`](@ref): the transforms built on it.
 "
-struct PosteriorTrace{T, O, D} <: AbstractVector{T}
+struct PosteriorTrace{T, O, D, S} <: AbstractVector{T}
     obj::O
     draws::Matrix{D}
     names::Vector{Symbol}
     nchains::Int
-    stats::NamedTuple
+    stats::S
 end
 
+# The one path to a `PosteriorTrace`: computes the phantom `T`, so nothing
+# else may call `PosteriorTrace{T,O,D,S}(...)` directly (see the file banner).
 function PosteriorTrace(
         obj::O, draws::AbstractMatrix{D}, names::AbstractVector{Symbol},
-        nchains::Int; stats::NamedTuple = NamedTuple()) where {O, D}
+        nchains::Int; stats::S = NamedTuple()) where {O, D, S}
     nchains >= 1 || throw(ArgumentError(
         "PosteriorTrace: nchains must be at least 1, got $nchains"))
     ndraws = size(draws, 2)
@@ -66,7 +86,7 @@ function PosteriorTrace(
         "$nchains; a chain count that disagrees with the draw count would " *
         "pool draws across chains silently"))
     T = typeof(reconstruct(obj, view(draws, :, 1)))
-    return PosteriorTrace{T, O, D}(
+    return PosteriorTrace{T, O, D, S}(
         obj, Matrix{D}(draws), Vector{Symbol}(names), nchains, stats)
 end
 
@@ -96,6 +116,18 @@ end
 # is always empty.
 function _slice_stats(stats::NamedTuple, idx)
     return NamedTuple{keys(stats)}(map(v -> v[idx], values(stats)))
+end
+
+# `filter` is the one AbstractVector method worth overriding: it is what a
+# caller reaches for to drop warmup or divergent draws before calling
+# `trace_to_distribution`, and dropping to a plain `Vector` (Julia's default
+# for `filter` on an AbstractVector) would silently discard `names`/`nchains`/
+# `stats` and make that follow-up call impossible. `map`, `sort`, `vcat` and
+# `similar` are left to degrade to a plain `Vector`, by contrast: none of them
+# has an obvious element-count-preserving reading against `names`/`nchains`,
+# so a `PosteriorTrace`-returning override would have to invent one.
+function Base.filter(f, trace::PosteriorTrace)
+    return trace[findall(f, trace)]
 end
 
 @doc "
@@ -359,6 +391,23 @@ function point_estimate(trace::PosteriorTrace; summary = Statistics.mean)
     return reconstruct(trace.obj, x)
 end
 
+# Refuse a reduction directly on a `PosteriorTrace`, consistently across
+# every reducer this ambiguity applies to (see the `@doc` block below for the
+# reasoning; this is shared so `mean`/`sum`/`median`/`std`/`var`/`quantile`
+# give the identical message rather than six near-duplicates that drift).
+# Without this, each one fails anyway (e.g. `+` or `isless` has no method on
+# the trace's element type), just two frames deeper inside `Statistics`/
+# `Base`, naming that element type rather than the trace.
+function _reduction_ambiguous(f::Symbol)
+    return ArgumentError(
+        "$(f)(trace) is ambiguous for a PosteriorTrace: it could mean " *
+        "$f applied to trace_to_distribution(trace) (the posterior-" *
+        "predictive mixture over every draw), or point_estimate(trace; " *
+        "summary = $f) (the distribution at the $f-summarised parameters). " *
+        "Call one of those directly; $f.(trace) still broadcasts $f over " *
+        "each reconstructed element, unaffected by this.")
+end
+
 @doc "
 
 Refuse the ambiguous `mean` of a trace.
@@ -367,27 +416,48 @@ Refuse the ambiguous `mean` of a trace.
 ambiguous between the two things this redesign keeps apart — the *mean
 distribution*, [`trace_to_distribution`](@ref)`(trace)`'s posterior-
 predictive mixture, and the *distribution at the mean parameters*,
-[`point_estimate`](@ref)`(trace)` (`summary = mean` by default). This method
-exists only to name both, rather than let `mean` resolve through
-`AbstractVector`'s generic fallback to one of them silently.
+[`point_estimate`](@ref)`(trace)` (`summary = mean` by default). `sum`,
+`Statistics.median`, `Statistics.std`, `Statistics.var` and non-broadcast
+`Statistics.quantile(trace, p)` carry the same ambiguity (`summary = median`,
+`summary = std`, ... in place of `mean`) and are refused the same way, all
+through one private helper so the six messages cannot drift apart. These
+methods exist only to name the two alternatives, rather than let the reducer
+resolve through
+`AbstractVector`'s generic fallback (`+`/`isless` on `T`, usually) to a
+confusing failure two frames deeper that never mentions the trace.
 
-Broadcasting is unaffected: `mean.(trace)` maps `mean` over each *element* of
-`trace` (each [`reconstruct`](@ref)ed object in turn), which never calls this
-method — only `mean(trace)` itself does.
+Broadcasting is unaffected: `mean.(trace)` (and `quantile.(trace, p)`, ...)
+map the reducer over each *element* of `trace` (each
+[`reconstruct`](@ref)ed object in turn), which never calls these methods —
+only the un-broadcast call on the trace itself does.
 
 # Arguments
-- `trace`: the [`PosteriorTrace`](@ref) `mean` was called on.
+- `trace`: the [`PosteriorTrace`](@ref) the reducer was called on.
 
 # See also
 - [`trace_to_distribution`](@ref), [`point_estimate`](@ref): the two things
-  this points at.
+  every one of these points at.
 "
 function Statistics.mean(trace::PosteriorTrace)
-    throw(ArgumentError(
-        "mean(trace) is ambiguous for a PosteriorTrace: call " *
-        "trace_to_distribution(trace) for the mean distribution (the " *
-        "posterior-predictive mixture over every draw), or " *
-        "point_estimate(trace) for the distribution at the mean " *
-        "parameters (summary = mean by default). mean.(trace) still " *
-        "broadcasts mean over each reconstructed element."))
+    throw(_reduction_ambiguous(:mean))
+end
+
+function Base.sum(trace::PosteriorTrace)
+    throw(_reduction_ambiguous(:sum))
+end
+
+function Statistics.median(trace::PosteriorTrace)
+    throw(_reduction_ambiguous(:median))
+end
+
+function Statistics.std(trace::PosteriorTrace)
+    throw(_reduction_ambiguous(:std))
+end
+
+function Statistics.var(trace::PosteriorTrace)
+    throw(_reduction_ambiguous(:var))
+end
+
+function Statistics.quantile(trace::PosteriorTrace, p::Real)
+    throw(_reduction_ambiguous(:quantile))
 end

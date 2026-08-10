@@ -147,6 +147,16 @@ A `Union`-typed field (e.g. `Union{Float64, Missing}`) is a false negative of
 that guard: `isconcretetype` is `false` for a `Union`, so it reads as already
 generic even though it cannot hold a tracer either.
 
+`reconstruct(obj, x)` must return one concrete type per `(obj, eltype(x))`:
+[`PosteriorTrace`](@ref) fixes its element type `T` once, by reconstructing
+the first draw, so an implementation that branches on `x`'s runtime *values*
+(not its type) to pick between different concrete result types would make a
+trace's later elements silently disagree with the `T` it was built with.
+Branching on `eltype(x)` alone (a `Float64` draw vs. a `ForwardDiff.Dual` one,
+say) is fine, since that already varies the *type* `reconstruct` is called
+with, not just the values. No `reconstruct` method in this package or its
+extensions violates this.
+
 # Arguments
 - `obj`: the fittable object whose structure is rebuilt.
 - `x`: an estimated flat vector of length [`flat_dimension`](@ref)`(obj)`.

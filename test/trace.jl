@@ -169,6 +169,34 @@ end
     @test length(single) == 1
 end
 
+# `T` is a phantom type parameter (it names no field of the struct), so it
+# cannot be inferred from arguments — see the #90 sign-off's "adversarial
+# review" correction. These are exactly the headline examples that correction
+# found broken in the issue's own naive sketch: a `PosteriorTrace` built with
+# `PosteriorTrace{T,O,D,S}(...)` directly (bypassing the outer constructor
+# that computes `T`) fails to resolve `T` from its arguments, and the issue's
+# own slicing call reproduced that failure. `draws_to_trace` and slicing
+# `getindex` both route through the one outer constructor instead, so all
+# three of these must actually run, not just type-check by inspection.
+@testitem "PosteriorTrace: UnitRange, arbitrary index vector and Bool mask all slice" setup=[ToyFixture] begin
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    draws = reshape(collect(1.0:6.0), 1, 6)
+    trace = DistributionsInference.draws_to_trace(leaf, draws)
+
+    by_range = trace[1:3]
+    @test by_range isa DistributionsInference.PosteriorTrace
+    @test [t.shape for t in by_range] == [1.0, 2.0, 3.0]
+
+    by_index = trace[[1, 3, 5]]
+    @test by_index isa DistributionsInference.PosteriorTrace
+    @test [t.shape for t in by_index] == [1.0, 3.0, 5.0]
+
+    mask = [true, false, true, false, true, false]
+    by_mask = trace[mask]
+    @test by_mask isa DistributionsInference.PosteriorTrace
+    @test [t.shape for t in by_mask] == [1.0, 3.0, 5.0]
+end
+
 @testitem "PosteriorTrace: is a well-behaved AbstractVector" setup=[ToyFixture] begin
     leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
     values = [2.1, 2.4, 2.0, 2.6]
@@ -180,6 +208,36 @@ end
     collected = collect(trace)
     @test collected isa Vector{typeof(leaf)}
     @test [c.shape for c in collected] == values
+end
+
+@testitem "PosteriorTrace: stats is a type parameter, not a bare NamedTuple field" setup=[ToyFixture] begin
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    values = [2.1, 2.4, 2.0, 2.6]
+    trace = DistributionsInference.draws_to_trace(leaf, reshape(values, 1, :))
+
+    # An undecorated `stats::NamedTuple` field is abstract, so its declared
+    # type would not be concrete even though every value stored in it is; a
+    # fourth type parameter `S` (with `stats::S`) is what makes it concrete.
+    S = fieldtype(typeof(trace), :stats)
+    @test isconcretetype(S)
+    @test S !== NamedTuple  # not the bare abstract type
+    @test trace.stats isa S
+end
+
+@testitem "filter(trace): preserves trace-ness, unlike a plain Vector" setup=[ToyFixture] begin
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    draws = reshape(collect(1.0:6.0), 1, 6)
+    trace = DistributionsInference.draws_to_trace(leaf, draws)
+
+    kept = filter(t -> t.shape > 3.0, trace)
+    @test kept isa DistributionsInference.PosteriorTrace
+    @test [t.shape for t in kept] == [4.0, 5.0, 6.0]
+    @test kept.nchains == 1
+
+    # A trace `filter` keeps is still usable by the transforms built on
+    # `PosteriorTrace`, which is the whole point of not degrading to a
+    # `Vector` (e.g. dropping warmup or divergent draws before summarising).
+    @test DistributionsInference.point_estimate(kept).shape ≈ 5.0
 end
 
 @testitem "parameter_draws: per-parameter unreduced draws, keyed by name" setup=[ToyFixture] begin
@@ -299,4 +357,41 @@ end
     # reconstructed element (each `Gamma(shape, 1.0)`), never calling
     # `mean(trace)` itself.
     @test mean.(trace) ≈ shapes
+end
+
+@testitem "every ambiguous reduction refuses consistently, not just mean" setup=[TraceDistFixture] begin
+    using Statistics: median, std, var, quantile
+
+    # `sum`, `median`, `std`, `var` and non-broadcast `quantile` are exactly
+    # as ambiguous as `mean` (trace_to_distribution vs point_estimate), and
+    # left undefended would fail two frames deeper inside Statistics/Base
+    # (a `+`/`isless` MethodError naming the reconstructed element type,
+    # `Gamma{Float64}`, rather than the trace) instead of failing here with a
+    # message that names both alternatives.
+    template = GammaShapeTemplate(2.0, LogNormal(log(2.0), 0.2))
+    shapes = [1.0, 2.0, 3.0, 4.0]
+    trace = DistributionsInference.draws_to_trace(
+        template, reshape(shapes, 1, :))
+
+    calls = [
+        (:sum, () -> sum(trace)),
+        (:median, () -> median(trace)),
+        (:std, () -> std(trace)),
+        (:var, () -> var(trace)),
+        (:quantile, () -> quantile(trace, 0.9))]
+    for (name, call) in calls
+        err = try
+            call()
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        @test occursin("trace_to_distribution", err.msg)
+        @test occursin("point_estimate", err.msg)
+        @test occursin(String(name), err.msg)
+    end
+
+    # Broadcasting every one of them is unaffected, same as `mean.(trace)`.
+    @test quantile.(trace, 0.9) ≈ quantile.(Gamma.(shapes, 1.0), 0.9)
 end
