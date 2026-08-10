@@ -37,6 +37,17 @@ public FitLogDensity, logdensity
 # `FlexiChains` or to the inference package that produced them (#104).
 export distribution_params, point_estimate, distribution_draws
 
+# The pooled posterior trace (#90), core only (no `FlexiChains`): a caller
+# builds one with `draws_to_trace` and reads it with `parameter_draws`,
+# `trace_to_distribution`, or `point_estimate` (a second method on the name
+# just exported above — it dispatches on a trace instead of a chain, so the
+# two never collide). `PosteriorTrace` itself stays `public`, not exported,
+# matching `FitLogDensity`: a caller mostly holds an instance without
+# spelling the type name, the way a caller who never annotates a return type
+# does not need it imported.
+export draws_to_trace, parameter_draws, trace_to_distribution
+public PosteriorTrace
+
 # A DynamicPPL model over a fittable object's estimated parameters. Stub here
 # (docstring in `turing.jl`); the model lives in
 # `DistributionsInferenceDynamicPPLExt`.

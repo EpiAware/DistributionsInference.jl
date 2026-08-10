@@ -7,9 +7,12 @@ hook) and a `LogDensityProblems`-based log-density engine, with no
 probabilistic programming language and no chain type in the core package.
 
 The protocol (`parameter_rows`, `reconstruct`), default-prior assembly over it
-(`default_prior`, `with_priors`) and the engine (`distribution_to_logdensity`,
-`logdensity`, `FitLogDensity`) are implemented here. Everything else arrives
-through an extension: `FlexiChains` (the dotted-name readback,
+(`default_prior`, `with_priors`), the engine (`distribution_to_logdensity`,
+`logdensity`, `FitLogDensity`) and the pooled posterior trace
+(`PosteriorTrace`, `draws_to_trace`, `parameter_draws`,
+`trace_to_distribution`, `point_estimate`) are implemented here, with no
+`FlexiChains` dependency. Everything else arrives through an extension:
+`FlexiChains` (the dotted-name chain readback,
 `distribution_params`, `point_estimate`, `distribution_draws`),
 `DynamicPPL` (`distribution_to_turing`), `DynamicPPL` x `FlexiChains` (the
 `VarName`-keyed dispatch of
@@ -34,6 +37,7 @@ using DocStringExtensions: @template, DOCSTRING, EXPORTS, IMPORTS,
 using LogDensityProblems: LogDensityProblems
 using EpiAwareADTools: EpiAwareADTools
 using LogExpFunctions: LogExpFunctions
+using Statistics: Statistics
 
 include("docstrings.jl")
 
@@ -42,6 +46,7 @@ include("protocol.jl")
 include("engine.jl")
 include("priors.jl")
 include("readback.jl")
+include("trace.jl")
 include("turing.jl")
 include("bijectors.jl")
 include("optimise.jl")
