@@ -47,7 +47,12 @@ export distribution_to_turing
 # `DistributionsInferenceBijectorsExt`. Both transforms are what an engine
 # author calls rather than fitting entry points, so they stay unexported, while
 # the two ends of the objective round trip a caller writes are exported.
-export logdensity_to_objective, objective_to_distribution
+# `distribution_to_objective` is the composed route to the same objective
+# straight from a distribution and data, so it is exported alongside them by
+# the same logic; it is written in core, calling the other two, rather than
+# having a method of its own in the extension.
+export logdensity_to_objective, objective_to_distribution,
+       distribution_to_objective
 public to_constrained, to_unconstrained
 
 # The one-call optimiser fit, and the single optimiser-package-specific step it

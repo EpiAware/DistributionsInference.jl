@@ -23,6 +23,7 @@ end
         :distribution_draws,
         :distribution_params,
         :distribution_to_logdensity,
+        :distribution_to_objective,
         :distribution_to_turing,
         :logdensity_to_objective,
         :objective_to_distribution,
@@ -67,6 +68,9 @@ end
         (() -> DistributionsInference.to_unconstrained(prob, [2.0]),
             "Bijectors", "DistributionsInferenceBijectorsExt"),
         (() -> DistributionsInference.objective_to_distribution(prob, [0.0]),
+            "Bijectors", "DistributionsInferenceBijectorsExt"),
+        (() -> DistributionsInference.distribution_to_objective(
+                rows, [1.5, 2.0]),
             "Bijectors", "DistributionsInferenceBijectorsExt"),
         (() -> DistributionsInference.minimise(sum, [0.0], nothing),
             "Optim", "DistributionsInferenceOptimExt"),

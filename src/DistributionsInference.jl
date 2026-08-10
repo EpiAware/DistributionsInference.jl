@@ -15,7 +15,8 @@ through an extension: `FlexiChains` (the dotted-name readback,
 `VarName`-keyed dispatch of
 `distribution_params`/`point_estimate`/`distribution_draws`), `Bijectors`
 (`to_constrained`, `to_unconstrained` and the `logdensity_to_objective` /
-`objective_to_distribution` pair built on them),
+`objective_to_distribution` pair built on them; `distribution_to_objective` is
+written in core over that pair, so it needs `Bijectors` loaded the same way),
 `ComposedDistributions` (the fit protocol over a composed tree's own codec),
 `Optim` (the `minimise` step of `optimise_distribution`) and `Mooncake`
 (gradient rules for `xlogy`/`xlog1py`). The

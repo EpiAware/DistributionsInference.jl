@@ -409,7 +409,7 @@ end
     f = distribution_to_objective(leaf, data; loglik = doubled)
     expected = logdensity_to_objective(
         DistributionsInference.distribution_to_logdensity(
-            leaf, data; loglik = doubled))
+        leaf, data; loglik = doubled))
     plain = logdensity_to_objective(
         DistributionsInference.distribution_to_logdensity(leaf, data))
 
@@ -436,61 +436,7 @@ end
     @test by_hand == fitted
 end
 
-@testitem "distribution_to_objective needs Bijectors when it is not loaded" begin
-    using DistributionsInference
-
-    # Sibling items in this process `using Bijectors`, so the
-    # extension-not-loaded path is only reachable in a fresh process.
-    script = """
-    using DistributionsInference, Distributions
-
-    Base.get_extension(
-        DistributionsInference,
-        :DistributionsInferenceBijectorsExt) === nothing ||
-        error("the Bijectors extension loaded without Bijectors")
-
-    struct AloneLeaf
-        shape::Float64
-        scale::Float64
-    end
-
-    Distributions.logpdf(d::AloneLeaf, y::Real) = logpdf(
-        Gamma(d.shape, d.scale), y)
-
-    function DistributionsInference.parameter_rows(d::AloneLeaf)
-        return [(name = :shape, value = d.shape,
-                prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
-            (name = :scale, value = d.scale, prior = nothing,
-                support = (0.0, Inf))]
-    end
-
-    function DistributionsInference.reconstruct(
-            d::AloneLeaf, x::AbstractVector)
-        return AloneLeaf(x[1], d.scale)
-    end
-
-    leaf = AloneLeaf(2.0, 1.5)
-    thrown = try
-        DistributionsInference.distribution_to_objective(leaf, [1.5, 2.0])
-        nothing
-    catch e
-        e
-    end
-    thrown isa ArgumentError ||
-        error("expected an ArgumentError, got \$(repr(thrown))")
-    occursin("Bijectors", thrown.msg) ||
-        error("the message does not name Bijectors: \$(thrown.msg)")
-    occursin("DistributionsInferenceBijectorsExt", thrown.msg) ||
-        error("the message does not name the extension: \$(thrown.msg)")
-    print("no-bijectors-ok")
-    """
-
-    out = IOBuffer()
-    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project())
-           --startup-file=no -e $script`
-    ok = success(pipeline(cmd; stdout = out, stderr = out))
-    output = String(take!(out))
-    ok || println(output)
-    @test ok
-    @test occursin("no-bijectors-ok", output)
-end
+# The no-Bijectors-loaded error path is covered alongside every other
+# extension-backed stub in
+# `test/DistributionsInference.jl`'s "an extension-backed stub names the
+# package to load" item, which already runs a fresh process for exactly this.
