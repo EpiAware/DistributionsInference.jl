@@ -1,6 +1,10 @@
 # The unconstrained <-> constrained transform for the PPL-neutral engine, both
 # directions and the two things built on them: stubs declared here with their
 # docstrings, whose methods live in `DistributionsInferenceBijectorsExt`.
+# `distribution_to_objective` is the one function here with no method of its
+# own: it is written directly in core over `distribution_to_logdensity` and
+# `logdensity_to_objective`, so it needs `Bijectors` only because the latter
+# does.
 
 @doc "
 
@@ -195,6 +199,72 @@ f([0.0])
 function logdensity_to_objective(prob)
     return _extension_required(:logdensity_to_objective, "Bijectors",
         "DistributionsInferenceBijectorsExt")
+end
+
+@doc "
+
+Build an optimiser objective straight from a distribution and data.
+
+`distribution_to_objective(obj, data; loglik)` is
+[`logdensity_to_objective`](@ref)`(`[`distribution_to_logdensity`](@ref)`(obj,
+data; loglik))`: the composed convenience so a caller reaches the objective
+without assembling a [`FitLogDensity`](@ref) by hand first. It is written in
+core over those two functions rather than reimplemented, so it needs
+`Bijectors` loaded for the same reason [`logdensity_to_objective`](@ref) does,
+and gives the same `ArgumentError` naming `Bijectors` and
+`DistributionsInferenceBijectorsExt` when it is not.
+
+Reach for this function when the objective is the whole of what is wanted;
+[`optimise_distribution`](@ref) runs the optimiser and rebuilds a fitted
+object too, and is a strict superset of what this composes.
+
+# Arguments
+- `obj`: the template fittable object, carrying its [`parameter_rows`](@ref).
+- `data`: the observed records.
+
+# Keyword Arguments
+- `loglik`: a reducer `(obj, data) -> Real` scoring `data` against the
+  reconstructed object (default: sum of `logpdf(obj, record)`).
+
+# Examples
+```@example
+using DistributionsInference, Distributions, Bijectors
+
+struct ComposedLeaf
+    shape::Float64
+    scale::Float64
+end
+
+Distributions.logpdf(d::ComposedLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::ComposedLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::ComposedLeaf, x::AbstractVector)
+    return ComposedLeaf(x[1], d.scale)
+end
+
+leaf = ComposedLeaf(2.0, 1.0)
+data = [1.5, 2.0, 3.2, 2.8, 1.9]
+f = distribution_to_objective(leaf, data)
+# `f` is the same callable the two-step route gives, ready for any external
+# optimiser.
+f([0.0])
+```
+
+# See also
+- [`logdensity_to_objective`](@ref), [`distribution_to_logdensity`](@ref): the
+  two calls this composes.
+- [`optimise_distribution`](@ref): the whole fit, objective through to a
+  rebuilt object.
+"
+function distribution_to_objective(obj, data; loglik = _default_loglik)
+    prob = distribution_to_logdensity(obj, data; loglik = loglik)
+    return logdensity_to_objective(prob)
 end
 
 @doc "
