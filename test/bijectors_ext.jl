@@ -381,3 +381,116 @@ end
 
     @test objective_to_distribution(prob, Float64[]) == fixed_leaf
 end
+
+@testitem "distribution_to_objective: exactly the two-step composition" setup=[TuringFixture] begin
+    using Bijectors
+
+    leaf = TwoParamLeaf(2.0, 1.0)
+    data = [1.5, 2.0, 3.2, 2.8]
+    f = distribution_to_objective(leaf, data)
+
+    expected = logdensity_to_objective(
+        DistributionsInference.distribution_to_logdensity(leaf, data))
+
+    n = DistributionsInference.flat_dimension(leaf)
+    for z in ([0.0, 0.0], [0.2, -0.4], [-1.1, 0.9])
+        @test f(z) == expected(z)
+    end
+    @test_throws DimensionMismatch f(fill(0.0, n - 1))
+end
+
+@testitem "distribution_to_objective: threads a custom loglik through" setup=[TuringFixture] begin
+    using Bijectors
+
+    leaf = TwoParamLeaf(2.0, 1.0)
+    data = [1.5, 2.0, 3.2, 2.8]
+    doubled(obj, records) = 2 * sum(y -> logpdf(obj, y), records)
+
+    f = distribution_to_objective(leaf, data; loglik = doubled)
+    expected = logdensity_to_objective(
+        DistributionsInference.distribution_to_logdensity(
+            leaf, data; loglik = doubled))
+    plain = logdensity_to_objective(
+        DistributionsInference.distribution_to_logdensity(leaf, data))
+
+    n = DistributionsInference.flat_dimension(leaf)
+    z = fill(0.2, n)
+    @test f(z) == expected(z)
+    @test f(z) != plain(z)
+end
+
+@testitem "distribution_to_objective: composes with minimise and objective_to_distribution to reproduce optimise_distribution" setup=[ToyFixture] begin
+    using Bijectors, Optim
+
+    mu, sigma = log(2.0), 0.2
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(mu, sigma))
+    data = [1.5, 2.0, 3.2, 2.8, 1.9, 4.1, 2.5, 3.0]
+
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
+    z0 = DistributionsInference.to_unconstrained(prob, [leaf.shape])
+    z_hat = DistributionsInference.minimise(
+        distribution_to_objective(leaf, data), z0, LBFGS())
+    by_hand = objective_to_distribution(prob, z_hat)
+
+    fitted = optimise_distribution(leaf, data, LBFGS())
+    @test by_hand == fitted
+end
+
+@testitem "distribution_to_objective needs Bijectors when it is not loaded" begin
+    using DistributionsInference
+
+    # Sibling items in this process `using Bijectors`, so the
+    # extension-not-loaded path is only reachable in a fresh process.
+    script = """
+    using DistributionsInference, Distributions
+
+    Base.get_extension(
+        DistributionsInference,
+        :DistributionsInferenceBijectorsExt) === nothing ||
+        error("the Bijectors extension loaded without Bijectors")
+
+    struct AloneLeaf
+        shape::Float64
+        scale::Float64
+    end
+
+    Distributions.logpdf(d::AloneLeaf, y::Real) = logpdf(
+        Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::AloneLeaf)
+        return [(name = :shape, value = d.shape,
+                prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(
+            d::AloneLeaf, x::AbstractVector)
+        return AloneLeaf(x[1], d.scale)
+    end
+
+    leaf = AloneLeaf(2.0, 1.5)
+    thrown = try
+        DistributionsInference.distribution_to_objective(leaf, [1.5, 2.0])
+        nothing
+    catch e
+        e
+    end
+    thrown isa ArgumentError ||
+        error("expected an ArgumentError, got \$(repr(thrown))")
+    occursin("Bijectors", thrown.msg) ||
+        error("the message does not name Bijectors: \$(thrown.msg)")
+    occursin("DistributionsInferenceBijectorsExt", thrown.msg) ||
+        error("the message does not name the extension: \$(thrown.msg)")
+    print("no-bijectors-ok")
+    """
+
+    out = IOBuffer()
+    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project())
+           --startup-file=no -e $script`
+    ok = success(pipeline(cmd; stdout = out, stderr = out))
+    output = String(take!(out))
+    ok || println(output)
+    @test ok
+    @test occursin("no-bijectors-ok", output)
+end
