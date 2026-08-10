@@ -47,11 +47,8 @@ const QA_CONFIG = (
     # Every extension whose triggers are test deps is listed; Aqua only sees
     # the core module's own methods.
     extensions = (
-        (; name = :DistributionsInferenceFlexiChainsExt,
-            triggers = ("FlexiChains",),
-            prefixes = ("DistributionsInference", "FlexiChains")),
         (; name = :DistributionsInferenceDynamicPPLFlexiChainsExt,
-            triggers = ("DynamicPPL", "FlexiChains"),
+            triggers = ("DynamicPPL",),
             prefixes = ("DistributionsInference", "DynamicPPL",
                 "FlexiChains")),
         (; name = :DistributionsInferenceDynamicPPLExt,

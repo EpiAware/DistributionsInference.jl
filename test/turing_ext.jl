@@ -391,19 +391,22 @@ end
         :DistributionsInferenceDynamicPPLFlexiChainsExt) !== nothing
 end
 
-@testitem "distribution_to_turing needs DynamicPPL alone, not FlexiChains" begin
+@testitem "distribution_to_turing works with just `using DynamicPPL`" begin
     using DistributionsInference
 
-    # The `VarName`-keyed readback lives in its own extension, so a project
-    # sampling with Turing need not install `FlexiChains`. Sibling items load
-    # it here, so a DynamicPPL-alone session needs a fresh process.
+    # `FlexiChains` is a hard dependency, so it is always in the session once
+    # `DistributionsInference` is; a caller sampling with Turing needs to
+    # `using DynamicPPL` (to trigger the readback's `VarName` dispatch) but
+    # never has to `using FlexiChains` explicitly. Sibling items load
+    # `DynamicPPL` here, so this needs a fresh process to check the caller's
+    # `using` list alone is enough.
     script = """
     using DistributionsInference, Distributions, DynamicPPL
 
     Base.get_extension(
         DistributionsInference,
-        :DistributionsInferenceFlexiChainsExt) === nothing ||
-        error("the FlexiChains extension loaded without FlexiChains")
+        :DistributionsInferenceDynamicPPLFlexiChainsExt) !== nothing ||
+        error("the DynamicPPL x FlexiChains extension did not load")
 
     struct AloneLeaf{S <: Real}
         shape::S

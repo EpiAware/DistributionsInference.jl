@@ -25,10 +25,10 @@ public default_prior
 export distribution_to_logdensity
 public FitLogDensity, logdensity
 
-# The dotted-name `FlexiChains` readback. Declared here as chain-free stubs
-# (with their docstrings, in `readback.jl`); every method lives in
-# `DistributionsInferenceFlexiChainsExt`, and all three also dispatch on a
-# `VarName`-keyed chain once `DynamicPPL` is loaded alongside `FlexiChains`.
+# The dotted-name `FlexiChains` readback (`FlexiChains` is a hard dependency;
+# implemented directly in `readback.jl`). All three also dispatch on a
+# `VarName`-keyed chain once `DynamicPPL` is loaded alongside this package
+# (`DistributionsInferenceDynamicPPLFlexiChainsExt`).
 #
 # `distribution_params` reads a chain's estimated values by name;
 # `point_estimate` and `distribution_draws` rebuild the distribution from them,

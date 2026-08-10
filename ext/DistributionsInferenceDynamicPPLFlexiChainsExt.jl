@@ -3,8 +3,9 @@ module DistributionsInferenceDynamicPPLFlexiChainsExt
 # DistributionsInference x DynamicPPL x FlexiChains: the `VarName`-keyed chain
 # readback (DI#4). A chain sampled from `distribution_to_turing` is keyed by
 # `VarName`, so rename it onto the estimated rows' dotted `Symbol` names and
-# hand it to the `Symbol`-keyed readback in
-# `DistributionsInferenceFlexiChainsExt`.
+# hand it to the `Symbol`-keyed readback in core (`src/readback.jl`).
+# `FlexiChains` is a hard dependency of `DistributionsInference`, so this
+# extension only needs `DynamicPPL` as its trigger.
 # Docstrings live on the stubs in `src/readback.jl`.
 
 using DistributionsInference: DistributionsInference, estimated_rows,
