@@ -113,6 +113,36 @@ end
         leaf, "not a matrix or vector-of-vectors")
 end
 
+@testitem "draws_to_chain: nchains > 1 pools chain-major, not iteration-major" setup=[
+    ToyFixture] begin
+    using FlexiChains: FlexiChains
+
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    # Chain 1 all 1.0s, chain 2 all 100.0s: a flat draws vector whose
+    # per-chain blocks are disjoint and obviously identifiable, so a layout
+    # bug (pooling iteration-major instead of chain-major) fails on the
+    # actual numbers rather than merely on a count. `distribution_to_advancedmh`,
+    # `distribution_to_turing`'s chain form, and `inference_to_distribution`'s
+    # `draws` selection all share this ordering assumption, so this pins the
+    # one place that assumption is actually built.
+    chain1 = fill(1.0, 3)
+    chain2 = fill(100.0, 3)
+    flat = vcat(chain1, chain2)
+    chain = DistributionsInference.draws_to_chain(
+        leaf, reshape(flat, 1, :); nchains = 2)
+
+    @test FlexiChains.niters(chain) == 3
+    @test FlexiChains.nchains(chain) == 2
+
+    pooled = vec(chain[:shape])
+    @test pooled[1:3] == chain1
+    @test pooled[4:6] == chain2
+
+    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
+    @test [f.shape for f in all_fitted[1:3]] == chain1
+    @test [f.shape for f in all_fitted[4:6]] == chain2
+end
+
 @testitem "distribution_params: keyed by dotted name, params-first" setup=[ToyFixture] begin
     using FlexiChains: FlexiChains
 
