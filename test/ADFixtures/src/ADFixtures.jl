@@ -21,12 +21,17 @@
 #
 # `Mooncake` is deliberately not a dependency here even though `backends()`
 # lists both its configurations: this registry loads `ComposedDistributions`,
-# and `DistributionsInferenceMooncakeExt` and `ComposedDistributionsMooncakeExt`
-# define the same `LogExpFunctions.xlogy`/`xlog1py` rules (DI ported CD#99's
-# fix), which Julia refuses as a method overwrite during precompilation. The
-# `ADTypes` backend entries need no import here, and `test/ad/setup.jl` does
-# the `using Mooncake` at test time, where the duplicate rules are only a load
-# warning. Drop this once the duplication is resolved upstream (DI#73).
+# whose `ComposedDistributionsMooncakeExt` (CD#99) and `EpiAwareADTools`'s
+# `EpiAwareADToolsLogExpFunctionsMooncakeExt` (triggered once
+# `DistributionsInference`'s hard `LogExpFunctions`/`EpiAwareADTools` deps
+# and `Mooncake` are all loaded) both define the same
+# `LogExpFunctions.xlogy`/`xlog1py` rules, which Julia refuses as a method
+# overwrite during precompilation. DI#73 removed this package's own copy of
+# that rule, but the duplication between `ComposedDistributions` and
+# `EpiAwareADTools` themselves remains, so this deliberate omission stays.
+# The `ADTypes` backend entries need no import here, and `test/ad/setup.jl`
+# does the `using Mooncake` at test time, where the duplicate rules are only
+# a load warning.
 module ADFixtures
 
 using ADTypes: AutoForwardDiff, AutoReverseDiff, AutoMooncake,
