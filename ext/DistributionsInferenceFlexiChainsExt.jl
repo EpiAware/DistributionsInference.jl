@@ -36,13 +36,19 @@ function _chain_column(chain, name::Symbol)
     return chain[name]
 end
 
-# The iteration indices a `draws` selector picks out: `nothing` is every
-# iteration, a predicate filters the index range, anything else is taken as
-# the indices directly.
+# The number of draws pooled across every chain: `_chain_column` returns the
+# full niters x nchains array and `vec` flattens it column-major, so the
+# pooled range a draw selector or an index into it must span is
+# niters * nchains, not niters alone (one chain's worth).
+_pooled_ndraws(chain) = FlexiChains.niters(chain) * FlexiChains.nchains(chain)
+
+# The pooled-draw indices a `draws` selector picks out: `nothing` is every
+# draw, a predicate filters the pooled index range, anything else is taken
+# as the indices directly.
 _draw_indices(chain, ::Nothing) = Colon()
 function _draw_indices(chain, draws)
     draws isa Function &&
-        return [i for i in 1:FlexiChains.niters(chain) if draws(i)]
+        return [i for i in 1:_pooled_ndraws(chain) if draws(i)]
     return collect(draws)
 end
 
@@ -91,7 +97,7 @@ end
 function distribution_draws(obj, chain::FlexiChains.FlexiChain; draws = nothing)
     rows = estimated_rows(obj)
     sel = _draw_indices(chain, draws)
-    idx = sel isa Colon ? (1:FlexiChains.niters(chain)) : sel
+    idx = sel isa Colon ? (1:_pooled_ndraws(chain)) : sel
     isempty(rows) && return [reconstruct(obj, Float64[]) for _ in idx]
     # Materialise each column once so this stays O(niter) rather than
     # re-extracting every column per draw.
