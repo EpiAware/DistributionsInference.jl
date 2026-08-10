@@ -15,6 +15,27 @@
 # vectors (with an `nchains` keyword), built into a `FlexiChain` via
 # `_to_flexichain` and dispatched on again.
 
+# An explicit range/vector selection must fall inside the pooled range: the
+# whole point of documenting the chain-major trap is that a caller ends up
+# hand-writing indices after reading it, and that is exactly the caller who
+# needs a directed error rather than a raw `BoundsError` two frames into
+# column indexing. `extrema` is a single O(length) pass (O(1) for a range),
+# and reports the actual out-of-range value reached, not just "somewhere
+# out of bounds". Emptiness is not a bounds problem and is handled
+# separately (by the callers that require a nonempty selection).
+function _check_pooled_bounds(n::Int, idx)
+    isempty(idx) && return nothing
+    lo, hi = extrema(idx)
+    lo >= 1 || throw(ArgumentError(
+        "draws index $lo is out of range: pooled draw indices run 1:$n " *
+        "(indices below 1, including 0 and negative indices, are not " *
+        "valid — there is no wraparound-from-the-end indexing here)"))
+    hi <= n || throw(ArgumentError(
+        "draws index $hi is out of range: the pooled draw count is $n, " *
+        "so valid indices run 1:$n"))
+    return nothing
+end
+
 # The `draws` keyword: `nothing` (every draw), an `AbstractRange` or
 # `AbstractVector{<:Integer}` of exact pooled indices, or an `Integer` number
 # of draws sampled at random from the pooled set (without replacement).
@@ -23,15 +44,28 @@
 # where #89's pooled-range bug lived.
 _resolve_pooled_draws(n::Int, ::Nothing, ::Any) = 1:n
 
-_resolve_pooled_draws(n::Int, draws::AbstractRange{<:Integer}, ::Any) = draws
+function _resolve_pooled_draws(n::Int, draws::AbstractRange{<:Integer}, ::Any)
+    _check_pooled_bounds(n, draws)
+    return draws
+end
 
-_resolve_pooled_draws(n::Int, draws::AbstractVector{<:Integer}, ::Any) = draws
+function _resolve_pooled_draws(
+        n::Int, draws::AbstractVector{<:Integer}, ::Any)
+    _check_pooled_bounds(n, draws)
+    return draws
+end
 
 function _resolve_pooled_draws(n::Int, k::Integer, rng)
     0 <= k <= n || throw(ArgumentError(
         "draws=$k requests more draws than the $n pooled across every " *
         "chain; pass an Integer no greater than the pooled draw count, or " *
         "an explicit index selection"))
+    # `randperm` allocates a length-n permutation regardless of k, rather
+    # than a partial without-replacement sample. n is the pooled draw
+    # count (thousands at most in practice) and reconstruct(obj, x) below
+    # dominates the cost by 1-2 orders of magnitude even at k << n, so the
+    # simpler, well-tested stdlib primitive wins over a hand-rolled partial
+    # shuffle here.
     return sort!(Random.randperm(rng, n)[1:k])
 end
 
@@ -41,6 +75,23 @@ function _resolve_pooled_draws(n::Int, draws, ::Any)
         "`AbstractVector{<:Integer}` of pooled draw indices, or an " *
         "`Integer` number of draws to sample at random; got " *
         "$(typeof(draws))"))
+end
+
+# `inference_to_distribution` (both the mixture and the plug-in forms) needs
+# at least one draw: a `MixtureModel` over zero components fails inside
+# Distributions.jl naming neither this function nor the cause, and a
+# `summary` over an empty collection either errors unhelpfully or (`mean`)
+# silently returns `NaN`. `k = 0` and `draws = <empty vector>` both resolve
+# to an empty selection, so this is checked on the resolved selection, not
+# on the `draws` argument's own emptiness. `inference_to_distributions`
+# deliberately has no such guard: an empty selection there is a legitimate
+# empty `Vector` result.
+function _require_nonempty_selection(f::Symbol, idx)
+    isempty(idx) && throw(ArgumentError(
+        "`$f` needs at least one selected draw; the resolved `draws` " *
+        "selection is empty. Use `inference_to_distributions` if an empty " *
+        "result is what you want."))
+    return idx
 end
 
 # Reduce each estimated row's selected draws by `summary`, then `reconstruct`
@@ -112,10 +163,21 @@ bug fixed in #89).
 
 - `nothing` (default): every pooled draw.
 - an `AbstractRange` or `AbstractVector{<:Integer}`: exactly those pooled
-  indices, in the chain-major order above.
+  indices, in the chain-major order above. Every index must fall within
+  `1:n` (`n` the pooled draw count) — an out-of-range index (including `0`
+  or negative: there is no wraparound-from-the-end indexing here) raises an
+  `ArgumentError` naming `n` and the offending index, rather than reaching a
+  bare `BoundsError`.
 - an `Integer` `n`: `n` draws sampled at random *from the whole pooled set*,
   so this — not a range — is the way to get \"some draws\" that actually span
-  every chain.
+  every chain. `0 <= n <= (the pooled draw count)`, checked the same way.
+
+An empty selection (`draws = 0`, or an empty range/vector) is allowed here
+and returns an empty `Vector` — there is nothing wrong with \"zero draws,
+reconstructed\" as a vectorised result.
+[`inference_to_distribution`](@ref) (both forms) refuses an empty selection
+instead, since a `MixtureModel` over zero components and a `summary` over an
+empty collection have no sensible answer.
 
 # Examples
 ```@example
@@ -257,6 +319,7 @@ mean(inference_to_distribution(leaf, chain))
 function inference_to_distribution(obj, chain::FlexiChains.FlexiChain;
         draws = nothing, rng = Random.default_rng())
     dists = inference_to_distributions(obj, chain; draws = draws, rng = rng)
+    _require_nonempty_selection(:inference_to_distribution, dists)
     _require_distribution_eltype(:inference_to_distribution, dists)
     return Distributions.MixtureModel(dists)
 end
@@ -350,6 +413,7 @@ function inference_to_distribution(
         obj, chain::FlexiChains.FlexiChain, summary;
         draws = nothing, rng = Random.default_rng())
     idx = _resolve_pooled_draws(_pooled_ndraws(chain), draws, rng)
+    _require_nonempty_selection(:inference_to_distribution, idx)
     result = _reconstruct_summary(obj, chain, summary, idx)
     return _require_distribution(:inference_to_distribution, result)
 end

@@ -160,6 +160,105 @@ end
         leaf, chain; draws = "nope")
 end
 
+@testitem "the draws keyword: out-of-range indices error clearly, across all three methods" setup=[
+    GammaLeafFixture] begin
+    using FlexiChains: FlexiChains
+    using Statistics: mean
+
+    leaf = GammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    values = [10.0, 20.0, 30.0, 40.0]  # 4 pooled draws, valid indices 1:4
+    chain = FlexiChains.FlexiChain{Symbol}(
+        4, 1, Dict(FlexiChains.Parameter(:shape) => reshape(values, 4, 1)))
+
+    # Each case: (draws selector, description). Checked against all three
+    # entry points so a directed `ArgumentError` (never a bare
+    # `BoundsError`) reaches the caller regardless of which one is used —
+    # this is exactly the trap a caller hand-writing indices after reading
+    # the chain-major documentation would hit.
+    cases = [
+        (1:10, "out-of-range range"),
+        ([1, 99], "out-of-range vector"),
+        ([-1, 2], "negative index"),
+        ([0, 2], "zero index")]
+
+    for (draws, description) in cases
+        @testset "$description" begin
+            err1 = try
+                DistributionsInference.inference_to_distributions(
+                    leaf, chain; draws = draws)
+                nothing
+            catch e
+                e
+            end
+            @test err1 isa ArgumentError
+            @test occursin("4", err1.msg)  # names the pooled count
+
+            err2 = try
+                DistributionsInference.inference_to_distribution(
+                    leaf, chain; draws = draws)
+                nothing
+            catch e
+                e
+            end
+            @test err2 isa ArgumentError
+
+            err3 = try
+                DistributionsInference.inference_to_distribution(
+                    leaf, chain, mean; draws = draws)
+                nothing
+            catch e
+                e
+            end
+            @test err3 isa ArgumentError
+        end
+    end
+end
+
+@testitem "the draws keyword: an empty selection is allowed for the plural form, refused for both singular forms" setup=[
+    GammaLeafFixture] begin
+    using FlexiChains: FlexiChains
+    using Statistics: mean
+
+    leaf = GammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    values = [10.0, 20.0, 30.0, 40.0]
+    chain = FlexiChains.FlexiChain{Symbol}(
+        4, 1, Dict(FlexiChains.Parameter(:shape) => reshape(values, 4, 1)))
+
+    # `draws = 0` (Integer) and `draws = Int[]` (explicit empty vector) both
+    # resolve to an empty pooled selection.
+    for empty_draws in (0, Int[])
+        # The plural form: an empty `Vector` back is a legitimate result,
+        # not an error.
+        result = DistributionsInference.inference_to_distributions(
+            leaf, chain; draws = empty_draws)
+        @test result == Gamma[]
+
+        # Both singular forms refuse: a `MixtureModel` over zero components
+        # and a `summary` over an empty collection have no sensible answer
+        # (in particular, `mean(Float64[])` would silently give `NaN`
+        # rather than erroring).
+        err_mixture = try
+            DistributionsInference.inference_to_distribution(
+                leaf, chain; draws = empty_draws)
+            nothing
+        catch e
+            e
+        end
+        @test err_mixture isa ArgumentError
+        @test occursin("empty", err_mixture.msg)
+
+        err_plugin = try
+            DistributionsInference.inference_to_distribution(
+                leaf, chain, mean; draws = empty_draws)
+            nothing
+        catch e
+            e
+        end
+        @test err_plugin isa ArgumentError
+        @test occursin("empty", err_plugin.msg)
+    end
+end
+
 @testitem "the Integer draws form spans every chain, not just the first" setup=[
     GammaLeafFixture] begin
     using FlexiChains: FlexiChains
