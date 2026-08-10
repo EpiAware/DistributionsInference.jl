@@ -61,34 +61,23 @@ DistributionsInference.flat_dimension(template)
 ```
 
 `prob` is a `LogDensityProblems` problem, so any sampler that consumes that interface can drive it.
-Here that is `AdvancedMH`'s random-walk Metropolis, wrapped in a guard because a random-walk proposal does not respect positive support on its own.
+`distribution_to_chain` drives one for you: an inference engine builds the problem, samples it, and hands back a `FlexiChains.FlexiChain` keyed by the names `parameter_rows` declared.
+`MetropolisEngine` samples `AdvancedMH`'s random-walk Metropolis on the unconstrained scale, so a proposal never lands outside a prior's support and needs no hand-written guard for it.
 
 ```julia
-using AdvancedMH
-using LinearAlgebra: I
+using AdvancedMH, Bijectors
 
-model = AdvancedMH.DensityModel() do x
-    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(prob, x)
-end
-sampler = RWMH(MvNormal(zeros(2), 0.05^2 * I))
-transitions = sample(Xoshiro(1), model, sampler, 4000;
-    param_names = ["shape", "scale"], progress = false)
-draws = [t.params for t in transitions][2001:end]
-length(draws)
+chain = distribution_to_chain(
+    template, data, MetropolisEngine(; nsamples = 4000, burnin = 2000))
 ```
 
-`point_estimate` reads the draws back onto the distribution through the same dotted-name chain a real PPL's sampler would hand back.
+`point_estimate` reads the chain back onto the distribution.
 What it returns is a `Gamma`.
 The chain readback is a package extension, so add and load `FlexiChains` for this last step.
-The chain itself is FlexiChains' own type, keyed by the names `parameter_rows` declared, and building one from a sampler's raw draws is FlexiChains' constructor rather than a step this package owns.
 
 ```julia
-using FlexiChains: FlexiChain, Parameter
+using FlexiChains
 
-niter = length(draws)
-chain = FlexiChain{Symbol}(niter, 1,
-    Dict(Parameter(:shape) => reshape(first.(draws), niter, 1),
-        Parameter(:scale) => reshape(last.(draws), niter, 1)))
 point_estimate(template, chain)
 ```
 

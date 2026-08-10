@@ -4,7 +4,7 @@
 module DistributionsInferenceBijectorsExt
 
 using DistributionsInference: DistributionsInference, FitLogDensity,
-                              logdensity
+                              logdensity, template, flat_priors
 using Bijectors: Bijectors, bijector, inverse, with_logabsdet_jacobian
 
 function _row_bijector(prior, i)
@@ -30,10 +30,10 @@ end
 # element-wise and the log-Jacobian is the sum of the per-row terms.
 function DistributionsInference.to_constrained(
         prob::FitLogDensity, z::AbstractVector)
-    priors = prob.flat_priors
+    priors = flat_priors(prob)
     length(z) == length(priors) || throw(DimensionMismatch(
-        "unconstrained vector has length $(length(z)) but $(prob.obj) has " *
-        "$(length(priors)) estimated parameter(s)"))
+        "unconstrained vector has length $(length(z)) but $(template(prob)) " *
+        "has $(length(priors)) estimated parameter(s)"))
     xs_and_logj = map(i -> _row_transform(priors[i], i, z[i]), eachindex(z))
     x = [xi for (xi, _) in xs_and_logj]
     logjac = isempty(xs_and_logj) ? zero(eltype(z)) : sum(last, xs_and_logj)
@@ -44,10 +44,10 @@ end
 # parameter values onto the sampling scale wants the point, not its density.
 function DistributionsInference.to_unconstrained(
         prob::FitLogDensity, x::AbstractVector)
-    priors = prob.flat_priors
+    priors = flat_priors(prob)
     length(x) == length(priors) || throw(DimensionMismatch(
-        "constrained vector has length $(length(x)) but $(prob.obj) has " *
-        "$(length(priors)) estimated parameter(s)"))
+        "constrained vector has length $(length(x)) but $(template(prob)) " *
+        "has $(length(priors)) estimated parameter(s)"))
     return [_row_bijector(priors[i], i)(x[i]) for i in eachindex(x)]
 end
 
@@ -63,7 +63,7 @@ end
 function DistributionsInference.objective_to_distribution(
         prob::FitLogDensity, z::AbstractVector)
     x, _ = DistributionsInference.to_constrained(prob, z)
-    return DistributionsInference.reconstruct(prob.obj, x)
+    return DistributionsInference.reconstruct(template(prob), x)
 end
 
 end # module

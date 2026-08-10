@@ -21,9 +21,11 @@ public default_prior
 # The PPL-neutral log-density engine. `logdensity` stays unexported: it is a
 # second spelling of `LogDensityProblems.logdensity`, which `FitLogDensity`
 # implements already, and a session with either `LogDensityProblems` or
-# `Turing` in it owns that name too.
+# `Turing` in it owns that name too. `template`/`observations`/`flat_priors`
+# are the accessors an engine author reaches for instead of a `FitLogDensity`
+# struct field directly.
 export distribution_to_logdensity
-public FitLogDensity, logdensity
+public FitLogDensity, logdensity, template, observations, flat_priors
 
 # The dotted-name `FlexiChains` readback (`FlexiChains` is a hard dependency;
 # implemented directly in `readback.jl`/`inference.jl`). All five also
@@ -32,10 +34,15 @@ public FitLogDensity, logdensity
 #
 # `distribution_params` reads a chain's estimated values by name;
 # `point_estimate` and `distribution_draws` rebuild the distribution from them,
-# reduced to one object or kept one per draw. Building a chain out of a
-# sampler's raw draws is not on the surface: that conversion belongs to
-# `FlexiChains` or to the inference package that produced them (#104).
+# reduced to one object or kept one per draw. `draws_to_chain` is the other
+# direction: raw sampler draws (a `dim x niter` matrix, or a vector of
+# `dim`-length vectors) keyed into a dotted-name `FlexiChain` — public because
+# an engine that produces raw draws rather than a chain of its own (#94) needs
+# it to satisfy `distribution_to_chain`'s return type; it stays `public`
+# rather than exported since it is an engine-author tool, not an everyday
+# call.
 export distribution_params, point_estimate, distribution_draws
+public draws_to_chain
 
 # The posterior-output API (additive; `point_estimate`/`distribution_draws`
 # above are unaffected). `inference_to_distribution` is the equal-weight
@@ -72,3 +79,15 @@ public to_constrained, to_unconstrained
 # The `Optim` method lives in `DistributionsInferenceOptimExt`.
 export optimise_distribution
 public minimise
+
+# The inference-engine contract (#94): `distribution_to_chain(obj, data,
+# engine)` dispatches on `engine`'s own concrete type and returns a
+# `FlexiChains.FlexiChain`, so a sampler package plugs in with one method and
+# the existing `inference_to_distribution`/`inference_to_distributions`
+# readback consumes the result unchanged. `TuringEngine`/`MetropolisEngine`
+# are the two shipped engines (their `distribution_to_chain` methods live in
+# the `DynamicPPL`/`AdvancedMH` extensions respectively); the struct
+# definitions stay in core, with no PPL dependency of their own, so the
+# exported name resolves whether or not the corresponding extension has
+# loaded yet.
+export distribution_to_chain, TuringEngine, MetropolisEngine

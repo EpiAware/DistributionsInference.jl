@@ -5,6 +5,10 @@
 # directly here; only the `VarName`-keyed dispatch (a chain sampled from
 # `distribution_to_turing`) lives in the `DistributionsInferenceDynamicPPLFlexiChainsExt`
 # extension, which needs `DynamicPPL` loaded alongside this package.
+#
+# `draws_to_chain` (below) is `public`: an engine whose sampler hands back raw
+# draws rather than a chain of its own needs it to satisfy
+# `distribution_to_chain`'s `FlexiChain`-returning contract (#94).
 
 # Normalise raw sampler draws to a `dim x niter` matrix, checked against the
 # object's estimated dimension. Samplers hand draws back either as a
@@ -50,9 +54,9 @@ end
 
 @doc "
 
-Build a dotted-name `FlexiChain` from raw sampler draws. Internal.
+Build a dotted-name `FlexiChain` from raw sampler draws.
 
-`_to_flexichain(obj, draws; nchains = 1)` keys `draws` by
+`draws_to_chain(obj, draws; nchains = 1)` keys `draws` by
 [`estimated_rows`](@ref)`(obj)`'s dotted `name`s (in [`parameter_rows`](@ref)
 order), so the result reads back onto `obj` with
 [`point_estimate`](@ref)/[`distribution_draws`](@ref)/[`inference_to_distribution`](@ref).
@@ -70,11 +74,12 @@ of `nchains`, checked here — this is the one place that can catch a chain
 count and a draw count silently disagreeing (#89). Default `nchains = 1`
 treats every column as one chain.
 
-Not part of the public surface: standardising a sampler's raw draws into a
-chain type belongs to `FlexiChains` or to the inference package that produced
-them, not here. It stays as the internal entry point from a bare
-`LogDensityProblems` sampler's draws, which is the one route into the
-readback with no chain of its own.
+`public`, not exported: an ordinary caller reaches
+[`inference_to_distribution`](@ref)/[`inference_to_distributions`](@ref)
+directly on raw draws instead, which build this internally. This function is
+for an engine author whose sampler hands back raw draws rather than a chain
+of its own (e.g. a `LogDensityProblems`-driven sampler) and needs to satisfy
+[`distribution_to_chain`](@ref)'s `FlexiChain`-returning contract (#94).
 
 # Arguments
 - `obj`: the fittable object the draws were sampled for.
@@ -84,23 +89,47 @@ readback with no chain of its own.
 - `nchains`: the number of chains the pooled columns split into, chain-major
   (default `1`).
 
+# Examples
+```@example
+using DistributionsInference, Distributions
+using FlexiChains: FlexiChains
+
+struct ChainLeaf
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::ChainLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+leaf = ChainLeaf(2.0, 1.0)
+draws = reshape([2.1, 2.4, 2.0, 2.6], 1, 4)
+chain = DistributionsInference.draws_to_chain(leaf, draws)
+FlexiChains.has_parameter(chain, :shape)
+```
+
 # See also
 - [`point_estimate`](@ref): reduce a chain back onto `obj` (point
   summary/draw).
 - [`distribution_draws`](@ref): the vectorised, every-draw form.
 - [`inference_to_distribution`](@ref): the Monte Carlo posterior predictive
   over a chain (or these raw draws directly).
+- [`distribution_to_chain`](@ref): the engine contract this satisfies.
 "
-function _to_flexichain(obj, draws; nchains::Int = 1)
+function draws_to_chain(obj, draws; nchains::Int = 1)
     nchains >= 1 || throw(ArgumentError(
-        "_to_flexichain: nchains must be >= 1, got $nchains"))
+        "draws_to_chain: nchains must be >= 1, got $nchains"))
     rows = estimated_rows(obj)
     dim = length(rows)
     mat = _draws_matrix(draws, dim)
     total = size(mat, 2)
     niters, remainder = divrem(total, nchains)
     remainder == 0 || throw(ArgumentError(
-        "_to_flexichain: $total pooled draw(s) is not an exact multiple " *
+        "draws_to_chain: $total pooled draw(s) is not an exact multiple " *
         "of nchains=$nchains; pass a draws count divisible by nchains, or " *
         "omit nchains to treat every column as one chain"))
     data = Dict{FlexiChains.ParameterOrExtra{<:Symbol}, Matrix}()
