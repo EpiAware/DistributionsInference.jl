@@ -6,6 +6,13 @@
 #src package-owned `test/ADFixtures` registry, so declare a broken scenario
 #src there, never here. If this page cannot execute for this package, park it
 #src via `FORCE_STUB_TUTORIALS` in `docs/docs_config.jl` instead of editing it.
+#src
+#src Not currently built for this package: this file is not registered in
+#src `docs/pages.jl`, nor in `LIGHT_TUTORIALS`/`HEAVY_TUTORIALS` in
+#src `docs/docs_config.jl`, so the docs build neither runs it nor writes a
+#src page for it. Tracked by DI#69; the underlying AlgebraOfGraphics /
+#src DimensionalData conflict with FlexiChains is tracked by kit#283 and
+#src CD#147. See `docs_config.jl` for the full explanation.
 
 md"""
 # [Automatic differentiation backends](@id ad-backends)
