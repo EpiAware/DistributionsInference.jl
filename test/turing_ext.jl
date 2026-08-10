@@ -544,3 +544,44 @@ end
     @test FlexiChains.niters(chain) == 100
     @test length(inference_to_distributions(leaf, chain)) == 300
 end
+
+@testitem "_pool_vnchains pools chain-major, matching draws_to_chain's convention" begin
+    using DistributionsInference, Distributions, DynamicPPL
+    using FlexiChains: FlexiChains, VarName, @varname
+
+    # Independent of any actual sampler run: three single-chain `VNChain`s
+    # with disjoint value ranges, so a transposed or reordered pool fails
+    # loudly (wrong numbers entirely) rather than looking plausible (right
+    # count, wrong assignment). This is the internal pooling helper
+    # `distribution_to_turing(obj, data, sampler, nsamples; nchains > 1)`
+    # calls; `distribution_to_advancedmh` has no separate pooling logic of
+    # its own to check here, since it pools by calling `draws_to_chain`
+    # directly rather than reimplementing the concatenation.
+    ext = Base.get_extension(DistributionsInference, :DistributionsInferenceDynamicPPLExt)
+    chain_vals = [[1.0, 2.0, 3.0], [101.0, 102.0, 103.0], [201.0, 202.0, 203.0]]
+    mkchain(vals) = FlexiChains.FlexiChain{VarName}(3, 1,
+        Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}(
+            FlexiChains.Parameter(@varname(d.shape)) => reshape(vals, 3, 1)))
+    chains = mkchain.(chain_vals)
+
+    pooled = ext._pool_vnchains(chains)
+    @test FlexiChains.niters(pooled) == 3
+    @test FlexiChains.nchains(pooled) == 3
+    got = pooled[@varname(d.shape)]
+
+    # The same values, pooled chain-major through `draws_to_chain` (the
+    # `Symbol`-keyed convention every other pooling path in this package
+    # uses — see `_to_flexichain`'s docstring): column `c` must be chain
+    # `c`'s draws in both, so the two independent implementations agree.
+    flat = vcat(chain_vals...)
+    rows = [(name = :shape, value = 1.0, prior = Normal(0.0, 1.0),
+        support = (-Inf, Inf))]
+    reference = DistributionsInference.draws_to_chain(
+        rows, reshape(flat, 1, 9); nchains = 3)
+    expected = reference[:shape]
+
+    @test got == expected
+    @test got[:, 1] == [1.0, 2.0, 3.0]
+    @test got[:, 2] == [101.0, 102.0, 103.0]
+    @test got[:, 3] == [201.0, 202.0, 203.0]
+end
