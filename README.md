@@ -61,14 +61,16 @@ DistributionsInference.flat_dimension(template)
 ```
 
 `prob` is a `LogDensityProblems` problem, so any sampler that consumes that interface can drive it.
-`distribution_to_chain` drives one for you: an inference engine builds the problem, samples it, and hands back a `FlexiChains.FlexiChain` keyed by the names `parameter_rows` declared.
-`MetropolisEngine` samples `AdvancedMH`'s random-walk Metropolis on the unconstrained scale, so a proposal never lands outside a prior's support and needs no hand-written guard for it.
+`distribution_to_advancedmh` drives one for you: `AdvancedMH`'s random-walk Metropolis, sampled on the unconstrained scale so a proposal never lands outside a prior's support and needs no hand-written guard for it.
+It hands back a `FlexiChains.FlexiChain` keyed by the names `parameter_rows` declared.
 
 ```julia
 using AdvancedMH, Bijectors
+using LinearAlgebra: I
 
-chain = distribution_to_chain(
-    template, data, MetropolisEngine(; nsamples = 4000, burnin = 2000))
+dim = DistributionsInference.flat_dimension(template)
+chain = distribution_to_advancedmh(
+    template, data, RWMH(MvNormal(zeros(dim), 0.05^2 * I)), 4000; burnin = 2000)
 ```
 
 `point_estimate` reads the chain back onto the distribution.

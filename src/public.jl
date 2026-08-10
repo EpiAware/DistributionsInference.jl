@@ -37,10 +37,10 @@ public FitLogDensity, logdensity, template, observations, flat_priors
 # reduced to one object or kept one per draw. `draws_to_chain` is the other
 # direction: raw sampler draws (a `dim x niter` matrix, or a vector of
 # `dim`-length vectors) keyed into a dotted-name `FlexiChain` — public because
-# an engine that produces raw draws rather than a chain of its own (#94) needs
-# it to satisfy `distribution_to_chain`'s return type; it stays `public`
-# rather than exported since it is an engine-author tool, not an everyday
-# call.
+# a sampling verb whose package hands back raw draws rather than a chain of
+# its own (`distribution_to_advancedmh`, #94) needs it to build one; it stays
+# `public` rather than exported since it is a sampler-extension-author tool,
+# not an everyday call.
 export distribution_params, point_estimate, distribution_draws
 public draws_to_chain
 
@@ -54,9 +54,13 @@ public draws_to_chain
 export inference_to_distribution, inference_to_distributions,
        inference_to_dist, inference_to_dists
 
-# A DynamicPPL model over a fittable object's estimated parameters. Stub here
-# (docstring in `turing.jl`); the model lives in
-# `DistributionsInferenceDynamicPPLExt`.
+# DynamicPPL forms over a fittable object's estimated parameters. Stubs here
+# (docstrings in `turing.jl`); both methods live in
+# `DistributionsInferenceDynamicPPLExt` — `distribution_to_turing(obj, data)`
+# builds the model, `distribution_to_turing(obj, data, sampler, nsamples)`
+# samples it and returns a `FlexiChain` (#94), one function with two
+# concrete return types picked by arity, the same pattern
+# `inference_to_distribution` uses.
 export distribution_to_turing
 
 # The unconstrained <-> constrained transform and the objective round trip
@@ -80,14 +84,9 @@ public to_constrained, to_unconstrained
 export optimise_distribution
 public minimise
 
-# The inference-engine contract (#94): `distribution_to_chain(obj, data,
-# engine)` dispatches on `engine`'s own concrete type and returns a
-# `FlexiChains.FlexiChain`, so a sampler package plugs in with one method and
-# the existing `inference_to_distribution`/`inference_to_distributions`
-# readback consumes the result unchanged. `TuringEngine`/`MetropolisEngine`
-# are the two shipped engines (their `distribution_to_chain` methods live in
-# the `DynamicPPL`/`AdvancedMH` extensions respectively); the struct
-# definitions stay in core, with no PPL dependency of their own, so the
-# exported name resolves whether or not the corresponding extension has
-# loaded yet.
-export distribution_to_chain, TuringEngine, MetropolisEngine
+# `distribution_to_advancedmh` (#94): samples `AdvancedMH`'s random-walk
+# Metropolis and returns a `FlexiChain`, the same naming convention
+# `distribution_to_turing` sets — a verb per sampling package rather than an
+# engine-object layer on top of them. Stub here (docstring in
+# `advancedmh.jl`); the method lives in `DistributionsInferenceAdvancedMHExt`.
+export distribution_to_advancedmh

@@ -73,24 +73,26 @@ DistributionsInference.logdensity(prob, [2.0])
 #
 # `prob` implements the `LogDensityProblems` interface, so any consumer of that
 # interface can drive it.
-# [`distribution_to_chain`](@ref) is the engine contract on top of that: an
-# engine builds the problem, samples it, and hands back a `FlexiChain` keyed
-# by the estimated rows' dotted names, the naming contract every readback verb
-# here uses.
-# [`MetropolisEngine`](@ref) drives `AdvancedMH`'s random-walk Metropolis, the
-# smallest sampler to reach for; a gradient backend added through
-# `LogDensityProblemsAD` opens up AdvancedHMC the same way.
+# [`distribution_to_advancedmh`](@ref) is a ready-made one: it drives
+# `AdvancedMH`'s random-walk Metropolis, the smallest sampler to reach for,
+# and hands back a `FlexiChain` keyed by the estimated rows' dotted names, the
+# naming contract every readback verb here uses. A gradient backend added
+# through `LogDensityProblemsAD` opens up AdvancedHMC the same way.
 #
 # It samples on the *unconstrained* scale (via [`to_constrained`](@ref
 # DistributionsInference.to_constrained), so `Bijectors` is loaded alongside
 # `AdvancedMH`), so a random-walk proposal can never land outside `shape`'s
 # positive support in the first place — no hand-written `-Inf` guard needed.
+# The proposal is sized to the estimated dimension, one row here.
 
 using AdvancedMH, Bijectors
+using LinearAlgebra: I
+
+dim = DistributionsInference.flat_dimension(delay)
+sampler = RWMH(MvNormal(zeros(dim), 0.05^2 * I))
 
 Random.seed!(1)
-chain = distribution_to_chain(
-    delay, data, MetropolisEngine(; nsamples = 2000, burnin = 1000))
+chain = distribution_to_advancedmh(delay, data, sampler, 2000; burnin = 1000)
 
 # ## Reading the fit back onto the distribution
 #
@@ -130,13 +132,12 @@ survival_prob = distribution_to_logdensity(delay, bounds;
 DistributionsInference.logdensity(survival_prob, [2.0])
 
 # The parameter inventory, the priors and the readback never see the reducer,
-# so everything above works unchanged: `distribution_to_chain` takes the same
-# `loglik` keyword `distribution_to_logdensity` does.
+# so everything above works unchanged: `distribution_to_advancedmh` takes the
+# same `loglik` keyword `distribution_to_logdensity` does.
 
 Random.seed!(1)
-survival_chain = distribution_to_chain(delay, bounds,
-    MetropolisEngine(; nsamples = 2000, burnin = 1000);
-    loglik = survival_loglik)
+survival_chain = distribution_to_advancedmh(delay, bounds, sampler, 2000;
+    burnin = 1000, loglik = survival_loglik)
 point_estimate(delay, survival_chain).shape
 
 # `logccdf` for a `Weibull` differentiates, so

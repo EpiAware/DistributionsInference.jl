@@ -20,11 +20,9 @@ end
 
     @test exported == [
         :DistributionsInference,
-        :MetropolisEngine,
-        :TuringEngine,
         :distribution_draws,
         :distribution_params,
-        :distribution_to_chain,
+        :distribution_to_advancedmh,
         :distribution_to_logdensity,
         :distribution_to_objective,
         :distribution_to_turing,

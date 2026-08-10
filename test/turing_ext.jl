@@ -503,3 +503,44 @@ end
     @test_throws ArgumentError DistributionsInference.inference_to_distribution(
         leaf, chain; prefix = :wrong)
 end
+
+@testitem "distribution_to_turing(obj, data, sampler, nsamples) round-trips through inference_to_distributions/point_estimate" setup=[
+    TuringFixture] begin
+    using DistributionsInference, Distributions, DynamicPPL, Turing, Random
+
+    scale = 1.5
+    leaf = TuringGammaLeaf(2.0, scale, LogNormal(log(2.0), 0.2))
+    data = [1.5, 2.0, 3.2, 2.8, 1.9]
+
+    Random.seed!(11)
+    chain = distribution_to_turing(leaf, data, NUTS(), 200; progress = false)
+
+    dists = inference_to_distributions(leaf, chain)
+    @test length(dists) == 200
+    @test all(d -> d isa TuringGammaLeaf, dists)
+
+    fitted = point_estimate(leaf, chain)
+    @test fitted.scale == scale
+    @test fitted.shape > 0
+
+    # The 2-argument (model-building) form is unaffected.
+    model = distribution_to_turing(leaf, data)
+    @test model isa DynamicPPL.Model
+end
+
+@testitem "distribution_to_turing(obj, data, sampler, nsamples): nchains > 1 pools independent chains" setup=[
+    TuringFixture] begin
+    using DistributionsInference, Distributions, DynamicPPL, Turing, Random
+    using FlexiChains: FlexiChains
+
+    leaf = TuringGammaLeaf(2.0, 1.5, LogNormal(log(2.0), 0.2))
+    data = [1.5, 2.0, 3.2, 2.8, 1.9]
+
+    Random.seed!(12)
+    chain = distribution_to_turing(leaf, data, NUTS(), 100;
+        nchains = 3, progress = false)
+
+    @test FlexiChains.nchains(chain) == 3
+    @test FlexiChains.niters(chain) == 100
+    @test length(inference_to_distributions(leaf, chain)) == 300
+end

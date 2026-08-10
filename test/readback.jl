@@ -334,3 +334,18 @@ end
     @test length(all_fitted) == length(draws)
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
 end
+
+@testitem "draws_to_chain is public and keys raw draws by dotted name" setup=[
+    ToyFixture] begin
+    using DistributionsInference, Distributions
+    using FlexiChains: FlexiChains
+
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    draws = reshape([2.1, 2.4, 2.0, 2.6], 1, 4)
+    chain = DistributionsInference.draws_to_chain(leaf, draws)
+
+    @test chain isa FlexiChains.FlexiChain
+    @test FlexiChains.has_parameter(chain, :shape)
+    @test FlexiChains.niters(chain) == 4
+    @test FlexiChains.nchains(chain) == 1
+end

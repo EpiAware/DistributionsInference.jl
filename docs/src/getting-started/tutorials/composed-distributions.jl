@@ -43,30 +43,32 @@ tree_data[1]
 
 # From here the calls are the ones the hand-written distribution used, pointed
 # at `tree`.
-# [`MetropolisEngine`](@ref) samples on the unconstrained scale, so a tree's
-# own dotted row names come back on the chain with no manual construction and
-# no hand-written support guard.
+# [`distribution_to_advancedmh`](@ref) samples on the unconstrained scale, so
+# a tree's own dotted row names come back on the chain with no manual
+# construction and no hand-written support guard.
 
 using AdvancedMH, Bijectors
+using LinearAlgebra: I
+
+dim = DistributionsInference.flat_dimension(tree)
+sampler = RWMH(MvNormal(zeros(dim), 0.05^2 * I))
 
 Random.seed!(1)
-chain = distribution_to_chain(
-    tree, tree_data, MetropolisEngine(; nsamples = 2000, burnin = 1000))
+chain = distribution_to_advancedmh(tree, tree_data, sampler, 2000; burnin = 1000)
 fitted = point_estimate(tree, chain)
 
 # The fit comes back as a tree, so its nodes are reachable by name.
 
 event(fitted, :onset_admit)
 
-# [`distribution_to_turing`](@ref) builds the same model over a tree, one site
-# per estimated row.
+# [`distribution_to_turing`](@ref) samples the same model over a tree, one
+# site per estimated row.
 
 using DynamicPPL, Turing
-using FlexiChains: VNChain
 
 Random.seed!(1)
-turing_chain = sample(distribution_to_turing(tree, tree_data), NUTS(), 500;
-    chain_type = VNChain, progress = false)
+turing_chain = distribution_to_turing(tree, tree_data, NUTS(), 500;
+    progress = false)
 event(point_estimate(tree, turing_chain), :onset_admit)
 
 # ## Partial pooling
@@ -92,9 +94,8 @@ pooled = compose((
 
 pooled_data = [rand(rng, pooled) for _ in 1:200]
 Random.seed!(1)
-pooled_chain = sample(distribution_to_turing(pooled, pooled_data), NUTS(0.9),
-    500; chain_type = VNChain, progress = false,
-    initial_params = InitFromPrior())
+pooled_chain = distribution_to_turing(pooled, pooled_data, NUTS(0.9), 500;
+    progress = false, initial_params = InitFromPrior())
 distribution_params(pooled, pooled_chain)
 
 # The readback puts the offsets back through the population, so a district's
@@ -129,15 +130,13 @@ end
 
 # The log-density route has no such gap.
 # A centred row's `extra_logprior` term has no per-row prior of its own, so
-# [`MetropolisEngine`](@ref) cannot build its unconstrained transform from it
-# either — the same limitation `distribution_to_turing` has, for the same
-# reason.
+# [`distribution_to_advancedmh`](@ref) cannot build its unconstrained
+# transform from it either — the same limitation `distribution_to_turing` has,
+# for the same reason.
 # [`distribution_to_logdensity`](@ref) plus a gradient-free sampler driven by
 # hand, on the *constrained* scale directly, has no such gap; the trade is the
 # hand-written `-Inf` guard a random-walk proposal needs there, since nothing
 # stops it stepping `shape` negative.
-
-using LinearAlgebra: I
 
 centred_prob = distribution_to_logdensity(centred, centred_data)
 centred_model = AdvancedMH.DensityModel() do x
