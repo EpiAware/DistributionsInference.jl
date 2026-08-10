@@ -24,14 +24,18 @@ end
         :distribution_params,
         :distribution_to_logdensity,
         :distribution_to_turing,
+        :draws_to_trace,
         :logdensity_to_objective,
         :objective_to_distribution,
         :optimise_distribution,
+        :parameter_draws,
         :parameter_rows,
         :point_estimate,
+        :trace_to_distribution,
         :with_priors]
     @test public_only == [
         :FitLogDensity,
+        :PosteriorTrace,
         :default_prior,
         :estimated_rows,
         :extra_logprior,
