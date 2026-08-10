@@ -189,6 +189,24 @@ toy fittable types in this package's own docstrings) — use
 [`inference_to_distributions`](@ref) for the accepted forms and the `nchains`
 keyword.
 
+# Performance
+
+The `MixtureModel` is built over *every* selected draw — this function does
+not cap or thin it, even at a large draw count, so a call over the pooled
+draws of a big multi-chain run mixes every one of them. Selecting fewer
+draws (via the `draws` keyword) is the caller's tool for the cost below, not
+a hidden default.
+
+Once built, `mean`/`rand`/`pdf`/`cdf` on the mixture are cheap: `mean`/`rand`
+are `O(1)` in the component count `K`, and `pdf`/`cdf` are `O(K)` per call but
+stay well under a millisecond even at `K = 8000` (~0.16 ms / ~0.9 ms
+respectively). `quantile` is the one call that is not cheap: it root-finds
+against the mixture's `O(K)` `cdf` on every iteration, so its cost grows with
+`K` and reaches roughly 13 ms at `K = 8000`. A single `quantile` call is
+fine; many `quantile` calls in a loop (e.g. a full posterior interval grid)
+are where this adds up — thin first with `draws = 500` (or similar) to cut
+`K`, and `quantile`'s cost, by the same factor.
+
 # Arguments
 - `obj`: the fittable object the draws were sampled for.
 - `chain`: the chain (or raw draws) to read from.
@@ -197,7 +215,8 @@ keyword.
 - `draws`: which pooled draws to keep. See
   [`inference_to_distributions`](@ref) for the four accepted forms and the
   chain-major pooling this documents (`draws = 1:n` is *not* a subsample of a
-  multi-chain run — read that docstring before using a range here).
+  multi-chain run — read that docstring before using a range here). Also the
+  cheapest way to bound the `quantile` cost above, by capping `K`.
 - `nchains`: raw-draws form only (default `1`).
 - `rng`: used when `draws` is an `Integer` (default `Random.default_rng()`).
 
