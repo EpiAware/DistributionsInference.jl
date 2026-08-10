@@ -27,6 +27,21 @@
         @test thrown isa ArgumentError
         @test occursin("has no method for a chain of type", thrown.msg)
     end
+
+    # `inference_to_distribution(s)` also accept raw draws (a matrix or a
+    # vector-of-vectors), so a matrix is not the wrong type for them; use a
+    # genuinely unsupported second argument instead.
+    for f in (DistributionsInference.inference_to_distributions,
+        DistributionsInference.inference_to_distribution)
+        thrown = try
+            f(rows, nothing)
+            nothing
+        catch e
+            e
+        end
+        @test thrown isa ArgumentError
+        @test occursin("has no method for a chain of type", thrown.msg)
+    end
 end
 
 @testitem "_to_flexichain: matrix and vector-of-vectors input agree" setup=[ToyFixture] begin

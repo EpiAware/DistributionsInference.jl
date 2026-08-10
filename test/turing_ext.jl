@@ -445,3 +445,61 @@ end
     @test ok
     @test occursin("as-turing-alone-ok", output)
 end
+
+@testitem "inference_to_distribution(s): VarName-keyed chain dispatch" begin
+    using DistributionsInference, Distributions, DynamicPPL, Turing, Random
+    using FlexiChains: FlexiChains, VNChain
+
+    # `reconstruct` returns a `Gamma` directly, so this exercises the
+    # MixtureModel/plug-in paths (unlike `TuringFixture`'s leaves, which
+    # reconstruct back to their own wrapper type).
+    struct TuringGammaDist{S <: Real}
+        shape::S
+        scale::Float64
+        shape_prior::Distribution
+    end
+
+    Distributions.logpdf(d::TuringGammaDist, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::TuringGammaDist)
+        return [
+            (name = :shape, value = d.shape,
+                prior = d.shape_prior, support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(
+            d::TuringGammaDist, x::AbstractVector)
+        return Gamma(x[1], d.scale)
+    end
+
+    scale = 1.5
+    leaf = TuringGammaDist(2.0, scale, LogNormal(log(2.0), 0.2))
+    data = [1.5, 2.0, 3.2, 2.8, 1.9]
+    model = DistributionsInference.distribution_to_turing(leaf, data)
+
+    Random.seed!(5)
+    chain = sample(model, NUTS(), 200; chain_type = VNChain, progress = false)
+
+    dists = DistributionsInference.inference_to_distributions(leaf, chain)
+    @test length(dists) == 200
+    @test all(d -> d isa Gamma, dists)
+
+    mm = DistributionsInference.inference_to_distribution(leaf, chain)
+    @test mm isa MixtureModel
+    @test mean(mm) ≈ mean(mean.(dists))
+
+    plugin = DistributionsInference.inference_to_distribution(leaf, chain, mean)
+    @test plugin isa Gamma
+    @test plugin.α ≈ mean(d -> d.α, dists)
+
+    # The aliases dispatch through the same VarName-keyed methods.
+    @test length(DistributionsInference.inference_to_dists(leaf, chain)) == 200
+    @test mean(DistributionsInference.inference_to_dist(leaf, chain)) ≈ mean(mm)
+
+    # A chain read back at the wrong prefix errors rather than silently
+    # matching nothing, exactly as `point_estimate` does.
+    @test_throws ArgumentError DistributionsInference.inference_to_distribution(
+        leaf, chain; prefix = :wrong)
+end
