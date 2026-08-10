@@ -21,10 +21,9 @@ form and the `FlexiChain`-returning sampling form), `DynamicPPL` x
 `distribution_to_objective` is written in core over that pair, so it needs
 `Bijectors` loaded the same way), `AdvancedMH` x `Bijectors`
 (`distribution_to_advancedmh`), `ComposedDistributions` (the fit protocol
-over a composed tree's own codec), `Optim` (the `minimise` step of
-`optimise_distribution`) and `Mooncake` (gradient rules for
-`xlogy`/`xlog1py`). The `ModifiedDistributions` extension is parked until
-that package registers in General (#17).
+over a composed tree's own codec), `ModifiedDistributions` (the fit protocol
+for a standalone modifier distribution, not only as a leaf inside a composed
+tree) and `Optim` (the `minimise` step of `optimise_distribution`).
 
 ```@example
 using DistributionsInference
