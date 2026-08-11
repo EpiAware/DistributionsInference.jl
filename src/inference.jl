@@ -13,7 +13,7 @@
 #
 # `chain` also accepts a raw `dim x ndraws` matrix or a vector of `dim`-length
 # vectors (with an `nchains` keyword), built into a `FlexiChain` via
-# `_to_flexichain` and dispatched on again.
+# `draws_to_chain` and dispatched on again.
 
 # An explicit range/vector selection must fall inside the pooled range: the
 # whole point of documenting the chain-major trap is that a caller ends up
@@ -138,7 +138,7 @@ values, a different `draws` selector).
 `chain` is a dotted-name `FlexiChain`, a `VarName`-keyed chain (once
 `DynamicPPL` is loaded alongside this package), or raw draws with no chain of
 their own — a `dim x ndraws` matrix or an `ndraws`-length vector of
-`dim`-length vectors, built into a chain via `_to_flexichain` (internal) — with
+`dim`-length vectors, built into a chain via [`draws_to_chain`](@ref) — with
 an `nchains` keyword (default `1`) for the raw-draws form.
 
 # Arguments
@@ -227,7 +227,7 @@ function inference_to_distributions(
         obj, raw::Union{AbstractMatrix, AbstractVector{<:AbstractVector}};
         draws = nothing, nchains::Int = 1, rng = Random.default_rng())
     return inference_to_distributions(
-        obj, _to_flexichain(obj, raw; nchains = nchains);
+        obj, draws_to_chain(obj, raw; nchains = nchains);
         draws = draws, rng = rng)
 end
 
@@ -332,7 +332,7 @@ function inference_to_distribution(
         obj, raw::Union{AbstractMatrix, AbstractVector{<:AbstractVector}};
         draws = nothing, nchains::Int = 1, rng = Random.default_rng())
     return inference_to_distribution(
-        obj, _to_flexichain(obj, raw; nchains = nchains);
+        obj, draws_to_chain(obj, raw; nchains = nchains);
         draws = draws, rng = rng)
 end
 
@@ -426,7 +426,7 @@ function inference_to_distribution(
         obj, raw::Union{AbstractMatrix, AbstractVector{<:AbstractVector}},
         summary; draws = nothing, nchains::Int = 1, rng = Random.default_rng())
     return inference_to_distribution(
-        obj, _to_flexichain(obj, raw; nchains = nchains), summary;
+        obj, draws_to_chain(obj, raw; nchains = nchains), summary;
         draws = draws, rng = rng)
 end
 

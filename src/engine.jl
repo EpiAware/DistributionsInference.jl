@@ -60,6 +60,128 @@ end
 
 @doc "
 
+The template fittable object a [`FitLogDensity`](@ref) was assembled from.
+
+`template(prob)` is the accessor onto `prob`'s `obj` field: the structure
+[`reconstruct`](@ref) rebuilds. An engine author reaches it through this
+function rather than `prob.obj` directly, so a struct-field rename in a
+future release does not break an engine implemented outside this package.
+
+# Arguments
+- `prob`: the assembled [`FitLogDensity`](@ref).
+
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct AccessorLeaf
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::AccessorLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+leaf = AccessorLeaf(2.0, 1.0)
+prob = distribution_to_logdensity(leaf, [1.5, 2.0, 3.2])
+DistributionsInference.template(prob) === leaf
+```
+
+# See also
+- [`observations`](@ref), [`flat_priors`](@ref): the other two accessors.
+- [`distribution_to_logdensity`](@ref): assembles `prob`.
+"
+template(prob::FitLogDensity) = prob.obj
+
+@doc "
+
+The observed data a [`FitLogDensity`](@ref) scores against.
+
+`observations(prob)` is the accessor onto `prob`'s `data` field: the records
+`prob`'s `loglik` reducer is scored against at each [`logdensity`](@ref) call.
+An engine author reaches it through this function rather than `prob.data`
+directly, for the same reason as [`template`](@ref).
+
+# Arguments
+- `prob`: the assembled [`FitLogDensity`](@ref).
+
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct AccessorLeaf2
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::AccessorLeaf2)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+leaf = AccessorLeaf2(2.0, 1.0)
+data = [1.5, 2.0, 3.2]
+prob = distribution_to_logdensity(leaf, data)
+DistributionsInference.observations(prob) === data
+```
+
+# See also
+- [`template`](@ref), [`flat_priors`](@ref): the other two accessors.
+- [`distribution_to_logdensity`](@ref): assembles `prob`.
+"
+observations(prob::FitLogDensity) = prob.data
+
+@doc "
+
+The estimated rows' priors a [`FitLogDensity`](@ref) was assembled with.
+
+`flat_priors(prob)` is the accessor onto `prob`'s `flat_priors` field: the
+[`estimated_rows`](@ref)`(template(prob))` priors, collected once at
+construction, in [`parameter_rows`](@ref) order. An entry is `nothing` for a
+row scored instead through [`extra_logprior`](@ref) (an object-dependent
+prior). An engine author reaches it through this function rather than
+`prob.flat_priors` directly, for the same reason as [`template`](@ref) — this
+is also the vector [`to_constrained`](@ref)/[`to_unconstrained`](@ref) build
+their per-row transform from.
+
+# Arguments
+- `prob`: the assembled [`FitLogDensity`](@ref).
+
+# Examples
+```@example
+using DistributionsInference, Distributions
+
+struct AccessorLeaf3
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::AccessorLeaf3)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+leaf = AccessorLeaf3(2.0, 1.0)
+prob = distribution_to_logdensity(leaf, [1.5, 2.0, 3.2])
+DistributionsInference.flat_priors(prob)
+```
+
+# See also
+- [`template`](@ref), [`observations`](@ref): the other two accessors.
+- [`to_constrained`](@ref), [`to_unconstrained`](@ref): built from this vector.
+"
+flat_priors(prob::FitLogDensity) = prob.flat_priors
+
+@doc "
+
 Assemble a [`FitLogDensity`](@ref) from a fittable object and data.
 
 `distribution_to_logdensity(obj, data; loglik)` packages the template `obj`

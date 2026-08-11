@@ -4,7 +4,12 @@ module DistributionsInferenceDynamicPPLExt
 # builds a DynamicPPL model over a fittable object's estimated rows, wrapping
 # the `distribution_to_logdensity` codec (docstring in `src/turing.jl`). Each
 # row's dotted `name` becomes the `VarName` `<prefix>.<name>`, sampled from
-# its own prior.
+# its own prior. `distribution_to_turing(obj, data, sampler, nsamples)` is
+# the second form (#94, docstring alongside its definition below): the same
+# model, sampled with `sample(...; chain_type = VNChain)`, returned as-is — a
+# `VarName`-keyed `FlexiChain`, which `point_estimate`/`inference_to_distribution`
+# already read (`DistributionsInferenceDynamicPPLFlexiChainsExt`), so no
+# rekeying onto `Symbol` is needed here.
 #
 # `_row_varname` is the naming contract shared with the `VarName`-keyed
 # readback in `DistributionsInferenceDynamicPPLFlexiChainsExt` (DI#4, the
@@ -15,9 +20,11 @@ module DistributionsInferenceDynamicPPLExt
 using DistributionsInference: DistributionsInference, FitLogDensity,
                               distribution_to_logdensity, estimated_rows,
                               reconstruct, extra_logprior,
-                              _check_generic_fields
+                              _check_generic_fields, template, observations,
+                              flat_priors
 import DistributionsInference: distribution_to_turing, _row_varname
-using DynamicPPL: DynamicPPL, @model, NamedDist, VarName
+using DynamicPPL: DynamicPPL, @model, NamedDist, VarName, sample
+using FlexiChains: FlexiChains, VNChain
 
 # There is no public constructor for a runtime dotted optic, so the two
 # primitives `@varname` lowers to are reached through `AbstractPPL` itself:
@@ -54,17 +61,18 @@ end
 # is no double counting and the total equals `logdensity(prob, θ)`. `θ` has an
 # abstract element type so AD values flow through `reconstruct` unchanged.
 @model function _fit_turing_model(prob::FitLogDensity, vns)
-    fp = prob.flat_priors
+    fp = flat_priors(prob)
     n = length(fp)
     θ = Vector{Real}(undef, n)
     for i in 1:n
         param ~ NamedDist(fp[i], vns[i])
         θ[i] = param
     end
-    _check_generic_fields(typeof(prob.obj), prob.concrete_fields, θ)
-    obj = reconstruct(prob.obj, θ)
-    DynamicPPL.@addlogprob! extra_logprior(prob.obj, obj, θ, prob.extra_state)
-    DynamicPPL.@addlogprob! prob.loglik(obj, prob.data)
+    obj_template = template(prob)
+    _check_generic_fields(typeof(obj_template), prob.concrete_fields, θ)
+    obj = reconstruct(obj_template, θ)
+    DynamicPPL.@addlogprob! extra_logprior(obj_template, obj, θ, prob.extra_state)
+    DynamicPPL.@addlogprob! prob.loglik(obj, observations(prob))
     return obj
 end
 
@@ -74,6 +82,106 @@ function distribution_to_turing(obj, data;
     prob = distribution_to_logdensity(obj, data; loglik = loglik)
     vns = [_row_varname(prefix, row.name) for row in rows]
     return _fit_turing_model(prob, vns)
+end
+
+@doc "
+
+Sample a fittable object's posterior with `Turing`, and return a `FlexiChain`.
+
+`distribution_to_turing(obj, data, sampler, nsamples; nchains = 1, prefix,
+loglik, kwargs...)` drives
+[`distribution_to_turing`](@ref)`(obj, data; prefix, loglik)`'s model with
+`sample(model, sampler, nsamples; chain_type = FlexiChains.VNChain,
+kwargs...)`, so [`point_estimate`](@ref)/[`inference_to_distribution`](@ref)
+read the result exactly as they do a chain built by hand from
+`sample(distribution_to_turing(obj, data), ...)`. This is a different
+concrete return type from the 2-argument
+[`distribution_to_turing`](@ref)`(obj, data)` (a `DynamicPPL` model, unaffected
+by this method): one function, two return types picked by arity, the same
+pattern [`inference_to_distribution`](@ref) uses for its own two forms.
+
+`nchains > 1` runs that many independent `sample` calls and pools them into
+one multi-chain `FlexiChain`, chain-major, the same convention
+[`draws_to_chain`](@ref) uses.
+
+This method is available only when `DynamicPPL` is loaded (`Turing`, in
+practice, for a useful `sampler` such as `NUTS()`).
+
+# Arguments
+- `obj`: the template fittable object, carrying its [`parameter_rows`](@ref).
+- `data`: the observed records scored by `loglik`.
+- `sampler`: the `Turing`/`DynamicPPL` sampler, e.g. `NUTS()`.
+- `nsamples`: the number of samples per chain.
+
+# Keyword Arguments
+- `nchains`: the number of independent chains to sample (default `1`).
+- `prefix`: the outer submodel variable name the sites are namespaced under
+  (default `:d`), matching [`distribution_to_turing`](@ref)`(obj, data)`.
+- `loglik`: a reducer `(obj, data) -> Real` scoring `data` against the
+  reconstructed object (default: sum of `logpdf(obj, record)`).
+- other keywords are forwarded to `sample`, e.g. `progress = false`.
+
+# Examples
+```@example
+using DistributionsInference, Distributions, DynamicPPL, Turing, Random
+
+struct TuringChainLeaf{S <: Real}
+    shape::S
+    scale::Float64
+end
+
+Distributions.logpdf(d::TuringChainLeaf, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+function DistributionsInference.parameter_rows(d::TuringChainLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+function DistributionsInference.reconstruct(d::TuringChainLeaf, x::AbstractVector)
+    return TuringChainLeaf(x[1], d.scale)
+end
+
+leaf = TuringChainLeaf(2.0, 1.0)
+data = [1.5, 2.0, 3.2]
+
+Random.seed!(1)
+chain = distribution_to_turing(leaf, data, NUTS(), 200; progress = false)
+fitted = point_estimate(leaf, chain)
+fitted.scale  # the fixed parameter, untouched
+```
+
+# See also
+- [`distribution_to_turing`](@ref)`(obj, data)`: the model-building form this
+  samples.
+- [`distribution_to_advancedmh`](@ref): the sibling sampling verb.
+- [`point_estimate`](@ref) / [`inference_to_distribution`](@ref): read the
+  returned chain back onto `obj`.
+"
+function distribution_to_turing(obj, data, sampler, nsamples::Integer;
+        nchains::Integer = 1, prefix::Symbol = :d,
+        loglik = DistributionsInference._default_loglik, kwargs...)
+    model = distribution_to_turing(obj, data; prefix = prefix, loglik = loglik)
+    chains = [sample(model, sampler, nsamples; chain_type = VNChain, kwargs...)
+              for _ in 1:nchains]
+    return nchains == 1 ? only(chains) : _pool_vnchains(chains)
+end
+
+# Pool `n` independent single-chain `VNChain`s into one `n`-chain `VNChain`,
+# chain-major — the same pooling convention `draws_to_chain` uses for raw
+# draws. Every chain samples the same model, so they share `niters` and the
+# same `VarName` parameter set; `only(unique(...))` turns a mismatch (a
+# caller-supplied `kwargs` changing `nsamples` mid-run some other way) into a
+# named error rather than a silent `hcat` dimension mismatch two frames down.
+function _pool_vnchains(chains::AbstractVector)
+    niters = only(unique(FlexiChains.niters.(chains)))
+    vns = FlexiChains.parameters(first(chains))
+    data = Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}()
+    for vn in vns
+        data[FlexiChains.Parameter(vn)] = hcat((chain[vn] for chain in chains)...)
+    end
+    return FlexiChains.FlexiChain{VarName}(niters, length(chains), data)
 end
 
 end # module DistributionsInferenceDynamicPPLExt

@@ -10,7 +10,7 @@ module DistributionsInferenceDynamicPPLFlexiChainsExt
 # Docstrings live on the stubs in `src/readback.jl`/`src/inference.jl`.
 
 using DistributionsInference: DistributionsInference, estimated_rows,
-                              _row_varname, _to_flexichain
+                              _row_varname
 import DistributionsInference: distribution_params, point_estimate,
                                distribution_draws, inference_to_distribution,
                                inference_to_distributions

@@ -22,6 +22,7 @@ end
         :DistributionsInference,
         :distribution_draws,
         :distribution_params,
+        :distribution_to_advancedmh,
         :distribution_to_logdensity,
         :distribution_to_objective,
         :distribution_to_turing,
@@ -38,13 +39,17 @@ end
     @test public_only == [
         :FitLogDensity,
         :default_prior,
+        :draws_to_chain,
         :estimated_rows,
         :extra_logprior,
         :extra_prior_state,
         :flat_dimension,
+        :flat_priors,
         :logdensity,
         :minimise,
+        :observations,
         :reconstruct,
+        :template,
         :to_constrained,
         :to_unconstrained]
 end

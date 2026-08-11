@@ -12,7 +12,6 @@
 # maximum-a-posteriori point with an external optimiser.
 
 using DistributionsInference, Distributions, Random
-using FlexiChains: FlexiChain, Parameter
 
 # ## Declaring the parameters
 #
@@ -74,35 +73,29 @@ DistributionsInference.logdensity(prob, [2.0])
 #
 # `prob` implements the `LogDensityProblems` interface, so any consumer of that
 # interface can drive it.
-# `AdvancedMH`'s random-walk Metropolis is the smallest one to reach for; a
-# gradient backend added through `LogDensityProblemsAD` opens up AdvancedHMC
-# the same way.
-# The wrapper below returns `-Inf` off `shape`'s positive support, which a
-# random-walk proposal does not respect on its own.
+# [`distribution_to_advancedmh`](@ref) is a ready-made one: it drives
+# `AdvancedMH`'s random-walk Metropolis, the smallest sampler to reach for,
+# and hands back a `FlexiChain` keyed by the estimated rows' dotted names, the
+# naming contract every readback verb here uses. A gradient backend added
+# through `LogDensityProblemsAD` opens up AdvancedHMC the same way.
+#
+# It samples on the *unconstrained* scale (via [`to_constrained`](@ref
+# DistributionsInference.to_constrained), so `Bijectors` is loaded alongside
+# `AdvancedMH`), so a random-walk proposal can never land outside `shape`'s
+# positive support in the first place — no hand-written `-Inf` guard needed.
+# The proposal is sized to the estimated dimension, one row here.
 
-using AdvancedMH
+using AdvancedMH, Bijectors
 using LinearAlgebra: I
 
-model = AdvancedMH.DensityModel() do x
-    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(prob, x)
-end
-sampler = RWMH(MvNormal(zeros(1), 0.05^2 * I))
-transitions = sample(Xoshiro(1), model, sampler, 2000;
-    param_names = ["shape"], progress = false)
-draws = [t.params for t in transitions][1001:end]
-length(draws)
+dim = DistributionsInference.flat_dimension(delay)
+sampler = RWMH(MvNormal(zeros(dim), 0.05^2 * I))
+
+Random.seed!(1)
+chain = distribution_to_advancedmh(delay, data, sampler, 2000; burnin = 1000)
 
 # ## Reading the fit back onto the distribution
 #
-# The readback reads a `FlexiChain` keyed by the estimated rows' dotted names,
-# the naming contract every readback verb here uses.
-# Building that chain out of a sampler's raw draws is FlexiChains' own
-# constructor rather than a step this package owns.
-
-niter = length(draws)
-chain = FlexiChain{Symbol}(niter, 1,
-    Dict(Parameter(:shape) => reshape(first.(draws), niter, 1)))
-
 # [`point_estimate`](@ref) reduces the chain straight back to a `ToyDelay`,
 # posterior mean by default.
 
@@ -139,17 +132,12 @@ survival_prob = distribution_to_logdensity(delay, bounds;
 DistributionsInference.logdensity(survival_prob, [2.0])
 
 # The parameter inventory, the priors and the readback never see the reducer,
-# so everything above works unchanged on `survival_prob`.
+# so everything above works unchanged: `distribution_to_advancedmh` takes the
+# same `loglik` keyword `distribution_to_logdensity` does.
 
-survival_model = AdvancedMH.DensityModel() do x
-    any(<=(0), x) ? -Inf : DistributionsInference.logdensity(survival_prob, x)
-end
-survival_transitions = sample(Xoshiro(1), survival_model, sampler, 2000;
-    param_names = ["shape"], progress = false)
-survival_draws = [t.params for t in survival_transitions][1001:end]
-survival_chain = FlexiChain{Symbol}(length(survival_draws), 1,
-    Dict(Parameter(:shape) => reshape(
-        first.(survival_draws), length(survival_draws), 1)))
+Random.seed!(1)
+survival_chain = distribution_to_advancedmh(delay, bounds, sampler, 2000;
+    burnin = 1000, loglik = survival_loglik)
 point_estimate(delay, survival_chain).shape
 
 # `logccdf` for a `Weibull` differentiates, so
@@ -174,17 +162,24 @@ map_fit = optimise_distribution(delay, data, LBFGS())
 map_fit.shape
 
 # The fit starts at the template's own parameter values rather than at an
-# arbitrary zero; `init` starts it somewhere else, and `loglik` swaps the
-# reducer as it does for [`distribution_to_logdensity`](@ref).
-#
+# arbitrary zero; `init` takes a starting point on the same (constrained)
+# scale `delay`'s own fields are in — no manual transform needed to try a
+# different start — and `loglik` swaps the reducer as it does for
+# [`distribution_to_logdensity`](@ref).
+
+optimise_distribution(delay, data, LBFGS(); init = [1.5]).shape
+
 # The steps are still individually available.
 # [`logdensity_to_objective`](@ref) gives the callable,
-# [`minimise`](@ref DistributionsInference.minimise) runs the optimiser, and
+# [`to_unconstrained`](@ref DistributionsInference.to_unconstrained) maps a
+# constrained starting point onto the scale the optimiser actually searches,
+# [`minimise`](@ref DistributionsInference.minimise) runs it, and
 # [`objective_to_distribution`](@ref) maps the minimiser back onto the
-# distribution.
+# distribution — the same round trip `optimise_distribution` composes above,
+# from the same starting point.
 
 f = logdensity_to_objective(prob)
-z0 = DistributionsInference.to_unconstrained(prob, [delay.shape])
+z0 = DistributionsInference.to_unconstrained(prob, [1.5])
 objective_to_distribution(prob, DistributionsInference.minimise(
     f, z0, LBFGS())).shape
 

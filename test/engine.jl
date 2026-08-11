@@ -207,3 +207,19 @@ end
     @test fitted.scale == scale
     @test fitted.shape ≈ post_mean
 end
+
+@testitem "FitLogDensity accessors: template/observations/flat_priors match direct field access" setup=[
+    ToyFixture] begin
+    using DistributionsInference, Distributions
+
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    data = [1.5, 2.0, 3.2]
+    prob = DistributionsInference.distribution_to_logdensity(leaf, data)
+
+    @test DistributionsInference.template(prob) === leaf
+    @test DistributionsInference.template(prob) === prob.obj
+    @test DistributionsInference.observations(prob) === data
+    @test DistributionsInference.observations(prob) === prob.data
+    @test DistributionsInference.flat_priors(prob) == [leaf.shape_prior]
+    @test DistributionsInference.flat_priors(prob) === prob.flat_priors
+end
