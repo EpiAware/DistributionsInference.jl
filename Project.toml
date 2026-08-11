@@ -7,23 +7,23 @@ version = "0.1.0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 EpiAwareADTools = "908e2895-a690-4874-a954-ca006cb9734d"
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
 LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [weakdeps]
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 ComposedDistributions = "2f642b71-32a9-4f47-97c4-6deb7517f7a7"
 DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
-FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 
 [extensions]
 DistributionsInferenceBijectorsExt = "Bijectors"
 DistributionsInferenceComposedDistributionsExt = "ComposedDistributions"
 DistributionsInferenceDynamicPPLExt = "DynamicPPL"
-DistributionsInferenceDynamicPPLFlexiChainsExt = ["DynamicPPL", "FlexiChains"]
-DistributionsInferenceFlexiChainsExt = "FlexiChains"
+DistributionsInferenceDynamicPPLFlexiChainsExt = "DynamicPPL"
 DistributionsInferenceOptimExt = "Optim"
 
 [compat]
@@ -45,6 +45,7 @@ LogExpFunctions = "0.3, 1"
 # Kept in step with test/Project.toml so the merged downgrade resolve agrees
 # on one floor for the two environments.
 Optim = "2.2"
+Random = "1"
 Statistics = "1"
 julia = "1.11"
 

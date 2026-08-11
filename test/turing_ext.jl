@@ -391,19 +391,22 @@ end
         :DistributionsInferenceDynamicPPLFlexiChainsExt) !== nothing
 end
 
-@testitem "distribution_to_turing needs DynamicPPL alone, not FlexiChains" begin
+@testitem "distribution_to_turing works with just `using DynamicPPL`" begin
     using DistributionsInference
 
-    # The `VarName`-keyed readback lives in its own extension, so a project
-    # sampling with Turing need not install `FlexiChains`. Sibling items load
-    # it here, so a DynamicPPL-alone session needs a fresh process.
+    # `FlexiChains` is a hard dependency, so it is always in the session once
+    # `DistributionsInference` is; a caller sampling with Turing needs to
+    # `using DynamicPPL` (to trigger the readback's `VarName` dispatch) but
+    # never has to `using FlexiChains` explicitly. Sibling items load
+    # `DynamicPPL` here, so this needs a fresh process to check the caller's
+    # `using` list alone is enough.
     script = """
     using DistributionsInference, Distributions, DynamicPPL
 
     Base.get_extension(
         DistributionsInference,
-        :DistributionsInferenceFlexiChainsExt) === nothing ||
-        error("the FlexiChains extension loaded without FlexiChains")
+        :DistributionsInferenceDynamicPPLFlexiChainsExt) !== nothing ||
+        error("the DynamicPPL x FlexiChains extension did not load")
 
     struct AloneLeaf{S <: Real}
         shape::S
@@ -441,4 +444,62 @@ end
     ok || println(output)
     @test ok
     @test occursin("as-turing-alone-ok", output)
+end
+
+@testitem "inference_to_distribution(s): VarName-keyed chain dispatch" begin
+    using DistributionsInference, Distributions, DynamicPPL, Turing, Random
+    using FlexiChains: FlexiChains, VNChain
+
+    # `reconstruct` returns a `Gamma` directly, so this exercises the
+    # MixtureModel/plug-in paths (unlike `TuringFixture`'s leaves, which
+    # reconstruct back to their own wrapper type).
+    struct TuringGammaDist{S <: Real}
+        shape::S
+        scale::Float64
+        shape_prior::Distribution
+    end
+
+    Distributions.logpdf(d::TuringGammaDist, y::Real) = logpdf(Gamma(d.shape, d.scale), y)
+
+    function DistributionsInference.parameter_rows(d::TuringGammaDist)
+        return [
+            (name = :shape, value = d.shape,
+                prior = d.shape_prior, support = (0.0, Inf)),
+            (name = :scale, value = d.scale, prior = nothing,
+                support = (0.0, Inf))]
+    end
+
+    function DistributionsInference.reconstruct(
+            d::TuringGammaDist, x::AbstractVector)
+        return Gamma(x[1], d.scale)
+    end
+
+    scale = 1.5
+    leaf = TuringGammaDist(2.0, scale, LogNormal(log(2.0), 0.2))
+    data = [1.5, 2.0, 3.2, 2.8, 1.9]
+    model = DistributionsInference.distribution_to_turing(leaf, data)
+
+    Random.seed!(5)
+    chain = sample(model, NUTS(), 200; chain_type = VNChain, progress = false)
+
+    dists = DistributionsInference.inference_to_distributions(leaf, chain)
+    @test length(dists) == 200
+    @test all(d -> d isa Gamma, dists)
+
+    mm = DistributionsInference.inference_to_distribution(leaf, chain)
+    @test mm isa MixtureModel
+    @test mean(mm) ≈ mean(mean.(dists))
+
+    plugin = DistributionsInference.inference_to_distribution(leaf, chain, mean)
+    @test plugin isa Gamma
+    @test plugin.α ≈ mean(d -> d.α, dists)
+
+    # The aliases dispatch through the same VarName-keyed methods.
+    @test length(DistributionsInference.inference_to_dists(leaf, chain)) == 200
+    @test mean(DistributionsInference.inference_to_dist(leaf, chain)) ≈ mean(mm)
+
+    # A chain read back at the wrong prefix errors rather than silently
+    # matching nothing, exactly as `point_estimate` does.
+    @test_throws ArgumentError DistributionsInference.inference_to_distribution(
+        leaf, chain; prefix = :wrong)
 end

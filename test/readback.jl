@@ -1,26 +1,18 @@
 # The dotted-name FlexiChains readback: `_to_flexichain`,
 # `point_estimate`/`distribution_draws` selection semantics (deliberately
 # matching ComposedDistributions' `chain_to_params`/`param_draws`), and the DI#3
-# acceptance criterion (a real AdvancedMH round-trip). Every method here
-# lives in `DistributionsInferenceFlexiChainsExt`, so each test item loads
-# `FlexiChains` itself rather than relying on a sibling item having done so.
+# acceptance criterion (a real AdvancedMH round-trip). `FlexiChains` is a hard
+# dependency (implemented directly in `src/readback.jl`), so every item here
+# still loads `FlexiChains` itself for its own `FlexiChain`/`Parameter`
+# constructors, rather than relying on a sibling item having done so.
 
-@testitem "the FlexiChains extension loads" begin
-    using DistributionsInference
-    using FlexiChains: FlexiChains
-
-    @test Base.get_extension(
-        DistributionsInference, :DistributionsInferenceFlexiChainsExt) !==
-          nothing
-end
-
-@testitem "the readback names the chain type once FlexiChains is loaded" begin
+@testitem "the readback names the chain type for a non-chain argument" begin
     using DistributionsInference, Distributions
-    using FlexiChains: FlexiChains
 
-    # With the extension live, a non-chain second argument is the caller's
-    # mistake, so the message must name the type rather than blame the
-    # package that is already there.
+    # A non-chain second argument is the caller's mistake, so the message
+    # must name the type. `distribution_params`/`point_estimate`/
+    # `distribution_draws` accept a `FlexiChain` only, so a raw matrix is
+    # already the wrong type for them.
     rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
         support = (0.0, Inf))]
     for f in (DistributionsInference.distribution_params,
@@ -34,55 +26,22 @@ end
         end
         @test thrown isa ArgumentError
         @test occursin("has no method for a chain of type", thrown.msg)
-        @test !occursin("needs `FlexiChains`", thrown.msg)
     end
-end
 
-@testitem "the readback names FlexiChains when it is not loaded" begin
-    using DistributionsInference
-
-    # Sibling items in this process `using FlexiChains`, so the
-    # extension-not-loaded path is only reachable in a fresh process.
-    script = """
-    using DistributionsInference, Distributions
-
-    rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
-        support = (0.0, Inf))]
-    Base.get_extension(
-        DistributionsInference,
-        :DistributionsInferenceFlexiChainsExt) === nothing ||
-        error("the FlexiChains extension loaded without FlexiChains")
-
-    calls = [
-        () -> DistributionsInference._to_flexichain(rows, reshape([1.0], 1, :)),
-        () -> DistributionsInference.distribution_params(rows, nothing),
-        () -> DistributionsInference.point_estimate(rows, nothing),
-        () -> DistributionsInference.distribution_draws(rows, nothing)]
-    for call in calls
+    # `inference_to_distribution(s)` also accept raw draws (a matrix or a
+    # vector-of-vectors), so a matrix is not the wrong type for them; use a
+    # genuinely unsupported second argument instead.
+    for f in (DistributionsInference.inference_to_distributions,
+        DistributionsInference.inference_to_distribution)
         thrown = try
-            call()
+            f(rows, nothing)
             nothing
         catch e
             e
         end
-        thrown isa ArgumentError ||
-            error("expected an ArgumentError, got \$(repr(thrown))")
-        occursin("FlexiChains", thrown.msg) ||
-            error("the message does not name FlexiChains: \$(thrown.msg)")
-        occursin("DistributionsInferenceFlexiChainsExt", thrown.msg) ||
-            error("the message does not name the extension: \$(thrown.msg)")
+        @test thrown isa ArgumentError
+        @test occursin("has no method for a chain of type", thrown.msg)
     end
-    print("clear-error-ok")
-    """
-
-    out = IOBuffer()
-    cmd = `$(Base.julia_cmd()) --project=$(Base.active_project())
-           --startup-file=no -e $script`
-    ok = success(pipeline(cmd; stdout = out, stderr = out))
-    output = String(take!(out))
-    ok || println(output)
-    @test ok
-    @test occursin("clear-error-ok", output)
 end
 
 @testitem "_to_flexichain: matrix and vector-of-vectors input agree" setup=[ToyFixture] begin

@@ -25,10 +25,10 @@ public default_prior
 export distribution_to_logdensity
 public FitLogDensity, logdensity
 
-# The dotted-name `FlexiChains` readback. Declared here as chain-free stubs
-# (with their docstrings, in `readback.jl`); every method lives in
-# `DistributionsInferenceFlexiChainsExt`, and all three also dispatch on a
-# `VarName`-keyed chain once `DynamicPPL` is loaded alongside `FlexiChains`.
+# The dotted-name `FlexiChains` readback (`FlexiChains` is a hard dependency;
+# implemented directly in `readback.jl`/`inference.jl`). All five also
+# dispatch on a `VarName`-keyed chain once `DynamicPPL` is loaded alongside
+# this package (`DistributionsInferenceDynamicPPLFlexiChainsExt`).
 #
 # `distribution_params` reads a chain's estimated values by name;
 # `point_estimate` and `distribution_draws` rebuild the distribution from them,
@@ -36,6 +36,16 @@ public FitLogDensity, logdensity
 # sampler's raw draws is not on the surface: that conversion belongs to
 # `FlexiChains` or to the inference package that produced them (#104).
 export distribution_params, point_estimate, distribution_draws
+
+# The posterior-output API (additive; `point_estimate`/`distribution_draws`
+# above are unaffected). `inference_to_distribution` is the equal-weight
+# `MixtureModel` over selected draws (2-argument form) or the marginal
+# plug-in `Distribution` (3-argument form, the reduction positional);
+# `inference_to_distributions` is the vectorised, every-draw form.
+# `inference_to_dist`/`inference_to_dists` are aliases for the two,
+# documented as such with the full names canonical.
+export inference_to_distribution, inference_to_distributions,
+       inference_to_dist, inference_to_dists
 
 # A DynamicPPL model over a fittable object's estimated parameters. Stub here
 # (docstring in `turing.jl`); the model lives in

@@ -1,8 +1,10 @@
 # Dotted-name FlexiChains readback: build a FlexiChain from the raw draws any
 # LogDensityProblems-compatible sampler hands back, keyed by the estimated
-# parameter rows' dotted names, and read it back onto a fitted object. The
-# four functions are declared here as FlexiChains-free stubs carrying the
-# docstrings, and implemented in `DistributionsInferenceFlexiChainsExt`.
+# parameter rows' dotted names, and read it back onto a fitted object.
+# `FlexiChains` is a hard dependency, so all four functions are implemented
+# directly here; only the `VarName`-keyed dispatch (a chain sampled from
+# `distribution_to_turing`) lives in the `DistributionsInferenceDynamicPPLFlexiChainsExt`
+# extension, which needs `DynamicPPL` loaded alongside this package.
 
 # Normalise raw sampler draws to a `dim x niter` matrix, checked against the
 # object's estimated dimension. Samplers hand draws back either as a
@@ -36,87 +38,120 @@ function _malformed_draws(draws)
         "vectors); got $(typeof(draws))"))
 end
 
-# Whether the readback extension is live in this session, which separates "you
-# have not loaded FlexiChains" from "you passed the wrong chain type".
-function _flexichains_loaded()
-    return Base.get_extension(
-        @__MODULE__, :DistributionsInferenceFlexiChainsExt) !== nothing
-end
-
-# Whether `FlexiChains` itself is in the session, a different question from
-# whether the extension loaded: `Base.get_extension` returns `nothing` both
-# when the trigger package was never loaded and when the extension failed to
-# load. Telling those apart stops the error below advising `using FlexiChains`
-# to someone who already ran it.
-const _FLEXICHAINS_PKGID = Base.PkgId(
-    Base.UUID("4a37a8b9-6e57-4b92-8664-298d46e639f7"), "FlexiChains")
-
-_flexichains_present() = haskey(Base.loaded_modules, _FLEXICHAINS_PKGID)
-
-function _flexichains_required(f::Symbol)
-    _flexichains_present() && throw(ArgumentError(
-        "`$f` has no method: `FlexiChains` is loaded, but the " *
-        "`DistributionsInferenceFlexiChainsExt` package extension carrying " *
-        "the dotted-name chain readback is not in this session, so it " *
-        "failed to load. Check this session's precompilation warnings for " *
-        "that extension, and the installed `FlexiChains` version against " *
-        "this package's `[compat]` bound."))
-    throw(ArgumentError(
-        "`$f` needs `FlexiChains`: the dotted-name chain readback lives in " *
-        "the `DistributionsInferenceFlexiChainsExt` package extension, " *
-        "which loads only once `FlexiChains` is in the session. Run " *
-        "`using FlexiChains` first (and `Pkg.add(\"FlexiChains\")` if it is " *
-        "not installed yet)."))
-end
-
-# The fallback for a chain argument the extension's own methods did not match:
-# with `FlexiChains` loaded that can only be the wrong chain type.
-function _no_chain_method(f::Symbol, chain)
-    _flexichains_loaded() || _flexichains_required(f)
+# The fallback for a chain argument no typed method matched: with
+# `FlexiChains` always in the session, that can only be the wrong chain type.
+function _wrong_chain_type(f::Symbol, chain)
     throw(ArgumentError(
         "`$f` has no method for a chain of type $(typeof(chain)): it reads " *
         "a `FlexiChains.FlexiChain` keyed by the estimated rows' dotted " *
         "names, or a `VarName`-keyed chain once `DynamicPPL` is loaded " *
-        "alongside `FlexiChains`."))
+        "alongside it."))
 end
 
 @doc "
 
 Build a dotted-name `FlexiChain` from raw sampler draws. Internal.
 
-`_to_flexichain(obj, draws)` keys `draws` by [`estimated_rows`](@ref)`(obj)`'s
-dotted `name`s (in [`parameter_rows`](@ref) order), so the result reads back
-onto `obj` with [`point_estimate`](@ref)/[`distribution_draws`](@ref). `draws`
-is accepted in either raw shape a `LogDensityProblems`-compatible sampler hands
-back: a `dim x niter` matrix, or a `niter`-length vector of `dim`-length
-vectors, where `dim` is [`flat_dimension`](@ref)`(obj)`. An object estimating
-nothing (`dim == 0`) still needs `draws` to carry the draw count — pass a
-`(0, niter)` matrix or a `niter`-length vector of empty vectors.
+`_to_flexichain(obj, draws; nchains = 1)` keys `draws` by
+[`estimated_rows`](@ref)`(obj)`'s dotted `name`s (in [`parameter_rows`](@ref)
+order), so the result reads back onto `obj` with
+[`point_estimate`](@ref)/[`distribution_draws`](@ref)/[`inference_to_distribution`](@ref).
+`draws` is accepted in either raw shape a `LogDensityProblems`-compatible
+sampler hands back: a `dim x niter` matrix, or a `niter`-length vector of
+`dim`-length vectors, where `dim` is [`flat_dimension`](@ref)`(obj)`. An
+object estimating nothing (`dim == 0`) still needs `draws` to carry the draw
+count — pass a `(0, niter)` matrix or a `niter`-length vector of empty
+vectors.
+
+`nchains` splits the pooled `niter` draws into that many equal chains,
+chain-major: the first `niter / nchains` columns are chain 1, the next
+`niter / nchains` are chain 2, and so on. `niter` must be an exact multiple
+of `nchains`, checked here — this is the one place that can catch a chain
+count and a draw count silently disagreeing (#89). Default `nchains = 1`
+treats every column as one chain.
 
 Not part of the public surface: standardising a sampler's raw draws into a
 chain type belongs to `FlexiChains` or to the inference package that produced
-them, not here (#91 takes the conversion off the readback path entirely). It
-stays as the internal entry point from a bare `LogDensityProblems` sampler's
-draws, which is the one route into the readback with no chain of its own,
-until #91 settles where that conversion lives.
-
-This has no method until `FlexiChains` is loaded; the chain construction lives
-in the `DistributionsInferenceFlexiChainsExt` extension.
+them, not here. It stays as the internal entry point from a bare
+`LogDensityProblems` sampler's draws, which is the one route into the
+readback with no chain of its own.
 
 # Arguments
 - `obj`: the fittable object the draws were sampled for.
 - `draws`: the raw draws, `dim x niter` or a `niter`-vector of `dim`-vectors.
 
+# Keyword Arguments
+- `nchains`: the number of chains the pooled columns split into, chain-major
+  (default `1`).
+
 # See also
 - [`point_estimate`](@ref): reduce a chain back onto `obj` (point
   summary/draw).
 - [`distribution_draws`](@ref): the vectorised, every-draw form.
+- [`inference_to_distribution`](@ref): the Monte Carlo posterior predictive
+  over a chain (or these raw draws directly).
 "
-function _to_flexichain(obj, draws)
-    _flexichains_loaded() || _flexichains_required(:_to_flexichain)
-    # With the extension loaded, either accepted raw shape would have matched
-    # its typed methods, so reaching here means the shape is wrong.
-    return _malformed_draws(draws)
+function _to_flexichain(obj, draws; nchains::Int = 1)
+    nchains >= 1 || throw(ArgumentError(
+        "_to_flexichain: nchains must be >= 1, got $nchains"))
+    rows = estimated_rows(obj)
+    dim = length(rows)
+    mat = _draws_matrix(draws, dim)
+    total = size(mat, 2)
+    niters, remainder = divrem(total, nchains)
+    remainder == 0 || throw(ArgumentError(
+        "_to_flexichain: $total pooled draw(s) is not an exact multiple " *
+        "of nchains=$nchains; pass a draws count divisible by nchains, or " *
+        "omit nchains to treat every column as one chain"))
+    data = Dict{FlexiChains.ParameterOrExtra{<:Symbol}, Matrix}()
+    for i in eachindex(rows)
+        data[FlexiChains.Parameter(rows[i].name)] = reshape(
+            mat[i, :], niters, nchains)
+    end
+    return FlexiChains.FlexiChain{Symbol}(niters, nchains, data)
+end
+
+function _chain_column(chain::FlexiChains.FlexiChain, name::Symbol)
+    FlexiChains.has_parameter(chain, name) ||
+        throw(ArgumentError("parameter $(repr(name)) not found in chain"))
+    return chain[name]
+end
+
+# The number of draws pooled across every chain: `_chain_column` returns the
+# full niters x nchains array and `vec` flattens it column-major, so the
+# pooled range a draw selector or an index into it must span is
+# niters * nchains, not niters alone (one chain's worth).
+function _pooled_ndraws(chain::FlexiChains.FlexiChain)
+    FlexiChains.niters(chain) * FlexiChains.nchains(chain)
+end
+
+# The pooled-draw indices a `draws` selector picks out: `nothing` is every
+# draw, a predicate filters the pooled index range, anything else is taken
+# as the indices directly.
+_draw_indices(chain, ::Nothing) = Colon()
+function _draw_indices(chain, draws)
+    draws isa Function &&
+        return [i for i in 1:_pooled_ndraws(chain) if draws(i)]
+    return collect(draws)
+end
+
+_select_draws(col, ::Colon) = vec(col)
+_select_draws(col, sel) = vec(col)[sel]
+
+# `NamedTuple{names}(...)` fails on a repeated name with a bare "duplicate
+# field name" error that names neither the object nor the row, so catch it at
+# the earliest point the duplicate is visible.
+function _check_unique_names(names::Tuple)
+    length(names) == length(Set(names)) && return nothing
+    counts = Dict{Symbol, Int}()
+    for n in names
+        counts[n] = get(counts, n, 0) + 1
+    end
+    dupes = [n for (n, c) in counts if c > 1]
+    throw(ArgumentError(
+        "distribution_params: duplicate estimated parameter name(s) " *
+        "$(dupes); parameter_rows(obj) must give every estimated row a " *
+        "unique dotted name"))
 end
 
 @doc "
@@ -131,11 +166,9 @@ over the `draws` selection (default: the mean over every draw).
 [`point_estimate`](@ref) is a thin layer on top: it collapses this result to a
 flat vector and calls [`reconstruct`](@ref).
 
-This has no method until `FlexiChains` is loaded; the read lives in the
-`DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
-sampled from [`distribution_to_turing`](@ref)) is read by the
-`DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
-`DynamicPPL` loaded as well.
+A `VarName`-keyed chain (one sampled from [`distribution_to_turing`](@ref))
+is read by the `DistributionsInferenceDynamicPPLFlexiChainsExt` extension,
+which needs `DynamicPPL` loaded as well.
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
@@ -183,7 +216,23 @@ distribution_params(leaf, chain)
   optimised implementation, not layered on this — see its docstring).
 "
 function distribution_params(obj, chain; kwargs...)
-    return _no_chain_method(:distribution_params, chain)
+    return _wrong_chain_type(:distribution_params, chain)
+end
+
+function distribution_params(obj, chain::FlexiChains.FlexiChain;
+        summary = mean, draw = nothing, draws = nothing)
+    rows = estimated_rows(obj)
+    isempty(rows) && return NamedTuple()
+    names = Tuple(row.name for row in rows)
+    _check_unique_names(names)
+    vals = if draw !== nothing
+        [vec(_chain_column(chain, row.name))[draw] for row in rows]
+    else
+        sel = _draw_indices(chain, draws)
+        [summary(_select_draws(_chain_column(chain, row.name), sel))
+         for row in rows]
+    end
+    return NamedTuple{names}(Tuple(vals))
 end
 
 @doc "
@@ -197,11 +246,9 @@ summary by default
 iteration (`draw`), or a summary restricted to a subset of iterations
 (`draws`).
 
-This has no method until `FlexiChains` is loaded; the read lives in the
-`DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
-sampled from [`distribution_to_turing`](@ref)) is read by the
-`DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
-`DynamicPPL` loaded as well.
+A `VarName`-keyed chain (one sampled from [`distribution_to_turing`](@ref))
+is read by the `DistributionsInferenceDynamicPPLFlexiChainsExt` extension,
+which needs `DynamicPPL` loaded as well.
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
@@ -214,6 +261,12 @@ sampled from [`distribution_to_turing`](@ref)) is read by the
 - `draw`: a single iteration index to read, overriding `summary`/`draws`.
 - `draws`: a subset of iterations to reduce over (a range / index vector, or a
   predicate over the iteration index); `nothing` uses every iteration.
+
+!!! note \"Not the posterior predictive\"
+    This is a plug-in estimate, reducing draws to a point *before* rebuilding
+    `obj` — `Gamma(mean(shape draws), scale) != mean(Gamma.(shape draws,
+    scale))`. For the Monte Carlo posterior predictive, see
+    [`inference_to_distribution`](@ref).
 
 # Examples
 ```@example
@@ -245,9 +298,18 @@ point_estimate(leaf, chain).shape
 # See also
 - [`distribution_params`](@ref): the params-first primitive this layers on.
 - [`distribution_draws`](@ref): the vectorised, every-draw form.
+- [`inference_to_distribution`](@ref): the Monte Carlo posterior predictive,
+  the honest alternative to this plug-in reduction.
 "
 function point_estimate(obj, chain; kwargs...)
-    return _no_chain_method(:point_estimate, chain)
+    return _wrong_chain_type(:point_estimate, chain)
+end
+
+function point_estimate(obj, chain::FlexiChains.FlexiChain; summary = mean,
+        draw = nothing, draws = nothing)
+    nt = distribution_params(obj, chain; summary = summary, draw = draw,
+        draws = draws)
+    return reconstruct(obj, collect(values(nt)))
 end
 
 @doc "
@@ -260,11 +322,9 @@ reconstructed object, `distribution_draws` keeps every draw, returning a
 vector of reconstructed objects (one per selected iteration) — e.g. for a
 per-draw posterior-predictive summary.
 
-This has no method until `FlexiChains` is loaded; the read lives in the
-`DistributionsInferenceFlexiChainsExt` extension. A `VarName`-keyed chain (one
-sampled from [`distribution_to_turing`](@ref)) is read by the
-`DistributionsInferenceDynamicPPLFlexiChainsExt` extension, which needs
-`DynamicPPL` loaded as well.
+A `VarName`-keyed chain (one sampled from [`distribution_to_turing`](@ref))
+is read by the `DistributionsInferenceDynamicPPLFlexiChainsExt` extension,
+which needs `DynamicPPL` loaded as well.
 
 # Arguments
 - `obj`: the fittable object the chain's parameters were sampled for.
@@ -313,7 +373,29 @@ length(distribution_draws(leaf, chain))
 - [`point_estimate`](@ref): the single-draw / reduced read this vectorises.
 - [`distribution_params`](@ref): the params-first primitive `point_estimate`
   (but not this function) layers on.
+- [`inference_to_distributions`](@ref): the additive replacement for this
+  function, with the chain-major-pooling trap documented and a random
+  `draws::Integer` subsample form.
 "
 function distribution_draws(obj, chain; kwargs...)
-    return _no_chain_method(:distribution_draws, chain)
+    return _wrong_chain_type(:distribution_draws, chain)
+end
+
+function distribution_draws(obj, chain::FlexiChains.FlexiChain; draws = nothing)
+    sel = _draw_indices(chain, draws)
+    idx = sel isa Colon ? (1:_pooled_ndraws(chain)) : sel
+    return _reconstruct_pooled(obj, chain, idx)
+end
+
+# Shared by `distribution_draws` and `inference_to_distributions`: rebuild one
+# object per pooled draw index in `idx`. Materialises each estimated row's
+# column once, so this stays O(niter) rather than re-extracting every column
+# per draw — the two callers differ only in how `idx` is computed
+# (`_draw_indices`'s predicate/range selector vs `_resolve_pooled_draws`'s
+# four `draws` forms), not in this extraction.
+function _reconstruct_pooled(obj, chain::FlexiChains.FlexiChain, idx)
+    rows = estimated_rows(obj)
+    isempty(rows) && return [reconstruct(obj, Float64[]) for _ in idx]
+    cols = [vec(_chain_column(chain, row.name)) for row in rows]
+    return [reconstruct(obj, [col[i] for col in cols]) for i in idx]
 end
