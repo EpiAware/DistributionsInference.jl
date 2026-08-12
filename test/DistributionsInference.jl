@@ -30,6 +30,8 @@ end
         :inference_to_distribution,
         :inference_to_distributions,
         :inference_to_dists,
+        :inference_to_parameter_distribution,
+        :inference_to_parameters,
         :logdensity_to_objective,
         :objective_to_distribution,
         :optimise_distribution,
@@ -80,6 +82,9 @@ end
             "Bijectors", "DistributionsInferenceBijectorsExt"),
         (() -> DistributionsInference.distribution_to_objective(
                 rows, [1.5, 2.0]),
+            "Bijectors", "DistributionsInferenceBijectorsExt"),
+        (() -> DistributionsInference.inference_to_parameter_distribution(
+                rows, [1.5 2.0]),
             "Bijectors", "DistributionsInferenceBijectorsExt"),
         (() -> DistributionsInference.minimise(sum, [0.0], nothing),
             "Optim", "DistributionsInferenceOptimExt"),
