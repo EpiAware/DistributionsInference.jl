@@ -12,11 +12,13 @@
     n = 5
     shape_draws = [2.0, 2.1, 1.9, 2.2, 2.05]
     scale_draws = [1.0, 1.1, 0.9, 1.2, 1.05]
-    chain = FlexiChains.FlexiChain{Symbol}(n, 1, Dict(
-        FlexiChains.Parameter(Symbol("leaf.shape")) => reshape(
-            shape_draws, n, 1),
-        FlexiChains.Parameter(Symbol("leaf.scale")) => reshape(
-            scale_draws, n, 1)))
+    chain = FlexiChains.FlexiChain{Symbol}(n,
+        1,
+        Dict(
+            FlexiChains.Parameter(Symbol("leaf.shape")) => reshape(
+                shape_draws, n, 1),
+            FlexiChains.Parameter(Symbol("leaf.scale")) => reshape(
+                scale_draws, n, 1)))
 
     nt = DistributionsInference.inference_to_parameters(leaf, chain)
     @test keys(nt) == (Symbol("leaf.shape"), Symbol("leaf.scale"))
@@ -203,11 +205,13 @@ end
     shape_draws = exp.(log_shape)
     scale_draws = exp.(log_scale)
     n = length(log_shape)
-    chain = FlexiChains.FlexiChain{Symbol}(n, 1, Dict(
-        FlexiChains.Parameter(Symbol("leaf.shape")) => reshape(
-            shape_draws, n, 1),
-        FlexiChains.Parameter(Symbol("leaf.scale")) => reshape(
-            scale_draws, n, 1)))
+    chain = FlexiChains.FlexiChain{Symbol}(n,
+        1,
+        Dict(
+            FlexiChains.Parameter(Symbol("leaf.shape")) => reshape(
+                shape_draws, n, 1),
+            FlexiChains.Parameter(Symbol("leaf.scale")) => reshape(
+                scale_draws, n, 1)))
 
     mvn = DistributionsInference.inference_to_parameter_distribution(
         leaf, chain)
@@ -233,11 +237,13 @@ end
     log_shape = [-1.0, -0.5, 0.0, 0.5, 1.0, 1.5]
     log_scale = 2.0 .* log_shape
     n = length(log_shape)
-    chain = FlexiChains.FlexiChain{Symbol}(n, 1, Dict(
-        FlexiChains.Parameter(Symbol("leaf.shape")) => reshape(
-            exp.(log_shape), n, 1),
-        FlexiChains.Parameter(Symbol("leaf.scale")) => reshape(
-            exp.(log_scale), n, 1)))
+    chain = FlexiChains.FlexiChain{Symbol}(n,
+        1,
+        Dict(
+            FlexiChains.Parameter(Symbol("leaf.shape")) => reshape(
+                exp.(log_shape), n, 1),
+            FlexiChains.Parameter(Symbol("leaf.scale")) => reshape(
+                exp.(log_scale), n, 1)))
 
     err = try
         DistributionsInference.inference_to_parameter_distribution(
@@ -283,11 +289,13 @@ end
     leaf = TwoParamLeaf(2.0, 1.0)  # 2 estimated parameters
     shape_draws = [2.0, 2.1]
     scale_draws = [1.0, 1.1]
-    chain = FlexiChains.FlexiChain{Symbol}(2, 1, Dict(
-        FlexiChains.Parameter(Symbol("leaf.shape")) => reshape(
-            shape_draws, 2, 1),
-        FlexiChains.Parameter(Symbol("leaf.scale")) => reshape(
-            scale_draws, 2, 1)))
+    chain = FlexiChains.FlexiChain{Symbol}(2,
+        1,
+        Dict(
+            FlexiChains.Parameter(Symbol("leaf.shape")) => reshape(
+                shape_draws, 2, 1),
+            FlexiChains.Parameter(Symbol("leaf.scale")) => reshape(
+                scale_draws, 2, 1)))
 
     # n == dim: still singular (a 2-draw sample covariance in 2 dimensions
     # has no residual degrees of freedom), so this must be refused too, not
@@ -310,8 +318,9 @@ end
     using FlexiChains: FlexiChains
 
     leaf = GammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
-    chain = FlexiChains.FlexiChain{Symbol}(4, 1, Dict(
-        FlexiChains.Parameter(:shape) => reshape(
+    chain = FlexiChains.FlexiChain{Symbol}(
+        4, 1, Dict(
+            FlexiChains.Parameter(:shape) => reshape(
             [1.0, 2.0, 3.0, 4.0], 4, 1)))
 
     err = try
