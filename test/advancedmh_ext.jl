@@ -24,7 +24,7 @@
     @test length(dists) == 3000
     @test all(d -> d isa TuringGammaLeaf, dists)
 
-    fitted = point_estimate(leaf, chain)
+    fitted = inference_to_distribution(leaf, chain, mean)
     @test fitted.scale == scale
 
     # Closer to the true shape than the prior mean, with a loose tolerance:
@@ -95,8 +95,8 @@ end
     advancedmh_chain = distribution_to_advancedmh(leaf, data, sampler, 6000;
         burnin = 1000, rng = Random.Xoshiro(6))
 
-    turing_fit = point_estimate(leaf, turing_chain)
-    advancedmh_fit = point_estimate(leaf, advancedmh_chain)
+    turing_fit = inference_to_distribution(leaf, turing_chain, mean)
+    advancedmh_fit = inference_to_distribution(leaf, advancedmh_chain, mean)
 
     @test turing_fit.scale == advancedmh_fit.scale == scale
     @test isapprox(turing_fit.shape, advancedmh_fit.shape; atol = 0.5)

@@ -186,7 +186,7 @@ end
         θ -> DistributionsInference.logdensity(prob, θ), x)
 end
 
-@testitem "distribution_to_turing round-trip: NUTS chain reads back through point_estimate" setup=[TuringFixture] begin
+@testitem "distribution_to_turing round-trip: NUTS chain reads back through inference_to_distribution" setup=[TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, Turing, Random
     using FlexiChains: FlexiChains, VNChain
 
@@ -203,19 +203,13 @@ end
     vns = Set(string.(collect(FlexiChains.parameters(chain))))
     @test "d.shape" in vns
 
-    fitted = DistributionsInference.point_estimate(leaf, chain)
+    fitted = DistributionsInference.inference_to_distribution(leaf, chain, mean)
     @test fitted.scale == scale
     @test fitted.shape > 0
 
-    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
+    all_fitted = DistributionsInference.inference_to_distributions(leaf, chain)
     @test length(all_fitted) == 200
     @test mean(f -> f.shape, all_fitted) ≈ fitted.shape
-
-    # `distribution_params` also dispatches on a VarName-keyed chain, through
-    # the same `_to_symbol_chain` conversion `point_estimate` uses.
-    nt = DistributionsInference.distribution_params(leaf, chain)
-    @test keys(nt) == (:shape,)
-    @test nt.shape == fitted.shape
 end
 
 @testitem "distribution_to_turing acceptance: NUTS recovers the true parameter" setup=[TuringFixture] begin
@@ -232,7 +226,7 @@ end
 
     Random.seed!(2)
     chain = sample(model, NUTS(), 1000; chain_type = VNChain, progress = false)
-    fitted = DistributionsInference.point_estimate(leaf, chain)
+    fitted = DistributionsInference.inference_to_distribution(leaf, chain, mean)
 
     prior_mean = mean(LogNormal(log(2.0), 0.5))
     @test abs(fitted.shape - true_shape) < abs(prior_mean - true_shape)
@@ -255,17 +249,17 @@ end
     @test "d.leaf.shape" in vns
     @test "d.leaf.scale" in vns
 
-    fitted = DistributionsInference.point_estimate(leaf, chain)
+    fitted = DistributionsInference.inference_to_distribution(leaf, chain, mean)
     @test fitted.shape > 0
     @test fitted.scale > 0
 
-    all_fitted = DistributionsInference.distribution_draws(leaf, chain)
+    all_fitted = DistributionsInference.inference_to_distributions(leaf, chain)
     @test length(all_fitted) == 200
 
     # A chain read back at the wrong prefix errors rather than silently
     # matching nothing.
-    @test_throws ArgumentError DistributionsInference.point_estimate(
-        leaf, chain; prefix = :wrong)
+    @test_throws ArgumentError DistributionsInference.inference_to_distribution(
+        leaf, chain, mean; prefix = :wrong)
 end
 
 @testitem "distribution_to_turing: a 0-estimated object samples and reads back unchanged" setup=[ToyFixture] begin
@@ -281,10 +275,12 @@ end
     chain = sample(model, Prior(), 50; chain_type = VNChain, progress = false)
     @test isempty(FlexiChains.parameters(chain))
 
-    fitted = DistributionsInference.point_estimate(fixed_leaf, chain)
+    fitted = DistributionsInference.inference_to_distribution(
+        fixed_leaf, chain, mean)
     @test fitted == fixed_leaf
 
-    all_fitted = DistributionsInference.distribution_draws(fixed_leaf, chain)
+    all_fitted = DistributionsInference.inference_to_distributions(
+        fixed_leaf, chain)
     @test length(all_fitted) == 50
     @test all(==(fixed_leaf), all_fitted)
 end
@@ -357,10 +353,11 @@ end
     @test_throws ArgumentError DistributionsInference.distribution_to_turing(leaf, data)
 end
 
-@testitem "point_estimate: the VarName empty-chain shortcut guards on the chain, not obj" setup=[
+@testitem "inference_to_distribution: the VarName empty-chain shortcut guards on the chain, not obj" setup=[
     ToyFixture, TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL
     using FlexiChains: FlexiChains, VarName, @varname
+    using Statistics: mean
 
     # (a) `obj` estimates nothing but the chain carries a parameter: the
     # `_to_symbol_chain` shortcut must guard on the chain being empty, not on
@@ -370,8 +367,8 @@ end
         Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}(
             FlexiChains.Parameter(@varname(d.shape)) => reshape(
             [1.0, 2.0, 3.0], 3, 1)))
-    @test_throws ArgumentError DistributionsInference.point_estimate(
-        fixed_leaf, mismatched_chain)
+    @test_throws ArgumentError DistributionsInference.inference_to_distribution(
+        fixed_leaf, mismatched_chain, mean)
 
     # (b) `obj` estimates a parameter but the chain is genuinely empty: must
     # raise the ordinary "not found in chain" mismatch rather than
@@ -379,7 +376,8 @@ end
     leaf = TuringGammaLeaf(2.0, 1.5, LogNormal(log(2.0), 0.2))
     empty_chain = FlexiChains.FlexiChain{VarName}(5, 1,
         Dict{FlexiChains.ParameterOrExtra{<:VarName}, Matrix}())
-    @test_throws ArgumentError DistributionsInference.point_estimate(leaf, empty_chain)
+    @test_throws ArgumentError DistributionsInference.inference_to_distribution(
+        leaf, empty_chain, mean)
 end
 
 @testitem "the DynamicPPL x FlexiChains readback extension loads" begin
@@ -499,12 +497,12 @@ end
     @test mean(DistributionsInference.inference_to_dist(leaf, chain)) ≈ mean(mm)
 
     # A chain read back at the wrong prefix errors rather than silently
-    # matching nothing, exactly as `point_estimate` does.
+    # matching nothing.
     @test_throws ArgumentError DistributionsInference.inference_to_distribution(
         leaf, chain; prefix = :wrong)
 end
 
-@testitem "distribution_to_turing(obj, data, sampler, nsamples) round-trips through inference_to_distributions/point_estimate" setup=[
+@testitem "distribution_to_turing(obj, data, sampler, nsamples) round-trips through inference_to_distributions" setup=[
     TuringFixture] begin
     using DistributionsInference, Distributions, DynamicPPL, Turing, Random
 
@@ -519,7 +517,7 @@ end
     @test length(dists) == 200
     @test all(d -> d isa TuringGammaLeaf, dists)
 
-    fitted = point_estimate(leaf, chain)
+    fitted = inference_to_distribution(leaf, chain, mean)
     @test fitted.scale == scale
     @test fitted.shape > 0
 

@@ -188,7 +188,7 @@ end
           -3.0600698871687486 rtol=1e-10
 end
 
-@testitem "point_estimate: the generic FlexiChains machinery round-trips a pooled, shared tree" setup=[ComposedFixture] begin
+@testitem "inference_to_distribution: the generic FlexiChains machinery round-trips a pooled, shared tree" setup=[ComposedFixture] begin
     using FlexiChains
 
     tree = noncentred_tree
@@ -198,11 +198,19 @@ end
     draws = [[0.05 * i + 0.01 * j for j in 1:n] for i in 1:20]
     chain = DistributionsInference.draws_to_chain(tree, draws)
 
-    fitted = DistributionsInference.point_estimate(tree, chain)
+    # `draws_to_chain`'s own keying/pooling, checked directly against the raw
+    # draws it was built from (#89's bug class) — independent of the
+    # summarise-then-reconstruct step below.
+    rows = DistributionsInference.estimated_rows(tree)
+    for (i, row) in enumerate(rows)
+        @test vec(chain[row.name]) == [d[i] for d in draws]
+    end
+
+    fitted = DistributionsInference.inference_to_distribution(tree, chain, mean)
     expected_x = [mean(d[i] for d in draws) for i in 1:n]
     @test fitted == ComposedDistributions.reconstruct(tree, expected_x)
 
-    all_fitted = DistributionsInference.distribution_draws(tree, chain)
+    all_fitted = DistributionsInference.inference_to_distributions(tree, chain)
     @test length(all_fitted) == length(draws)
     @test all_fitted[end] == ComposedDistributions.reconstruct(tree, draws[end])
 end
@@ -233,7 +241,8 @@ end
 
     # Exactly one site for the tie, at the tag's dotted name, not one per
     # occurrence.
-    fitted = DistributionsInference.point_estimate(shared_tree, chain)
+    fitted = DistributionsInference.inference_to_distribution(
+        shared_tree, chain, mean)
     @test ComposedDistributions.event(fitted, :a) ==
           ComposedDistributions.event(fitted, :b)
     @test !ComposedDistributions.has_uncertain(fitted)
@@ -249,7 +258,8 @@ end
     Random.seed!(7)
     chain = sample(model, NUTS(), 200; progress = false)
 
-    fitted = DistributionsInference.point_estimate(resolve_tree, chain)
+    fitted = DistributionsInference.inference_to_distribution(
+        resolve_tree, chain, mean)
     @test !ComposedDistributions.has_uncertain(fitted)
     p = collect(values(Distributions.probs(fitted)))
     @test sum(p) ≈ 1.0
@@ -264,7 +274,8 @@ end
     Random.seed!(13)
     chain = sample(model, NUTS(), 200; progress = false)
 
-    fitted = DistributionsInference.point_estimate(noncentred_tree, chain)
+    fitted = DistributionsInference.inference_to_distribution(
+        noncentred_tree, chain, mean)
     @test !ComposedDistributions.has_uncertain(fitted)
     @test ComposedDistributions.event(fitted, :north) isa Distributions.Gamma
     @test ComposedDistributions.event(fitted, :east) isa Distributions.Gamma
