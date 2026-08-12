@@ -567,3 +567,117 @@ length(inference_to_dists(leaf, chain))
 - [`inference_to_distributions`](@ref): the canonical name this aliases.
 "
 const inference_to_dists = inference_to_distributions
+
+# A duplicate dotted name would collide in the returned `NamedTuple`; this is
+# `readback.jl`'s `_check_unique_names` in substance, but that helper's
+# message hardcodes `distribution_params` as the offending call, so it is
+# reimplemented here rather than reused, to keep the error naming the
+# function actually called.
+function _require_unique_parameter_names(f::Symbol, names::Tuple)
+    length(names) == length(Set(names)) && return names
+    counts = Dict{Symbol, Int}()
+    for n in names
+        counts[n] = get(counts, n, 0) + 1
+    end
+    dupes = [n for (n, c) in counts if c > 1]
+    throw(ArgumentError(
+        "`$f` needs unique estimated parameter names; parameter_rows(obj) " *
+        "gives duplicate dotted name(s) $(dupes)"))
+end
+
+@doc "
+
+Exact posterior draws, keyed by an object's dotted parameter names.
+
+`inference_to_parameters(obj, chain; draws = nothing)` reads `chain` (pooled
+across every chain it carries, exactly as [`inference_to_distributions`](@ref)
+does) and returns a `NamedTuple` keyed by [`estimated_rows`](@ref)`(obj)`'s
+dotted `name`s, one entry per row, each an exact vector of that row's
+selected draws — no summary, no [`reconstruct`](@ref); the values are read
+straight off `chain`. This is the gap the reconstructed-object verbs
+([`inference_to_distributions`](@ref), [`inference_to_distribution`](@ref))
+leave open: both need `reconstruct(obj, x)` to run before their result is any
+use, so neither hands back the parameter draws themselves.
+
+A `NamedTuple` of equal-length vectors already satisfies the Tables.jl
+column-table interface structurally (every column an `AbstractVector`, every
+column the same length), so `DataFrame(result)` (or any other Tables.jl
+consumer) works with **no Tables.jl dependency** on this package's part —
+the interface is the promise, not a wrapper type this package defines.
+
+`chain` also accepts raw draws with no chain of their own; see
+[`inference_to_distributions`](@ref) for the accepted forms and the
+`nchains` keyword.
+
+# Arguments
+- `obj`: the fittable object the draws were sampled for.
+- `chain`: the chain (or raw draws) to read from.
+
+# Keyword Arguments
+- `draws`: which pooled draws to keep; see
+  [`inference_to_distributions`](@ref) for the four accepted forms and the
+  chain-major pooling caveat.
+- `nchains`: raw-draws form only (default `1`).
+- `rng`: used when `draws` is an `Integer` (default `Random.default_rng()`).
+
+An object estimating nothing ([`estimated_rows`](@ref)`(obj)` empty) returns
+`NamedTuple()` — a legitimate zero-column table.
+
+Two estimated rows sharing a dotted `name` is refused with an `ArgumentError`
+naming the duplicate, exactly as [`distribution_params`](@ref) does.
+
+# Examples
+```@example
+using DistributionsInference, Distributions
+using FlexiChains: FlexiChain, Parameter
+
+struct ParameterLeaf
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::ParameterLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+
+leaf = ParameterLeaf(2.0, 1.0)
+draws = [2.1, 2.4, 2.0, 2.6]
+chain = FlexiChain{Symbol}(
+    4, 1, Dict(Parameter(:shape) => reshape(draws, 4, 1)))
+inference_to_parameters(leaf, chain)
+```
+
+# See also
+- [`inference_to_parameter_distribution`](@ref): the joint Gaussian
+  approximation fitted to these same draws, on the unconstrained scale.
+- [`inference_to_distributions`](@ref): the reconstructed-object analogue of
+  this function.
+- [`distribution_params`](@ref): the older, reduce-first primitive — it
+  collapses each row to one value by `summary` (default `mean`) before
+  returning; this keeps every selected draw.
+"
+function inference_to_parameters(obj, chain::FlexiChains.FlexiChain;
+        draws = nothing, rng = Random.default_rng())
+    idx = _resolve_pooled_draws(_pooled_ndraws(chain), draws, rng)
+    rows = estimated_rows(obj)
+    isempty(rows) && return NamedTuple()
+    names = Tuple(row.name for row in rows)
+    _require_unique_parameter_names(:inference_to_parameters, names)
+    vals = Tuple(vec(_chain_column(chain, row.name))[idx] for row in rows)
+    return NamedTuple{names}(vals)
+end
+
+function inference_to_parameters(obj, chain; kwargs...)
+    return _wrong_chain_type(:inference_to_parameters, chain)
+end
+
+function inference_to_parameters(
+        obj, raw::Union{AbstractMatrix, AbstractVector{<:AbstractVector}};
+        draws = nothing, nchains::Int = 1, rng = Random.default_rng())
+    return inference_to_parameters(
+        obj, draws_to_chain(obj, raw; nchains = nchains);
+        draws = draws, rng = rng)
+end

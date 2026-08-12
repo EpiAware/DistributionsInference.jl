@@ -51,6 +51,17 @@ public draws_to_chain
 export inference_to_distribution, inference_to_distributions,
        inference_to_dist, inference_to_dists
 
+# The raw-draws access verb (#90): `inference_to_parameters` is exported,
+# same tier as `inference_to_distributions` above, since it is an everyday
+# call a caller writes directly (the parameter draws themselves, e.g. to
+# build a `DataFrame`), not an implementer- or engine-facing tool.
+# `inference_to_parameter_distribution` is exported for the same reason —
+# a caller reaches for it directly for a joint-posterior Gaussian
+# approximation (e.g. Markov melding) — even though its only method lives
+# behind the `Bijectors` extension; `distribution_to_objective` sets the same
+# precedent (exported, extension-backed).
+export inference_to_parameters, inference_to_parameter_distribution
+
 # DynamicPPL forms over a fittable object's estimated parameters. Stubs here
 # (docstrings in `turing.jl`); both methods live in
 # `DistributionsInferenceDynamicPPLExt` — `distribution_to_turing(obj, data)`
