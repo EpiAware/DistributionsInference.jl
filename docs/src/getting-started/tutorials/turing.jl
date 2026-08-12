@@ -62,15 +62,15 @@ chain = sample(model, NUTS(), 500; chain_type = VNChain, progress = false)
 # ## Reading the chain back
 #
 # The sites are keyed by the same dotted names the protocol declared, under the
-# model's prefix, so [`point_estimate`](@ref) and
-# [`distribution_draws`](@ref) read a `VNChain` exactly as they read a
+# model's prefix, so [`inference_to_distribution`](@ref) and
+# [`inference_to_distributions`](@ref) read a `VNChain` exactly as they read a
 # hand-rolled chain.
 
-point_estimate(delay, chain).shape
+inference_to_distribution(delay, chain, mean).shape
 
 # Keeping every draw gives a posterior-predictive summary.
 
-fits = distribution_draws(delay, chain)
+fits = inference_to_distributions(delay, chain)
 quantile([mean(Weibull(d.shape, d.scale)) for d in fits], [0.025, 0.5, 0.975])
 
 # The readback contract is the dotted names, so switching sampler leaves this
@@ -90,7 +90,7 @@ Random.seed!(1)
 weighted_chain = sample(
     distribution_to_turing(delay, counts; loglik = weighted_loglik),
     NUTS(), 500; chain_type = VNChain, progress = false)
-point_estimate(delay, weighted_chain).shape
+inference_to_distribution(delay, weighted_chain, mean).shape
 
 # The survival reducer from
 # [Fitting a custom distribution](@ref custom-distribution) goes through the

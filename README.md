@@ -22,7 +22,7 @@ A distribution names its own parameters and becomes fittable through a plain log
   Attaching a prior to a row is what makes that parameter estimated.
   The rows are plain `NamedTuple`s, so the inventory is a row table any Tables.jl consumer reads, without this package depending on Tables.jl.
 - `optimise_distribution` fits a distribution to data with an optimiser of your choosing in one call, for a point estimate rather than a posterior, and the pieces it composes stay available for a fit you drive yourself.
-- `point_estimate` post-processes sampler output onto a fitted distribution in one call.
+- `inference_to_distribution` post-processes sampler output onto a fitted distribution in one call: the Monte Carlo posterior predictive by default, or a plug-in point estimate with a reduction named at the call site.
 - Supporting a new chain type takes one added method.
 - The distribution that comes back is the same kind of object that went in, so a fitted `Gamma` is a `Gamma`.
 
@@ -73,14 +73,14 @@ chain = distribution_to_advancedmh(
     template, data, RWMH(MvNormal(zeros(dim), 0.05^2 * I)), 4000; burnin = 2000)
 ```
 
-`point_estimate` reads the chain back onto the distribution.
-What it returns is a `Gamma`.
+`inference_to_distribution` reads the chain back onto the distribution.
+Naming a reduction (here `mean`) returns the plug-in point estimate, a `Gamma`; leaving it off returns the Monte Carlo posterior predictive instead, an equal-weight mixture over every draw.
 The chain readback is a package extension, so add and load `FlexiChains` for this last step.
 
 ```julia
 using FlexiChains
 
-point_estimate(template, chain)
+inference_to_distribution(template, chain, mean)
 ```
 
 The [getting started guide](https://distributionsinference.epiaware.org/dev/getting-started/) goes further, with a distribution type of your own and sampling through Turing.

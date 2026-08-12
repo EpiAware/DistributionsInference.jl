@@ -32,7 +32,7 @@ Every fit here is the same three steps, whatever the distribution and sampler.
 |---|---|---|
 | Declare | [`parameter_rows`](@ref) and [`reconstruct`](@ref DistributionsInference.reconstruct) on your type | one row per scalar parameter, and a way back from a flat vector |
 | Score | [`distribution_to_logdensity`](@ref) or [`distribution_to_turing`](@ref) | a `LogDensityProblems` problem, or a `DynamicPPL` model |
-| Read back | [`point_estimate`](@ref) or [`distribution_draws`](@ref) | the fitted distribution |
+| Read back | [`inference_to_distribution`](@ref) or [`inference_to_distributions`](@ref) | the fitted distribution |
 
 Only the first step is written per type, and a distribution from a package that already implements the protocol skips it.
 A point estimate replaces the last two: [`optimise_distribution`](@ref) takes the distribution, the data and an optimiser, and returns the fitted distribution.
