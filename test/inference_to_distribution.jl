@@ -312,9 +312,10 @@ end
     @test [d.α for d in explicit_full_pool] == chain2
 end
 
-@testitem "inference_to_distribution: a non-Distribution reconstruct errors, naming the type" setup=[
+@testitem "inference_to_distribution: only the 2-argument MixtureModel form requires a Distribution" setup=[
     ToyFixture] begin
     using FlexiChains: FlexiChains
+    using Statistics: mean
 
     # `ToyGammaLeaf` reconstructs to itself, not a `Distribution` — exactly
     # the toy fittable type this package's own docstrings use.
@@ -329,7 +330,8 @@ end
     @test length(dists) == 4
     @test all(d -> d isa ToyGammaLeaf, dists)
 
-    # Both `inference_to_distribution` forms require it and name the type
+    # Only the 2-argument `MixtureModel` form requires it — mixing
+    # non-distributions has no sensible meaning — and names the type
     # actually reached.
     err_mixture = try
         DistributionsInference.inference_to_distribution(leaf, chain)
@@ -341,15 +343,43 @@ end
     @test occursin("ToyGammaLeaf", err_mixture.msg)
     @test occursin("Distribution", err_mixture.msg)
 
-    err_plugin = try
-        using Statistics: mean
-        DistributionsInference.inference_to_distribution(leaf, chain, mean)
-        nothing
-    catch e
-        e
-    end
-    @test err_plugin isa ArgumentError
-    @test occursin("ToyGammaLeaf", err_plugin.msg)
+    # The 3-argument summarise-then-reconstruct form does not: it never
+    # mixes, so it is as generic as the plural form above (see the dedicated
+    # test below for the full non-Distribution coverage).
+    plugin = DistributionsInference.inference_to_distribution(leaf, chain, mean)
+    @test plugin isa ToyGammaLeaf
+end
+
+@testitem "inference_to_distribution(obj, chain, summary): works for a non-Distribution fittable object" setup=[
+    ToyFixture] begin
+    using FlexiChains: FlexiChains
+    using Statistics: mean, median
+
+    # This is the direct replacement for the old `point_estimate`, which
+    # never required `reconstruct(obj, x)` to return a `Distribution`
+    # either — this form summarises each estimated row's draws and calls
+    # `reconstruct` once, exactly what `inference_to_distributions` does
+    # once per draw, so it needs no `Distribution` out any more than that
+    # does.
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    values = [1.0, 2.0, 3.0, 4.0]
+    chain = FlexiChains.FlexiChain{Symbol}(
+        4, 1, Dict(FlexiChains.Parameter(:shape) => reshape(values, 4, 1)))
+
+    fitted_mean = DistributionsInference.inference_to_distribution(
+        leaf, chain, mean)
+    @test fitted_mean isa ToyGammaLeaf
+    @test fitted_mean.shape ≈ mean(values)
+    @test fitted_mean.scale == leaf.scale  # the fixed row, untouched
+
+    fitted_median = DistributionsInference.inference_to_distribution(
+        leaf, chain, median)
+    @test fitted_median.shape ≈ median(values)
+
+    # A subset selection reduces over the selected draws only.
+    fitted_subset = DistributionsInference.inference_to_distribution(
+        leaf, chain, mean; draws = 2:3)
+    @test fitted_subset.shape ≈ mean(values[2:3])
 end
 
 @testitem "dim == 0 with ndraws > 0" setup=[GammaLeafFixture] begin

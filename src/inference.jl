@@ -1,8 +1,14 @@
 # The posterior-output API: three ways to turn a fitted chain (or raw draws)
-# back into a `Distribution`, replacing `point_estimate`/`distribution_draws`
-# for a caller who wants a `Distribution` out rather than a rebuilt fittable
-# object. Additive: `point_estimate`, `distribution_params` and
-# `distribution_draws` are unaffected and keep working.
+# back into a reconstructed object, replacing `point_estimate`/
+# `distribution_draws`. Only the 2-argument `MixtureModel` form needs
+# `reconstruct(obj, x)` to return a `Distribution` — mixing non-distributions
+# is meaningless. The plural and 3-argument (summarise-then-reconstruct)
+# forms work for any fittable object, exactly as `reconstruct` itself does;
+# neither has ever needed a `Distribution` out, and requiring one on the
+# 3-argument form was an inconsistency with the plural form, not a design
+# choice, so it is not enforced. Additive: `point_estimate`,
+# `distribution_params` and `distribution_draws` are unaffected and keep
+# working.
 #
 # Each of the three has ONE concrete return type, which is why this is
 # dispatch (three names) rather than one function branching on a keyword:
@@ -103,18 +109,12 @@ function _reconstruct_summary(obj, chain::FlexiChains.FlexiChain, summary, idx)
     return reconstruct(obj, vals)
 end
 
-# `inference_to_distribution`/`inference_to_distribution(..., summary)` need
-# `reconstruct(obj, x)` to return a `Distribution`; `inference_to_distributions`
-# does not (it is the generic vectorised readback, e.g. for a non-`Distribution`
-# fittable object). This is the shared check, naming the actual type reached.
-function _require_distribution(f::Symbol, x)
-    x isa Distributions.Distribution && return x
-    throw(ArgumentError(
-        "`$f` needs `reconstruct(obj, x)` to return a `Distribution`; got " *
-        "$(typeof(x)). Use `inference_to_distributions` instead when the " *
-        "reconstructed object is not a `Distribution`."))
-end
-
+# Only the 2-argument `inference_to_distribution` (the `MixtureModel` form)
+# needs `reconstruct(obj, x)` to return a `Distribution`: mixing
+# non-distributions has no sensible meaning. `inference_to_distributions` and
+# the 3-argument (summarise-then-reconstruct) form are generic, exactly as
+# `reconstruct` itself is — this is the one check, naming the actual eltype
+# reached.
 function _require_distribution_eltype(f::Symbol, dists::AbstractVector)
     eltype(dists) <: Distributions.Distribution && return dists
     throw(ArgumentError(
@@ -345,7 +345,11 @@ each estimated row's selected draws with `summary` (e.g. `mean`) to a flat
 parameter vector, and calls [`reconstruct`](@ref) *once* on that vector — the
 plug-in estimate, positionally requiring the reduction so the loss of
 posterior uncertainty is visible at the call site. This replaces the old
-`point_estimate`.
+`point_estimate`, and like it, does not require `reconstruct(obj, x)` to
+return a `Distribution`: this form summarises and reconstructs once, exactly
+what [`inference_to_distributions`](@ref) does once per draw, so it is
+generic in the same way. Only the 2-argument `MixtureModel` form needs a
+`Distribution` out.
 
 **This is not the posterior predictive.** Summarising before reconstructing
 is not the same distribution as reconstructing every draw and mixing:
@@ -354,10 +358,9 @@ left side is what this function returns, the right side (its Monte Carlo
 approximation) is [`inference_to_distribution`](@ref)`(obj, chain)`. Reach
 for this only when a single point estimate genuinely suffices (e.g. handing
 one `Distribution` to code that takes one), not as a stand-in for the
-posterior predictive.
-
-Raises an `ArgumentError` naming the actual type reached when
-[`reconstruct`](@ref)`(obj, x)` does not return a `Distribution`.
+posterior predictive. That comparison needs `reconstruct` to return a
+`Distribution`, of course, even though this function itself does not require
+it.
 
 `chain` also accepts raw draws with no chain of their own; see
 [`inference_to_distributions`](@ref) for the accepted forms and the
@@ -404,6 +407,36 @@ chain = FlexiChain{Symbol}(
 inference_to_distribution(leaf, chain, mean)
 ```
 
+`reconstruct(obj, x)` need not return a `Distribution` here — unlike the
+2-argument form, this one never mixes:
+
+```@example
+using DistributionsInference, Distributions
+using FlexiChains: FlexiChain, Parameter
+using Statistics: mean
+
+struct NonDistLeaf
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::NonDistLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale, prior = nothing,
+            support = (0.0, Inf))]
+end
+function DistributionsInference.reconstruct(d::NonDistLeaf, x::AbstractVector)
+    return NonDistLeaf(x[1], d.scale)
+end
+
+leaf = NonDistLeaf(2.0, 1.0)
+draws = [2.1, 2.4, 2.0, 2.6]
+chain = FlexiChain{Symbol}(
+    4, 1, Dict(Parameter(:shape) => reshape(draws, 4, 1)))
+inference_to_distribution(leaf, chain, mean).shape
+```
+
 # See also
 - [`inference_to_distribution`](@ref): the Monte Carlo posterior predictive
   this trades accuracy for cheapness against.
@@ -414,8 +447,7 @@ function inference_to_distribution(
         draws = nothing, rng = Random.default_rng())
     idx = _resolve_pooled_draws(_pooled_ndraws(chain), draws, rng)
     _require_nonempty_selection(:inference_to_distribution, idx)
-    result = _reconstruct_summary(obj, chain, summary, idx)
-    return _require_distribution(:inference_to_distribution, result)
+    return _reconstruct_summary(obj, chain, summary, idx)
 end
 
 function inference_to_distribution(obj, chain, summary; kwargs...)

@@ -46,10 +46,12 @@ public draws_to_chain
 
 # The posterior-output API (additive; `point_estimate`/`distribution_draws`
 # above are unaffected). `inference_to_distribution` is the equal-weight
-# `MixtureModel` over selected draws (2-argument form) or the marginal
-# plug-in `Distribution` (3-argument form, the reduction positional);
-# `inference_to_distributions` is the vectorised, every-draw form.
-# `inference_to_dist`/`inference_to_dists` are aliases for the two,
+# `MixtureModel` over selected draws (2-argument form, needs
+# `reconstruct(obj, x)` to return a `Distribution` — mixing non-distributions
+# is meaningless) or the marginal plug-in (3-argument form, the reduction
+# positional; generic, like the plural form below, since it never mixes);
+# `inference_to_distributions` is the vectorised, every-draw form, also
+# generic. `inference_to_dist`/`inference_to_dists` are aliases for the two,
 # documented as such with the full names canonical.
 export inference_to_distribution, inference_to_distributions,
        inference_to_dist, inference_to_dists
