@@ -323,3 +323,92 @@ function objective_to_distribution(prob, z)
     return _extension_required(:objective_to_distribution, "Bijectors",
         "DistributionsInferenceBijectorsExt")
 end
+
+@doc "
+
+The joint posterior approximated as a `MvNormal`, on the unconstrained scale.
+
+`inference_to_parameter_distribution(obj, chain; draws = nothing)` fits a
+`Distributions.MvNormal` to `chain`'s selected draws (pooled across every
+chain it carries, exactly as [`inference_to_distributions`](@ref) does) — the
+Gaussian approximation to the *joint* posterior, capturing the correlations
+between [`estimated_rows`](@ref)`(obj)`'s parameters that a set of marginal
+summaries (e.g. [`distribution_params`](@ref)'s default `mean`, taken one row
+at a time) discards.
+
+**The returned `MvNormal` lives on the unconstrained scale**, in
+[`estimated_rows`](@ref)`(obj)` row order: every draw is mapped through
+[`to_unconstrained`](@ref) before its mean and covariance are computed. A row
+with positive support (a shape, a scale, ...) has a posterior skewed toward a
+boundary the constrained scale cannot cross, and a Gaussian fitted there
+directly would put mass on impossible values (e.g. a negative shape); the
+unconstrained scale (a `log` link for a positive-support prior, a `logit`
+link for a `[0, 1]`-supported one, and so on, exactly as
+[`to_unconstrained`](@ref)/[`to_constrained`](@ref) build it from `obj`'s own
+[`parameter_rows`](@ref) priors) is where the Gaussian approximation is
+honest. Map a draw from this `MvNormal` back to the constrained scale with
+[`to_constrained`](@ref).
+
+The intended use is Markov melding: a fitted posterior from an upstream model
+becomes a joint prior for a downstream one. Because this `MvNormal` carries
+correlation, a downstream model must score it as a joint term through
+[`extra_logprior`](@ref) — which receives the reconstructed object's full
+flat parameter vector (see [`parameter_rows`](@ref)) — **not** through
+per-row priors, which are independent by construction and would silently
+drop the correlation this function exists to keep.
+
+This has no method until `Bijectors` is loaded (the unconstrained transform
+is a `Bijectors` extension concern, exactly as for [`to_unconstrained`](@ref)
+itself); the implementation lives in the `DistributionsInferenceBijectorsExt`
+extension.
+
+# Arguments
+- `obj`: the fittable object the draws were sampled for.
+- `chain`: the chain (or raw draws) to read from.
+
+# Keyword Arguments
+- `draws`: which pooled draws to fit over; see
+  [`inference_to_distributions`](@ref) for the four accepted forms and the
+  chain-major pooling caveat. Needs more selected draws than
+  `obj` has estimated parameters, so the fitted covariance is non-singular.
+- `nchains`: raw-draws form only (default `1`).
+- `rng`: used when `draws` is an `Integer` (default `Random.default_rng()`).
+
+# Examples
+```@example
+using DistributionsInference, Distributions, Bijectors
+using FlexiChains: FlexiChain, Parameter
+
+struct MeldLeaf
+    shape::Float64
+    scale::Float64
+end
+
+function DistributionsInference.parameter_rows(d::MeldLeaf)
+    return [(name = :shape, value = d.shape,
+            prior = LogNormal(log(2.0), 0.2), support = (0.0, Inf)),
+        (name = :scale, value = d.scale,
+            prior = LogNormal(log(1.0), 0.2), support = (0.0, Inf))]
+end
+
+leaf = MeldLeaf(2.0, 1.0)
+shape_draws = [2.1, 2.4, 2.0, 2.6]
+scale_draws = [0.9, 1.1, 1.0, 1.2]
+chain = FlexiChain{Symbol}(4, 1, Dict(
+    Parameter(:shape) => reshape(shape_draws, 4, 1),
+    Parameter(:scale) => reshape(scale_draws, 4, 1)))
+mvn = inference_to_parameter_distribution(leaf, chain)
+mvn isa MvNormal
+```
+
+# See also
+- [`inference_to_parameters`](@ref): the exact draws this fits over.
+- [`to_unconstrained`](@ref), [`to_constrained`](@ref): the transform this
+  scale lives on.
+- [`extra_logprior`](@ref): where a downstream model scores this as a joint
+  prior.
+"
+function inference_to_parameter_distribution(obj, chain; kwargs...)
+    return _extension_required(:inference_to_parameter_distribution,
+        "Bijectors", "DistributionsInferenceBijectorsExt")
+end

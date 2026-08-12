@@ -10,16 +10,19 @@ The protocol (`parameter_rows`, `reconstruct`), default-prior assembly over it
 (`default_prior`, `with_priors`), the engine (`distribution_to_logdensity`,
 `logdensity`, `FitLogDensity`) and the dotted-name `FlexiChains` readback
 (`distribution_params`, `point_estimate`, `distribution_draws`,
-`inference_to_distribution`, `inference_to_distributions` and their
-`inference_to_dist`/`inference_to_dists` aliases) are implemented here;
-`FlexiChains` is a hard dependency. Everything else arrives through an
+`inference_to_distribution`, `inference_to_distributions`, their
+`inference_to_dist`/`inference_to_dists` aliases, and
+`inference_to_parameters` for the exact draws themselves) are implemented
+here; `FlexiChains` is a hard dependency. Everything else arrives through an
 extension: `DynamicPPL` (`distribution_to_turing`, both the model-building
 form and the `FlexiChain`-returning sampling form), `DynamicPPL` x
 `FlexiChains` (the `VarName`-keyed dispatch of the readback functions above),
-`Bijectors` (`to_constrained`, `to_unconstrained` and the
-`logdensity_to_objective` / `objective_to_distribution` pair built on them;
-`distribution_to_objective` is written in core over that pair, so it needs
-`Bijectors` loaded the same way), `AdvancedMH` x `Bijectors`
+`Bijectors` (`to_constrained`, `to_unconstrained`, the
+`logdensity_to_objective` / `objective_to_distribution` pair built on them,
+and `inference_to_parameter_distribution`, the joint posterior fitted as an
+`MvNormal` on the unconstrained scale; `distribution_to_objective` is written
+in core over the objective pair, so it needs `Bijectors` loaded the same
+way), `AdvancedMH` x `Bijectors`
 (`distribution_to_advancedmh`), `ComposedDistributions` (the fit protocol
 over a composed tree's own codec), `ModifiedDistributions` (the fit protocol
 for a standalone modifier distribution, not only as a leaf inside a composed
