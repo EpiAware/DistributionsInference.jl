@@ -27,31 +27,26 @@ public default_prior
 export distribution_to_logdensity
 public FitLogDensity, logdensity, template, observations, flat_priors
 
-# The dotted-name `FlexiChains` readback (`FlexiChains` is a hard dependency;
-# implemented directly in `readback.jl`/`inference.jl`). All five also
-# dispatch on a `VarName`-keyed chain once `DynamicPPL` is loaded alongside
-# this package (`DistributionsInferenceDynamicPPLFlexiChainsExt`).
-#
-# `distribution_params` reads a chain's estimated values by name;
-# `point_estimate` and `distribution_draws` rebuild the distribution from them,
-# reduced to one object or kept one per draw. `draws_to_chain` is the other
-# direction: raw sampler draws (a `dim x niter` matrix, or a vector of
-# `dim`-length vectors) keyed into a dotted-name `FlexiChain` — public because
-# a sampling verb whose package hands back raw draws rather than a chain of
-# its own (`distribution_to_advancedmh`, #94) needs it to build one; it stays
-# `public` rather than exported since it is a sampler-extension-author tool,
-# not an everyday call.
-export distribution_params, point_estimate, distribution_draws
+# `draws_to_chain` keys raw sampler draws (a `dim x niter` matrix, or a
+# vector of `dim`-length vectors) into a dotted-name `FlexiChain`
+# (`FlexiChains` is a hard dependency; implemented directly in
+# `readback.jl`). Public because a sampling verb whose package hands back raw
+# draws rather than a chain of its own (`distribution_to_advancedmh`, #94)
+# needs it to build one; it stays `public` rather than exported since it is a
+# sampler-extension-author tool, not an everyday call.
 public draws_to_chain
 
-# The posterior-output API (additive; `point_estimate`/`distribution_draws`
-# above are unaffected). `inference_to_distribution` is the equal-weight
-# `MixtureModel` over selected draws (2-argument form, needs
+# The posterior-output API, and the only way this package reads a chain (or
+# raw draws) back onto a fitted object: `inference_to_distribution` is the
+# equal-weight `MixtureModel` over selected draws (2-argument form, needs
 # `reconstruct(obj, x)` to return a `Distribution` — mixing non-distributions
 # is meaningless) or the marginal plug-in (3-argument form, the reduction
 # positional; generic, like the plural form below, since it never mixes);
 # `inference_to_distributions` is the vectorised, every-draw form, also
-# generic. `inference_to_dist`/`inference_to_dists` are aliases for the two,
+# generic. Both also dispatch on a `VarName`-keyed chain once `DynamicPPL` is
+# loaded alongside this package
+# (`DistributionsInferenceDynamicPPLFlexiChainsExt`).
+# `inference_to_dist`/`inference_to_dists` are aliases for the two,
 # documented as such with the full names canonical.
 export inference_to_distribution, inference_to_distributions,
        inference_to_dist, inference_to_dists

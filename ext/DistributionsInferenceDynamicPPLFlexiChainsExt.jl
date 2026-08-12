@@ -3,16 +3,14 @@ module DistributionsInferenceDynamicPPLFlexiChainsExt
 # DistributionsInference x DynamicPPL x FlexiChains: the `VarName`-keyed chain
 # readback (DI#4). A chain sampled from `distribution_to_turing` is keyed by
 # `VarName`, so rename it onto the estimated rows' dotted `Symbol` names and
-# hand it to the `Symbol`-keyed readback in core (`src/readback.jl`,
-# `src/inference.jl`). `FlexiChains` is a hard dependency of
-# `DistributionsInference`, so this extension only needs `DynamicPPL` as its
-# trigger.
-# Docstrings live on the stubs in `src/readback.jl`/`src/inference.jl`.
+# hand it to the `Symbol`-keyed readback in core (`src/inference.jl`).
+# `FlexiChains` is a hard dependency of `DistributionsInference`, so this
+# extension only needs `DynamicPPL` as its trigger.
+# Docstrings live on the stubs in `src/inference.jl`.
 
 using DistributionsInference: DistributionsInference, estimated_rows,
                               _row_varname
-import DistributionsInference: distribution_params, point_estimate,
-                               distribution_draws, inference_to_distribution,
+import DistributionsInference: inference_to_distribution,
                                inference_to_distributions
 using DynamicPPL: VarName
 using FlexiChains: FlexiChains
@@ -46,23 +44,6 @@ end
 
 # `prefix` must match the one `distribution_to_turing` was called with; every
 # other keyword forwards to the `Symbol`-keyed method.
-function distribution_params(obj, chain::FlexiChains.FlexiChain{<:VarName};
-        prefix::Symbol = :d, kwargs...)
-    return distribution_params(
-        obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
-end
-
-function point_estimate(obj, chain::FlexiChains.FlexiChain{<:VarName};
-        prefix::Symbol = :d, kwargs...)
-    return point_estimate(obj, _to_symbol_chain(obj, chain, prefix); kwargs...)
-end
-
-function distribution_draws(obj, chain::FlexiChains.FlexiChain{<:VarName};
-        prefix::Symbol = :d, kwargs...)
-    symbol_chain = _to_symbol_chain(obj, chain, prefix)
-    return distribution_draws(obj, symbol_chain; kwargs...)
-end
-
 function inference_to_distributions(
         obj, chain::FlexiChains.FlexiChain{<:VarName};
         prefix::Symbol = :d, kwargs...)

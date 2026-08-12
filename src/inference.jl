@@ -1,21 +1,18 @@
 # The posterior-output API: three ways to turn a fitted chain (or raw draws)
-# back into a reconstructed object, replacing `point_estimate`/
-# `distribution_draws`. Only the 2-argument `MixtureModel` form needs
-# `reconstruct(obj, x)` to return a `Distribution` — mixing non-distributions
-# is meaningless. The plural and 3-argument (summarise-then-reconstruct)
-# forms work for any fittable object, exactly as `reconstruct` itself does;
-# neither has ever needed a `Distribution` out, and requiring one on the
-# 3-argument form was an inconsistency with the plural form, not a design
-# choice, so it is not enforced. Additive: `point_estimate`,
-# `distribution_params` and `distribution_draws` are unaffected and keep
-# working.
+# back into a reconstructed object. This is the only chain-to-object readback
+# the package has; it replaced the `point_estimate`/`distribution_params`/
+# `distribution_draws` trio, removed once this proved itself (#90, #95). Only
+# the 2-argument `MixtureModel` form needs `reconstruct(obj, x)` to return a
+# `Distribution` — mixing non-distributions is meaningless. The plural and
+# 3-argument (summarise-then-reconstruct) forms work for any fittable object,
+# exactly as `reconstruct` itself does.
 #
 # Each of the three has ONE concrete return type, which is why this is
 # dispatch (three names) rather than one function branching on a keyword:
 #
 #   inference_to_distribution(obj, chain; draws)        -> MixtureModel
-#   inference_to_distributions(obj, chain; draws)        -> Vector{<:Distribution}
-#   inference_to_distribution(obj, chain, summary; draws) -> one Distribution
+#   inference_to_distributions(obj, chain; draws)        -> Vector
+#   inference_to_distribution(obj, chain, summary; draws) -> a reconstructed object
 #
 # `chain` also accepts a raw `dim x ndraws` matrix or a vector of `dim`-length
 # vectors (with an `nchains` keyword), built into a `FlexiChain` via
@@ -131,9 +128,7 @@ Every selected draw, reconstructed: the vectorised posterior readback.
 (pooled across every chain it carries) and returns one
 [`reconstruct`](@ref)`(obj, x)` per selected draw. Unlike
 [`inference_to_distribution`](@ref), the reconstructed element does not need
-to be a `Distribution` — this is the generic vectorised readback, and the
-additive replacement for [`distribution_draws`](@ref) (identical selected
-values, a different `draws` selector).
+to be a `Distribution` — this is the generic vectorised readback.
 
 `chain` is a dotted-name `FlexiChain`, a `VarName`-keyed chain (once
 `DynamicPPL` is loaded alongside this package), or raw draws with no chain of
@@ -211,7 +206,6 @@ length(inference_to_distributions(leaf, chain))
   this same selection — the Monte Carlo posterior predictive.
 - [`inference_to_distribution`](@ref)`(obj, chain, summary)`: the plug-in
   point estimate instead of the full draw set.
-- [`distribution_draws`](@ref): the function this replaces.
 "
 function inference_to_distributions(obj, chain::FlexiChains.FlexiChain;
         draws = nothing, rng = Random.default_rng())
@@ -440,7 +434,6 @@ inference_to_distribution(leaf, chain, mean).shape
 # See also
 - [`inference_to_distribution`](@ref): the Monte Carlo posterior predictive
   this trades accuracy for cheapness against.
-- [`point_estimate`](@ref): the function this replaces.
 "
 function inference_to_distribution(
         obj, chain::FlexiChains.FlexiChain, summary;

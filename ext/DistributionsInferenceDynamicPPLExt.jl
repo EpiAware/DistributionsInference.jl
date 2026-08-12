@@ -7,9 +7,10 @@ module DistributionsInferenceDynamicPPLExt
 # its own prior. `distribution_to_turing(obj, data, sampler, nsamples)` is
 # the second form (#94, docstring alongside its definition below): the same
 # model, sampled with `sample(...; chain_type = VNChain)`, returned as-is — a
-# `VarName`-keyed `FlexiChain`, which `point_estimate`/`inference_to_distribution`
-# already read (`DistributionsInferenceDynamicPPLFlexiChainsExt`), so no
-# rekeying onto `Symbol` is needed here.
+# `VarName`-keyed `FlexiChain`, which `inference_to_distribution`/
+# `inference_to_distributions` already read
+# (`DistributionsInferenceDynamicPPLFlexiChainsExt`), so no rekeying onto
+# `Symbol` is needed here.
 #
 # `_row_varname` is the naming contract shared with the `VarName`-keyed
 # readback in `DistributionsInferenceDynamicPPLFlexiChainsExt` (DI#4, the
@@ -92,7 +93,8 @@ Sample a fittable object's posterior with `Turing`, and return a `FlexiChain`.
 loglik, kwargs...)` drives
 [`distribution_to_turing`](@ref)`(obj, data; prefix, loglik)`'s model with
 `sample(model, sampler, nsamples; chain_type = FlexiChains.VNChain,
-kwargs...)`, so [`point_estimate`](@ref)/[`inference_to_distribution`](@ref)
+kwargs...)`, so
+[`inference_to_distribution`](@ref)/[`inference_to_distributions`](@ref)
 read the result exactly as they do a chain built by hand from
 `sample(distribution_to_turing(obj, data), ...)`. This is a different
 concrete return type from the 2-argument
@@ -148,7 +150,7 @@ data = [1.5, 2.0, 3.2]
 
 Random.seed!(1)
 chain = distribution_to_turing(leaf, data, NUTS(), 200; progress = false)
-fitted = point_estimate(leaf, chain)
+fitted = inference_to_distribution(leaf, chain, mean)
 fitted.scale  # the fixed parameter, untouched
 ```
 
@@ -156,8 +158,8 @@ fitted.scale  # the fixed parameter, untouched
 - [`distribution_to_turing`](@ref)`(obj, data)`: the model-building form this
   samples.
 - [`distribution_to_advancedmh`](@ref): the sibling sampling verb.
-- [`point_estimate`](@ref) / [`inference_to_distribution`](@ref): read the
-  returned chain back onto `obj`.
+- [`inference_to_distribution`](@ref) / [`inference_to_distributions`](@ref):
+  read the returned chain back onto `obj`.
 "
 function distribution_to_turing(obj, data, sampler, nsamples::Integer;
         nchains::Integer = 1, prefix::Symbol = :d,

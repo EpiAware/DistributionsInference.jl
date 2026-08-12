@@ -18,7 +18,8 @@ burnin = 0, loglik, rng, kwargs...)` assembles
 `nsamples` draws, and keys the draws back onto the constrained scale into a
 dotted-name `FlexiChain` with [`draws_to_chain`](@ref) — the same naming
 [`distribution_to_turing`](@ref)'s sampling form produces, so the result
-reads back with [`point_estimate`](@ref)/[`inference_to_distribution`](@ref)
+reads back with
+[`inference_to_distribution`](@ref)/[`inference_to_distributions`](@ref)
 unchanged.
 
 Sampling on the unconstrained scale means a random-walk proposal can never
@@ -92,15 +93,15 @@ dim = DistributionsInference.flat_dimension(leaf)
 Random.seed!(1)
 chain = distribution_to_advancedmh(
     leaf, data, RWMH(MvNormal(zeros(dim), 0.1^2 * I)), 2000; burnin = 1000)
-fitted = point_estimate(leaf, chain)
+fitted = inference_to_distribution(leaf, chain, mean)
 fitted.scale  # the fixed parameter, untouched
 ```
 
 # See also
 - [`distribution_to_logdensity`](@ref): the PPL-neutral log-density this wraps.
 - [`distribution_to_turing`](@ref): the sibling sampling verb.
-- [`point_estimate`](@ref) / [`inference_to_distribution`](@ref): read the
-  returned chain back onto `obj`.
+- [`inference_to_distribution`](@ref) / [`inference_to_distributions`](@ref):
+  read the returned chain back onto `obj`.
 - [`draws_to_chain`](@ref): the raw-draws-to-chain step this uses internally.
 "
 function distribution_to_advancedmh end
