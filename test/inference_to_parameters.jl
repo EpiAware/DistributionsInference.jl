@@ -373,3 +373,21 @@ end
 # extension-backed stub in `test/DistributionsInference.jl`'s "an
 # extension-backed stub names the package to load" item, which already runs
 # a fresh process for exactly this.
+
+@testitem "inference_to_parameters: a chain of the wrong type names the type" setup=[
+    GammaLeafFixture] begin
+    leaf = GammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+
+    # Not a `FlexiChain`, and not raw draws in either accepted shape, so it
+    # falls through to the shared wrong-chain-type fallback rather than
+    # failing with a bare `MethodError`.
+    err = try
+        DistributionsInference.inference_to_parameters(leaf, "not a chain")
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("inference_to_parameters", err.msg)
+    @test occursin("String", err.msg)
+end
