@@ -93,6 +93,45 @@ end
     end
 end
 
+@testitem "NamedTuple-record batch: cached scoring matches uncached, missing preserved (#115)" setup=[
+    ComposedFixture] begin
+    using ComposedDistributions: _named_value_vector
+
+    # A record with a `missing` field: the censored `AbstractVector{>:Missing}`
+    # `logpdf` specialisation must still be selected after the batch is
+    # converted once at construction, not the plain `AbstractVector` one.
+    data = [(onset_admit = 1.5, admit_death = missing),
+        (onset_admit = 2.0, admit_death = 3.0)]
+    prob = DistributionsInference.distribution_to_logdensity(plain_tree, data)
+
+    # `observations` still returns exactly what was passed in — the
+    # conversion is held internally, not exposed through the public accessor.
+    @test DistributionsInference.observations(prob) === data
+
+    # The internally-cached scoring batch is the by-name-matched,
+    # `Missing`-admitting vector form, matching CD's own per-record
+    # conversion exactly.
+    @test prob.scored_data isa Vector{Vector{Union{Missing, Float64}}}
+    for i in eachindex(data)
+        @test isequal(prob.scored_data[i], _named_value_vector(plain_tree, data[i]))
+    end
+
+    # The method actually selected for the cached vector is the censored
+    # specialisation, not a plain-`AbstractVector` fallback.
+    m = which(Distributions.logpdf, (typeof(plain_tree), typeof(prob.scored_data[1])))
+    @test occursin("Missing", string(m.sig))
+
+    # End-to-end: the cached-batch `logdensity` matches a hand-rolled
+    # uncached NamedTuple walk exactly, for a missing-admitting batch.
+    x = [2.5]
+    reconstructed = DistributionsInference.reconstruct(plain_tree, x)
+    rows = DistributionsInference.estimated_rows(plain_tree)
+    lp_prior = sum(logpdf(rows[i].prior, x[i]) for i in eachindex(x))
+    lp_uncached = lp_prior +
+                  sum(r -> Distributions.logpdf(reconstructed, r), data)
+    @test DistributionsInference.logdensity(prob, x) ≈ lp_uncached rtol=1e-12
+end
+
 @testitem "logdensity matches the CD reference for a plain tree" setup=[ComposedFixture] begin
     data = [[0.5, 2.0], [1.0, 3.0]]
     prob = DistributionsInference.distribution_to_logdensity(plain_tree, data)

@@ -12,9 +12,11 @@
 # belongs upstream (CD#189), not here.
 module DistributionsInferenceComposedDistributionsExt
 
-using ComposedDistributions: ComposedDistributions, AbstractComposedDistribution
+using ComposedDistributions: ComposedDistributions, AbstractComposedDistribution,
+                             Sequential, Parallel
 import DistributionsInference: parameter_rows, estimated_rows, flat_dimension,
-                               reconstruct, extra_logprior, extra_prior_state
+                               reconstruct, extra_logprior, extra_prior_state,
+                               _prepare_default_loglik_data
 
 # A centred pooled row's prior is a `CentredPoolPrior` marker, not a fixed
 # distribution: it is scored against the reconstructed hyperparameters, so it
@@ -79,6 +81,23 @@ function extra_logprior(d::AbstractComposedDistribution, ::Any,
     isempty(state) && return 0.0
     nt = ComposedDistributions.unflatten(d, x)
     return ComposedDistributions.pool_centred_logprior(state, nt)
+end
+
+# A `NamedTuple`-record batch (e.g. `[rand(d) for _ in 1:n]`) is matched to
+# `d`'s value-name layout by `ComposedDistributions._named_value_vector` on
+# every `logpdf(d, ::NamedTuple)` call, heap-allocating a fresh
+# `Missing`-admitting vector per record per evaluation — directly in the
+# gradient loop under the default `loglik`. Since `reconstruct` only ever
+# changes `d`'s numeric fields, not its tree structure, the by-name match is
+# invariant across the whole fit: do it once here, at
+# `distribution_to_logdensity` construction, and score the converted vectors
+# directly thereafter. The `Missing`-admitting element type is preserved
+# exactly, so the same censored `logpdf` specialisation
+# (`AbstractVector{>:Missing}`) is still selected (#115).
+function _prepare_default_loglik_data(
+        d::Union{Sequential, Parallel}, data::AbstractVector{<:NamedTuple})
+    return [ComposedDistributions._named_value_vector(d, record)
+            for record in data]
 end
 
 end # module DistributionsInferenceComposedDistributionsExt
