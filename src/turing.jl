@@ -20,13 +20,13 @@ scored by `loglik`. The model's total log-density equals
 corresponding constrained `x` by construction.
 
 The `~` sites are named to match the
-[`point_estimate`](@ref)/[`distribution_draws`](@ref) contract exactly: an
+[`inference_to_distributions`](@ref) contract exactly: an
 estimated row's dotted `name` (e.g. `Symbol(\"onset.shape\")`) becomes the
 `VarName` `<prefix>.onset.shape`, so a chain from
 `sample(distribution_to_turing(obj, data), ...; chain_type =
 FlexiChains.VNChain)` reads back through
-[`point_estimate`](@ref)/[`distribution_draws`](@ref) unchanged (that
-`VarName`-keyed dispatch lives in the
+[`inference_to_distribution`](@ref)/[`inference_to_distributions`](@ref)
+unchanged (that `VarName`-keyed dispatch lives in the
 `DistributionsInferenceDynamicPPLFlexiChainsExt` extension, so it needs
 `FlexiChains` loaded too; `distribution_to_turing` itself does not).
 
@@ -84,14 +84,14 @@ data = [1.5, 2.0, 3.2]
 Random.seed!(1)
 chain = sample(distribution_to_turing(leaf, data), NUTS(), 200;
     chain_type = VNChain, progress = false)
-fitted = point_estimate(leaf, chain)
+fitted = inference_to_distribution(leaf, chain, mean)
 fitted.scale  # the fixed parameter, untouched
 ```
 
 # See also
 - [`distribution_to_logdensity`](@ref): the PPL-neutral log-density this wraps.
-- [`point_estimate`](@ref) / [`distribution_draws`](@ref): read a fitted chain
-  back onto `obj`.
+- [`inference_to_distribution`](@ref) / [`inference_to_distributions`](@ref):
+  read a fitted chain back onto `obj`.
 - [`parameter_rows`](@ref) / [`reconstruct`](@ref): the fit protocol this reads.
 "
 function distribution_to_turing end

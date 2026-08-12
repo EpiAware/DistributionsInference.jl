@@ -1,9 +1,8 @@
 # The posterior-output API: `inference_to_distribution`/`inference_to_distributions`
 # (and their `inference_to_dist`/`inference_to_dists` aliases), the equal-weight
-# `MixtureModel`/vectorised/plug-in trio replacing `point_estimate`/
-# `distribution_draws` for a caller who wants a `Distribution` out. Additive:
-# `point_estimate`/`distribution_params`/`distribution_draws` are covered
-# separately in `test/readback.jl` and are unaffected by this file.
+# `MixtureModel`/vectorised/plug-in trio that replaced `point_estimate`/
+# `distribution_params`/`distribution_draws` (#90, #95). `draws_to_chain`
+# coverage lives separately in `test/readback.jl`.
 
 @testsnippet GammaLeafFixture begin
     using DistributionsInference, Distributions
@@ -35,7 +34,7 @@
     end
 end
 
-@testitem "inference_to_distributions: agrees with distribution_draws on the same input" setup=[
+@testitem "inference_to_distributions: reconstructs every selected draw" setup=[
     GammaLeafFixture] begin
     using FlexiChains: FlexiChains
 
@@ -44,15 +43,14 @@ end
     chain = FlexiChains.FlexiChain{Symbol}(
         6, 1, Dict(FlexiChains.Parameter(:shape) => reshape(values, 6, 1)))
 
-    new_dists = DistributionsInference.inference_to_distributions(leaf, chain)
-    old_dists = DistributionsInference.distribution_draws(leaf, chain)
+    dists = DistributionsInference.inference_to_distributions(leaf, chain)
 
-    @test length(new_dists) == length(old_dists) == 6
-    @test all(d -> d isa Gamma, new_dists)
-    @test [d.α for d in new_dists] == [d.α for d in old_dists] == values
+    @test length(dists) == 6
+    @test all(d -> d isa Gamma, dists)
+    @test [d.α for d in dists] == values
 end
 
-@testitem "inference_to_distribution(obj, chain, summary): agrees with point_estimate" setup=[
+@testitem "inference_to_distribution(obj, chain, summary): the plug-in reduction" setup=[
     GammaLeafFixture] begin
     using FlexiChains: FlexiChains
     using Statistics: mean, median
@@ -64,15 +62,12 @@ end
 
     plugin_mean = DistributionsInference.inference_to_distribution(
         leaf, chain, mean)
-    old_mean = DistributionsInference.point_estimate(leaf, chain)
     @test plugin_mean isa Gamma
-    @test plugin_mean.α ≈ old_mean.α
+    @test plugin_mean.α ≈ mean(values)
 
     plugin_median = DistributionsInference.inference_to_distribution(
         leaf, chain, median)
-    old_median = DistributionsInference.point_estimate(
-        leaf, chain; summary = median)
-    @test plugin_median.α ≈ old_median.α
+    @test plugin_median.α ≈ median(values)
 
     # Not the same distribution as the Monte Carlo mixture: the plug-in
     # collapses the draws before reconstructing. With `scale = 1`,
@@ -115,6 +110,44 @@ end
           DistributionsInference.inference_to_distribution
     @test DistributionsInference.inference_to_dists ===
           DistributionsInference.inference_to_distributions
+end
+
+@testitem "the readback names the chain type for a non-chain argument" begin
+    using DistributionsInference, Distributions
+
+    # A non-chain second argument is the caller's mistake, so the message
+    # must name the type. `inference_to_distribution(s)` also accept raw
+    # draws (a matrix or a vector-of-vectors), so a matrix is not itself the
+    # wrong type for them; use a genuinely unsupported second argument.
+    rows = [(name = :shape, value = 2.0, prior = LogNormal(0.0, 0.2),
+        support = (0.0, Inf))]
+    for f in (DistributionsInference.inference_to_distributions,
+        DistributionsInference.inference_to_distribution)
+        thrown = try
+            f(rows, nothing)
+            nothing
+        catch e
+            e
+        end
+        @test thrown isa ArgumentError
+        @test occursin("has no method for a chain of type", thrown.msg)
+    end
+end
+
+@testitem "a chain missing an estimated parameter errors" setup=[GammaLeafFixture] begin
+    using FlexiChains: FlexiChains
+    using Statistics: mean
+
+    leaf = GammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    mismatched_chain = FlexiChains.FlexiChain{Symbol}(1, 1,
+        Dict(FlexiChains.Parameter(:not_shape) => reshape([2.0], 1, 1)))
+
+    @test_throws ArgumentError DistributionsInference.inference_to_distributions(
+        leaf, mismatched_chain)
+    @test_throws ArgumentError DistributionsInference.inference_to_distribution(
+        leaf, mismatched_chain)
+    @test_throws ArgumentError DistributionsInference.inference_to_distribution(
+        leaf, mismatched_chain, mean)
 end
 
 @testitem "the draws keyword: nothing, range, index vector, Integer" setup=[
@@ -312,9 +345,10 @@ end
     @test [d.α for d in explicit_full_pool] == chain2
 end
 
-@testitem "inference_to_distribution: a non-Distribution reconstruct errors, naming the type" setup=[
+@testitem "inference_to_distribution: only the 2-argument MixtureModel form requires a Distribution" setup=[
     ToyFixture] begin
     using FlexiChains: FlexiChains
+    using Statistics: mean
 
     # `ToyGammaLeaf` reconstructs to itself, not a `Distribution` — exactly
     # the toy fittable type this package's own docstrings use.
@@ -329,7 +363,8 @@ end
     @test length(dists) == 4
     @test all(d -> d isa ToyGammaLeaf, dists)
 
-    # Both `inference_to_distribution` forms require it and name the type
+    # Only the 2-argument `MixtureModel` form requires it — mixing
+    # non-distributions has no sensible meaning — and names the type
     # actually reached.
     err_mixture = try
         DistributionsInference.inference_to_distribution(leaf, chain)
@@ -341,15 +376,43 @@ end
     @test occursin("ToyGammaLeaf", err_mixture.msg)
     @test occursin("Distribution", err_mixture.msg)
 
-    err_plugin = try
-        using Statistics: mean
-        DistributionsInference.inference_to_distribution(leaf, chain, mean)
-        nothing
-    catch e
-        e
-    end
-    @test err_plugin isa ArgumentError
-    @test occursin("ToyGammaLeaf", err_plugin.msg)
+    # The 3-argument summarise-then-reconstruct form does not: it never
+    # mixes, so it is as generic as the plural form above (see the dedicated
+    # test below for the full non-Distribution coverage).
+    plugin = DistributionsInference.inference_to_distribution(leaf, chain, mean)
+    @test plugin isa ToyGammaLeaf
+end
+
+@testitem "inference_to_distribution(obj, chain, summary): works for a non-Distribution fittable object" setup=[
+    ToyFixture] begin
+    using FlexiChains: FlexiChains
+    using Statistics: mean, median
+
+    # This is the direct replacement for the old `point_estimate`, which
+    # never required `reconstruct(obj, x)` to return a `Distribution`
+    # either — this form summarises each estimated row's draws and calls
+    # `reconstruct` once, exactly what `inference_to_distributions` does
+    # once per draw, so it needs no `Distribution` out any more than that
+    # does.
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    values = [1.0, 2.0, 3.0, 4.0]
+    chain = FlexiChains.FlexiChain{Symbol}(
+        4, 1, Dict(FlexiChains.Parameter(:shape) => reshape(values, 4, 1)))
+
+    fitted_mean = DistributionsInference.inference_to_distribution(
+        leaf, chain, mean)
+    @test fitted_mean isa ToyGammaLeaf
+    @test fitted_mean.shape ≈ mean(values)
+    @test fitted_mean.scale == leaf.scale  # the fixed row, untouched
+
+    fitted_median = DistributionsInference.inference_to_distribution(
+        leaf, chain, median)
+    @test fitted_median.shape ≈ median(values)
+
+    # A subset selection reduces over the selected draws only.
+    fitted_subset = DistributionsInference.inference_to_distribution(
+        leaf, chain, mean; draws = 2:3)
+    @test fitted_subset.shape ≈ mean(values[2:3])
 end
 
 @testitem "dim == 0 with ndraws > 0" setup=[GammaLeafFixture] begin

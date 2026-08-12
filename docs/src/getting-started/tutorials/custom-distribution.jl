@@ -96,25 +96,20 @@ chain = distribution_to_advancedmh(delay, data, sampler, 2000; burnin = 1000)
 
 # ## Reading the fit back onto the distribution
 #
-# [`point_estimate`](@ref) reduces the chain straight back to a `ToyDelay`,
-# posterior mean by default.
+# [`inference_to_distribution`](@ref) reduces the chain straight back to a
+# `ToyDelay`, the reduction (here the posterior mean) positional.
 
-fitted = point_estimate(delay, chain)
+fitted = inference_to_distribution(delay, chain, mean)
 fitted.shape
 
 # The fixed row came back at its template value.
 
 fitted.scale
 
-# [`distribution_params`](@ref) is the params-first primitive underneath, the
-# same reduction keyed by dotted name before the object is rebuilt.
+# [`inference_to_distributions`](@ref) keeps every draw instead of reducing
+# them, for a per-draw posterior-predictive summary.
 
-distribution_params(delay, chain)
-
-# [`distribution_draws`](@ref) keeps every draw instead of reducing them, for a
-# per-draw posterior-predictive summary.
-
-all_fitted = distribution_draws(delay, chain)
+all_fitted = inference_to_distributions(delay, chain)
 quantile([mean(Weibull(d.shape, d.scale)) for d in all_fitted], [0.025, 0.975])
 
 # ## Swapping the likelihood
@@ -138,7 +133,7 @@ DistributionsInference.logdensity(survival_prob, [2.0])
 Random.seed!(1)
 survival_chain = distribution_to_advancedmh(delay, bounds, sampler, 2000;
     burnin = 1000, loglik = survival_loglik)
-point_estimate(delay, survival_chain).shape
+inference_to_distribution(delay, survival_chain, mean).shape
 
 # `logccdf` for a `Weibull` differentiates, so
 # [Sampling with Turing](@ref turing-sampling) hands this same reducer to

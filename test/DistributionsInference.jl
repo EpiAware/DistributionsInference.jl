@@ -20,8 +20,6 @@ end
 
     @test exported == [
         :DistributionsInference,
-        :distribution_draws,
-        :distribution_params,
         :distribution_to_advancedmh,
         :distribution_to_logdensity,
         :distribution_to_objective,
@@ -36,7 +34,6 @@ end
         :objective_to_distribution,
         :optimise_distribution,
         :parameter_rows,
-        :point_estimate,
         :with_priors]
     @test public_only == [
         :FitLogDensity,

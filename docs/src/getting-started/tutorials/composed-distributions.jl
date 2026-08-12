@@ -55,7 +55,7 @@ sampler = RWMH(MvNormal(zeros(dim), 0.05^2 * I))
 
 Random.seed!(1)
 chain = distribution_to_advancedmh(tree, tree_data, sampler, 2000; burnin = 1000)
-fitted = point_estimate(tree, chain)
+fitted = inference_to_distribution(tree, chain, mean)
 
 # The fit comes back as a tree, so its nodes are reachable by name.
 
@@ -69,7 +69,7 @@ using DynamicPPL, Turing
 Random.seed!(1)
 turing_chain = distribution_to_turing(tree, tree_data, NUTS(), 500;
     progress = false)
-event(point_estimate(tree, turing_chain), :onset_admit)
+event(inference_to_distribution(tree, turing_chain, mean), :onset_admit)
 
 # ## Partial pooling
 #
@@ -96,12 +96,11 @@ pooled_data = [rand(rng, pooled) for _ in 1:200]
 Random.seed!(1)
 pooled_chain = distribution_to_turing(pooled, pooled_data, NUTS(0.9), 500;
     progress = false, initial_params = InitFromPrior())
-distribution_params(pooled, pooled_chain)
 
 # The readback puts the offsets back through the population, so a district's
 # shape comes out rather than its offset.
 
-event(point_estimate(pooled, pooled_chain), :north)
+event(inference_to_distribution(pooled, pooled_chain, mean), :north)
 
 # `InitFromPrior` above is Turing's own.
 # The default initialisation draws uniformly on the unconstrained scale, which
@@ -147,7 +146,7 @@ centred_transitions = sample(Xoshiro(1), centred_model, centred_sampler, 2000;
     param_names = ["north.shape", "south.shape"], progress = false)
 centred_draws = [t.params for t in centred_transitions][1001:end]
 centred_chain = DistributionsInference.draws_to_chain(centred, centred_draws)
-event(point_estimate(centred, centred_chain), :north)
+event(inference_to_distribution(centred, centred_chain, mean), :north)
 
 # ## Next
 #
