@@ -5,6 +5,20 @@
 
 _default_loglik(obj, data) = sum(record -> Distributions.logpdf(obj, record), data)
 
+# The batch a `FitLogDensity` actually scores `loglik` against, prepared once
+# at construction rather than re-derived on every `logdensity` call (#115).
+# Generic no-op: an extension overrides this for its own object/record shape
+# where a per-evaluation conversion would otherwise sit in the gradient loop
+# (e.g. `ComposedDistributions`' `NamedTuple`-record batches). Only the
+# *default* `loglik` gets a prepared batch: a caller-supplied `loglik` may
+# read `data` in ways a converted form would silently break, so it always
+# sees the untouched `data` it was handed at construction.
+_prepare_scored_data(obj, data, loglik) = data
+function _prepare_scored_data(obj, data, ::typeof(_default_loglik))
+    _prepare_default_loglik_data(obj, data)
+end
+_prepare_default_loglik_data(obj, data) = data
+
 @doc "
 
 A PPL-neutral log-density over a fit-protocol object's estimated parameters.
@@ -24,6 +38,12 @@ directly, so it is sampleable by any LogDensityProblems consumer.
 - `data`: the observed records scored by `loglik`.
 - `loglik`: a reducer `(obj, data) -> Real` (default sums `logpdf(obj,
   record)`).
+- `scored_data`: the batch `loglik` is actually called against, prepared once
+  from `data` at construction (`_prepare_scored_data`, #115). Equal to `data`
+  unless `loglik` is the default reducer and an extension has registered a
+  cheaper per-evaluation form for `obj`'s and `data`'s shape (e.g.
+  `ComposedDistributions` converting a `NamedTuple`-record batch to its
+  `Missing`-admitting vector form once, rather than on every evaluation).
 - `flat_priors`: the estimated rows' priors, in [`parameter_rows`](@ref) order,
   collected once at construction. An entry is `nothing` for an estimated row
   scored instead through [`extra_logprior`](@ref) (an object-dependent prior;
@@ -40,10 +60,11 @@ directly, so it is sampleable by any LogDensityProblems consumer.
 - [`distribution_to_logdensity`](@ref): the assembler.
 - [`logdensity`](@ref): evaluate on a flat vector.
 "
-struct FitLogDensity{D, T, L, FP, ES, CF}
+struct FitLogDensity{D, T, L, SD, FP, ES, CF}
     obj::D
     data::T
     loglik::L
+    scored_data::SD
     flat_priors::FP
     extra_state::ES
     concrete_fields::CF
@@ -54,8 +75,9 @@ function FitLogDensity(obj, data, loglik)
     flat_priors = [row.prior for row in rows]
     extra_state = extra_prior_state(obj)
     concrete_fields = _concrete_field_candidates(typeof(obj), rows)
-    return FitLogDensity(
-        obj, data, loglik, flat_priors, extra_state, concrete_fields)
+    scored_data = _prepare_scored_data(obj, data, loglik)
+    return FitLogDensity(obj, data, loglik, scored_data, flat_priors,
+        extra_state, concrete_fields)
 end
 
 @doc "
@@ -357,7 +379,7 @@ function logdensity(prob::FitLogDensity, x::AbstractVector)
     _check_generic_fields(typeof(prob.obj), prob.concrete_fields, x)
     obj = reconstruct(prob.obj, x)
     lp += extra_logprior(prob.obj, obj, x, prob.extra_state)
-    return lp + prob.loglik(obj, prob.data)
+    return lp + prob.loglik(obj, prob.scored_data)
 end
 
 # A `nothing` prior (a fixed row, or an estimated one scored through

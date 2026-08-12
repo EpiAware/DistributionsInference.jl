@@ -223,3 +223,25 @@ end
     @test DistributionsInference.flat_priors(prob) == [leaf.shape_prior]
     @test DistributionsInference.flat_priors(prob) === prob.flat_priors
 end
+
+@testitem "FitLogDensity: scored_data defaults to data, custom loglik sees the untouched data (#115)" setup=[
+    ToyFixture] begin
+    leaf = ToyGammaLeaf(2.0, 1.0, LogNormal(log(2.0), 0.2))
+    data = [1.5, 2.0, 3.2]
+
+    # No batch-conversion hook registered for `ToyGammaLeaf`: the internal
+    # scoring batch is exactly `data`, not a copy.
+    default_prob = DistributionsInference.distribution_to_logdensity(leaf, data)
+    @test default_prob.scored_data === data
+
+    # A caller-supplied `loglik` always receives the untouched `data`, even
+    # though a `_prepare_scored_data` hook could in principle exist for this
+    # object/data shape: only the default reducer's batch may be swapped.
+    seen = Ref{Any}(nothing)
+    capture_loglik(obj, d) = (seen[] = d; sum(y -> logpdf(obj, y), d))
+    custom_prob = DistributionsInference.distribution_to_logdensity(
+        leaf, data; loglik = capture_loglik)
+    @test custom_prob.scored_data === data
+    DistributionsInference.logdensity(custom_prob, [2.5])
+    @test seen[] === data
+end

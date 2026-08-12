@@ -134,7 +134,7 @@ at its value in `obj`. `x` is [`flat_dimension`](@ref)`(obj)` long — empty whe
 
 This is the companion hook every fittable object implements with its own
 method, alongside [`parameter_rows`](@ref). The engine's
-[`logdensity`](@ref) calls it once per evaluation to score `prob.data`
+[`logdensity`](@ref) calls it once per evaluation to score the observations
 against the object collapsed at `x`.
 
 An estimated field's type must stay generic (e.g. `shape::S`, not
