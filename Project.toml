@@ -18,6 +18,7 @@ AdvancedMH = "5b7e9947-ddc0-4b3f-9b55-0d8042f74170"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 ComposedDistributions = "2f642b71-32a9-4f47-97c4-6deb7517f7a7"
 DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
+ModifiedDistributions = "664e6f8c-d74f-44d3-9f37-f82699103046"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 
 [extensions]
@@ -26,6 +27,7 @@ DistributionsInferenceBijectorsExt = "Bijectors"
 DistributionsInferenceComposedDistributionsExt = "ComposedDistributions"
 DistributionsInferenceDynamicPPLExt = "DynamicPPL"
 DistributionsInferenceDynamicPPLFlexiChainsExt = "DynamicPPL"
+DistributionsInferenceModifiedDistributionsExt = "ModifiedDistributions"
 DistributionsInferenceOptimExt = "Optim"
 
 [compat]
@@ -45,6 +47,7 @@ EpiAwareADTools = "0.1.2"
 FlexiChains = "0.4, 0.5, 0.6"
 LogDensityProblems = "2"
 LogExpFunctions = "0.3, 1"
+ModifiedDistributions = "0.1"
 # Kept in step with test/Project.toml so the merged downgrade resolve agrees
 # on one floor for the two environments.
 Optim = "2.2"
