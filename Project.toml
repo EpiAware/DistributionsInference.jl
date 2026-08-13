@@ -44,7 +44,7 @@ DocStringExtensions = "0.9"
 DynamicPPL = "0.40, 0.41, 0.42"
 # Floored at 0.1.2: the release that hosts the shared `xlogy`/`xlog1py`
 # Mooncake rules this package used to carry itself (#73).
-EpiAwareADTools = "0.1.2"
+EpiAwareADTools = "0.1.2, 0.2"
 FlexiChains = "0.4, 0.5, 0.6"
 LogDensityProblems = "2"
 LogExpFunctions = "0.3, 1"
