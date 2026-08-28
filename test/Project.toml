@@ -55,7 +55,7 @@ Statistics = "1"
 Test = "1"
 TestItemRunner = "1"
 TestItems = "1"
-Turing = "0.45, 0.46"
+Turing = "0.45, 0.46, 0.47"
 
 [sources]
 DistributionsInference = {path = ".."}
